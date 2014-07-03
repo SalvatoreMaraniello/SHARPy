@@ -25,7 +25,7 @@ module xbeam_shared
  type xbelem
   integer:: NumNodes               ! Number of nodes in the element.
   integer:: MemNo                  ! Member to which the element belongs.
-  integer:: Conn   (MaxElNod)      ! Connectivities.
+  integer:: Conn   (MaxElNod)      ! Connectivities (i.e., for each node, contains the local number to global number association)
   integer:: Master (MaxElNod,2)    ! Master node for each node j in the element.
                                    ! (j,1): # master elem  (or 0 if current is master).
                                    ! (j,2): Node within master element (or 0 if current is master).
@@ -33,6 +33,7 @@ module xbeam_shared
   real(8):: PreCurv (3)            ! Initial curvature of the element.
   real(8):: Psi     (3)            ! Rotation vector of (undeformed) element frame.
   real(8):: Vector  (3)            ! Element orientation vector. It goes along the local Y axis.
+                                   ! sm: this defines the element y axis and is in the a frame components
   real(8):: Mass    (6,6)          ! Mass matrix (constant along the element).
   real(8):: Stiff   (6,6)          ! Element stiffness (constant along the element).
   real(8):: InvStiff(6,6)          ! Inverse of the element stiffness (constant along the element).

@@ -66,6 +66,7 @@ module lib_bgeom
 
 ! Define Gauss points and loop on them.
   call fem_1d_gauss_val (NumGauss,CoordGauss,WeightGauss)
+  !                          in      out       out
 
   do iGauss=1,NumGauss
 
@@ -210,6 +211,9 @@ module lib_bgeom
 !  1) V is only used for collinear points in an element. This is defined
 !     by the convergence parameter (Delta).
 !
+! -> Reference:
+! [1] par.4.4 "Three Noded Geometrically Nonlinear Composite Beam", Palacios R. (2009)
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine bgeom_nodeframe (NumNodesElem,Coords,Phi,V,Psi,Delta)
   use lib_fem
@@ -264,55 +268,66 @@ module lib_bgeom
   end select
 
 ! Loop through the element nodes.
-
   do iNode=1,NumNodesElem
 
-! Obtain the shape functions derivatives.
+  ! Obtain the shape functions derivatives (at the nodes)
+  ! sm: this step does only depend on the number of nodes and returns:
+  ! ----------  case(3) ----------------- ! ----------  case(2) ---------------
+  !  1.0   0.0    0.0   ShapeFun iNode=-1 !  1.0   0.0        ShapeFun iNode=-1
+  !  0.0   1.0    0.0   ShapeFun iNode= 1 !  0.0   1.0        ShapeFun iNode= 1
+  !  0.0   0.0    1.0   ShapeFun iNode= 0 !
+  ! -1.5  -0.5    2.0   ShapeDer iNode=-1 ! -0.5   0.5        ShapeDer iNode=-1
+  !  0.5   1.5   -2.0   ShapeDer iNode= 1 ! -0.5   0.5        ShapeDer iNode= 1
+  ! -0.5   0.5    0.0   ShapeDer iNode= 0 !
+  ! ----------  case(3) ----------------- ! ----------  case(2) ---------------
     call fem_1d_shapefun (NumNodesElem,Eta(iNode),ShapeFun,ShapeDer)
 
-! Compute Jacobian.
+  ! Compute Jacobian.
+  ! Following ref.[1] notation, this will be
+  ! dx_j = dr_j/dxi evaluated at xi_iNode
     do j=1,3
       dx(j)= dot_product (ShapeDer,Coords(1:NumNodesElem,j))
     end do
 
-! Tangent vector.
+  ! Compute Frenet FoR unit vectors e_t, e_b, e_n
+  ! Tangent vector.
     e_t=dx/sqrt(dot_product(dx,dx))
 
-! Binormal vector for collinear and non-collinear cases.
-    if (sqrt(dot_product(v23,v23)).le.Delta) then
+  ! Binormal vector for collinear and non-collinear cases.
+    if (sqrt(dot_product(v23,v23)).le.Delta) then ! this is always true for linear beam
       AuxV=rot_cross(v12,V)
       e_b=AuxV/dsqrt(dot_product(AuxV,AuxV))
     else
       e_b=v23/dsqrt(dot_product(v23,v23))
     end if
 
-! Normal vector (normalization included to avoid numerical problems).
+  ! Normal vector (normalization included to avoid numerical problems).
     e_n=rot_cross(e_b,e_t)
     e_n=e_n/dsqrt(dot_product(e_n,e_n))
 
-! Grid A is used to establish the reference for the pretwist angle, which is defined
-! as the angle that vector e_n needs to be rotated around e_t so that it lies in the
-! element X-Y plane.
+  ! Grid A is used to establish the reference for the pretwist angle, which is defined
+  ! as the angle that vector e_n needs to be rotated around e_t so that it lies in the
+  ! element X-Y plane.
     if (iNode.eq.1) then
       AuxV=rot_cross(rot_cross(v12,V),e_t)
       AuxV=AuxV/sqrt(dot_product(AuxV,AuxV))
       if (sqrt(dot_product(AuxV,AuxV)).gt.Delta) then
         Phi0= sign(acos(max(-1.d0,min(dot_product(e_n,AuxV),1.d0))), &
-&                  dot_product(e_t,rot_cross(v12,V)))
+  &                dot_product(e_t,rot_cross(v12,V)))
       else
         AuxV=rot_cross(v12,rot_cross(v12,V))
         AuxV=AuxV/sqrt(dot_product(AuxV,AuxV))
         Phi0= sign(acos(max(-1.d0,min(dot_product(e_n,AuxV),1.d0))), &
-&                  dot_product(e_n,V))
+  &                dot_product(e_n,V))
       end if
     end if
 
-! Rotate vectors with the pretwist angle.    
+  ! Rotate vectors with the pretwist angle.
     Cgb(1,:)= e_t
     Cgb(2,:)= e_n*cos(Phi0+Phi(iNode))+e_b*sin(Phi0+Phi(iNode))
     Cgb(3,:)=-e_n*sin(Phi0+Phi(iNode))+e_b*cos(Phi0+Phi(iNode))
 
-! Compute the cartesian rotation vector that defines 
+  ! Compute the cartesian rotation vector that defines
     Psi(iNode,:)= rotvect_mat2psi(Cgb)
   end do
 

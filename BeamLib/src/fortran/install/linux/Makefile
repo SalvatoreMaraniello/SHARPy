@@ -36,7 +36,7 @@ wrapC: xbeamlib xbeamC
 ################################################################################
 ## I/O SELECTION.
 
-TESTCASE=rob
+TESTCASE=sal
 TESTDIR=../../main
 
 ROOTDIR=../../..

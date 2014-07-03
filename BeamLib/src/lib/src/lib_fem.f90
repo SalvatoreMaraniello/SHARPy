@@ -790,6 +790,19 @@ module lib_fem
 !    Extract the values corresponding to given nodes from a vector of global
 !    data.
 !
+! sm: Input/Output description:
+! - ElemNodes(ii) = nn, where ii is the ii-th node according to the local elem.
+!               ... ordering and nn is the nn-th element in the global ordering
+! - GlobVector(nn,:): array associated to the nn-th node (in the global ordering)
+!               ... the quantities here stored are not associated to any
+!               ... frame of reference
+! - LocVector(ii,:): array associated to the ii-th node (local), i.e. to the
+!              ... nn-th node (global). The association is extablished through
+!              ... ElemNodes. No change of frame of reference is performed
+!
+! e.g.: sample call from input_xxx.f90 (output_elems)
+! fem_glob2loc_extract (Elem(iElem)%Conn,Coords,PosElem,NumNE)
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine fem_glob2loc_extract (ElemNodes,GlobVector,LocVector,NumNodeElem)
 

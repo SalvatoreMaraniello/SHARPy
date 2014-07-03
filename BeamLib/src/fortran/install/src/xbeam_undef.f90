@@ -39,17 +39,25 @@ module xbeam_undef
 !  2) The displaced coordinate system (a) is given as the cartesian rotation
 !     vector that defines its orientation with respect to the global frame.
 !
+! -> sm Example: call from main_xxx.f90:
+!   allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
+!   call xbeam_undef_geom (Elem,PosIni,PhiNodes,PsiIni,Options)
+!        xbeam_undef_geom(inout, in  ,  in    , out  ,  in   )
+!   - PosIni   (in): Coords in unput_xxx.f90
+!   - PhiNodes (in): pretwist
+!   - PsiIni  (out): CRV at the node
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine xbeam_undef_geom (Elem,Coords,PhiNodes,Psi0,Options)
   use lib_fem
   use lib_bgeom
 
 ! I/O Variables.
-  type(xbelem),intent(inout):: Elem     (:)    ! Element information.
-  real(8),      intent(in)   :: Coords   (:,:)  ! Initial coordinates of the grid points.
-  real(8),      intent(in)   :: PhiNodes (:)    ! Pretwist at the nodes.
-  real(8),      intent(out)  :: Psi0     (:,:,:)! Initial CRV at element nodes.
-  type(xbopts),intent(in)   :: Options         ! Solver parameters.
+  type(xbelem), intent(inout):: Elem     (:)     ! Element information.
+  real(8),      intent(in)   :: Coords   (:,:)   ! Initial coordinates of the grid points.
+  real(8),      intent(in)   :: PhiNodes (:)     ! Pretwist at the nodes.
+  real(8),      intent(out)  :: Psi0     (:,:,:) ! Initial CRV at element nodes Psi0(NumElems,MaxElNod,3)
+  type(xbopts), intent(in)   :: Options          ! Solver parameters.
 
 ! Local variables.
   real(8)            :: ElemPhi(MaxElNod)      ! Pretwist at the nodes of the element.
@@ -59,16 +67,28 @@ module xbeam_undef
 ! Loop in all elements in the model.
   do j=1,size(Elem)
 
-! Extract element information.
+  ! Extract element information.
+  ! sm: given the node nn (global numbering), associated to the node ii (local) of
+  ! the element j, the function allocates in LocCoords(ii,:) the row Coords(nn,:)
+  ! Elem%NumNodes is here recomputed and allocated
     call fem_glob2loc_extract (Elem(j)%Conn,Coords,LocCoords,Elem(j)%NumNodes)
-
+  ! similar call for the pretwist. No need to insert in a function as
+  ! Elme%NumNodes is available
     ElemPhi(1:Elem(j)%NumNodes)= PhiNodes(Elem(j)%Conn(1:Elem(j)%NumNodes))
 
-! Compute initial displaced coordinate system (a).
+  ! Compute initial displaced coordinate system (a).
+  ! sm: input/purpose recap
+  ! the 1st and last node of the element [r <-> LocCoords(1:2,:)] define the x axis
+  ! the local y axis (in global coordinates) is set in input under Elem%Vector
+  ! the function computes the last direction to define the local element frame,
+  ! the transformation matrix and the CRV associated.
+  !
+  ! sm: from lib_bgeom:
+  !      bgeom_elemframe (          r (in),        V (in),  Psi (out), Delta(in))
     call bgeom_elemframe (LocCoords(1:2,:),Elem(j)%Vector,Elem(j)%Psi, &
 &                         Options%DeltaCurved)
 
-! Compute undeformed frame (b) at all nodes of each element. Given by CRV in Psi0.
+! Compute undeformed frame (B) at all nodes of each element. Given by CRV in Psi0.
     call bgeom_nodeframe (Elem(j)%NumNodes,LocCoords,ElemPhi,Elem(j)%Vector,&
 &                         Psi0(j,:,:),Options%DeltaCurved)
 
@@ -98,6 +118,12 @@ module xbeam_undef
 !    Initialize the solution process.
 !
 !-> Remarks.-
+!
+!    1. Nodes(nn) contains information of the nn-th node (global numbering).
+!    2. Nodes(nn)%Master=(jj,kk) means that the nn-th node (global numbering) is
+!    associated to the kk-th node (local numbering) of the jj-th element.
+!    3. Nodes%Master only points to master nodes: this ensure uniqueness in the
+!    association
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine xbeam_undef_dofs (Elem,BoundConds,Node,NumDof)
@@ -208,13 +234,25 @@ module xbeam_undef
 !    Identify independent nodes in the problem.
 !
 !-> Remarks.-
+!   1. NumFr and NumIN are counters; they count the number of nodes and forces
+!      for which to solve.
+!      a. If no BCs are applied to a node, both forces and displacements have to
+!         be found (both have a +1)
+!      b. If a clamped BC is applied, the forces have to be solved, but no the
+!         displacements (NumFr = NumFr + 1). Vice-versa for free end, for which
+!         only the displacements need to be solved for (NumIN = NumIN + 1).
+!   2. ListIN and ListFr, are arrays of length equal to the total number of
+!      nodes.
+!      a. If ListIN(ii)=0 : the nn-th node (global numbering) is not independent
+!      b. If ListIN(ii)=jj: the nn-th node (global numbering) is associated to the
+!         jj-th independent nodal dispacement.
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine xbeam_undef_nodeindep (NumN,BoundCond,NumIN,ListIN,ListFr)
 
 ! I/O Variables.
   integer,intent(in)::  NumN               ! Number of nodes in the model.
-  integer,intent(in)::  BoundCond(:)       ! Boundary conditions: 1: Clamped; -1; free.
+  integer,intent(in)::  BoundCond(:)       ! Boundary conditions: 1: Clamped; -1: free; 0: nothing
   integer,intent(out):: NumIN              ! Number of independent nodes.
   integer,intent(out):: ListIN (:)         ! List of independent nodes.
   integer,intent(out):: ListFr (:)         ! List of nodes with independent force vector (not free nodes).
@@ -231,7 +269,7 @@ module xbeam_undef
 
   do iNode=1,NumN
     select case (BoundCond(iNode))
-      case (0)
+      case (0) ! no BCs (independent nodes)
         NumIN=NumIN+1
         NumFr=NumFr+1
         ListIN(iNode)=NumIN

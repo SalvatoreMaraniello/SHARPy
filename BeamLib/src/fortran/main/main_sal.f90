@@ -31,7 +31,7 @@ program main
  type(xbopts)            :: Options           ! Solution options (structure defined in xbeam_shared).
  type(xbelem),allocatable:: Elem(:)           ! Element information.
  type(xbnode),allocatable:: Node(:)           ! Nodal information.
- integer,      allocatable:: BoundConds(:)     ! =0 on free nodes; =1 on clamped nodes.
+ integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
  real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
  real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
  real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
@@ -43,8 +43,8 @@ program main
  character(len=25)        :: OutFile           ! Output file.
 
  real(8),      allocatable:: PosIni   (:,:)    ! Initial nodal Coordinates.
- real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors.
- real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector.
+ real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
+ real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
  real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
  real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
  real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
@@ -64,14 +64,16 @@ program main
 ! Read input data.
  call input_setup (NumElems,OutFile,Options)
 
- allocate (Elem(NumElems))
+ allocate (Elem(NumElems)) ! sm: initial orientation stored here
  call input_elem (NumElems,NumNodes,Elem)
 
- allocate(PosIni     (NumNodes,3)); PosIni     = 0.d0
+ allocate(PosIni     (NumNodes,3)); PosIni     = 0.d0 ! sm: coord in input_xxx.f90
  allocate(ForceStatic(NumNodes,6)); ForceStatic= 0.d0
  allocate(PhiNodes   (NumNodes));   PhiNodes   = 0.d0
  allocate(BoundConds (NumNodes));   BoundConds = 0
  call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic,PhiNodes)
+ ! sm: in input_xxx.f90
+ ! input_node (NumNodes,Elem,BoundConds,Coords,Forces     ,PhiNodes)
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Open main output file and select grid points where output will be written.
@@ -91,6 +93,11 @@ program main
 ! Compute initial (undeformed) geometry.
  allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
  call xbeam_undef_geom (Elem,PosIni,PhiNodes,PsiIni,Options)
+ !call xbeam_undef_geom(inout, in  ,  in    , out  ,  in   )
+ ! sm: notes on the call
+ ! - PosIni (in): Coords in unput_xxx.f90
+ ! - PhiNodes (in): pretwist
+ ! - PsiIni (out): CRV at the node
 
 ! Store undeformed geometry in external text file.
  open (unit=11,file=OutFile(1:11)//'_und.txt',status='replace')
@@ -302,5 +309,7 @@ program main
     write (*,'(1P6E12.4)') PosDef(NumNodes,:),PsiDef(NumElems,2,:)
 
   end if     ! Dynamic analysis
+
+  print *, 'job done!'
 
 end program main
