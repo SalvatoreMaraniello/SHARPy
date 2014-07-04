@@ -790,7 +790,8 @@ module lib_fem
 !    Extract the values corresponding to given nodes from a vector of global
 !    data.
 !
-! sm: Input/Output description:
+! -> sm: Input/Output description:
+!
 ! - ElemNodes(ii) = nn, where ii is the ii-th node according to the local elem.
 !               ... ordering and nn is the nn-th element in the global ordering
 ! - GlobVector(nn,:): array associated to the nn-th node (in the global ordering)

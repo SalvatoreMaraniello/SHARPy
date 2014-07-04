@@ -155,6 +155,11 @@ module cbeam3_solv
 !
 !-> Remarks.-
 !
+!    a. NumDof is 6*Number of Independent Nodes (see xbeam_undef_dofs &
+!    xbeam_undef_nodeindep)
+!    b. ForceStatic is a matrix (row: global numbering; columns: forces and Moments)
+!    c. Psi0 (PsiIni is main): CRV at the nodes [Psi0(NumElems,MaxElNod,3)].
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine cbeam3_solv_linstatic (NumDof,Elem,Node,AppForces,Coords,Psi0, &
 &                                  PosDefor,PsiDefor,Options)
@@ -199,6 +204,9 @@ module cbeam3_solv
   end do
 
 ! Allocate memory for solver (Use a conservative estimate of the size of the matrix Kglobal).
+! - DimMat=24 is a parameter
+! - ks and fs are defined by the sparse_zero call. Same for Kglobal and Fglobal.
+! - They are both output
   allocate (Kglobal(DimMat*NumDof)); call sparse_zero (ks,Kglobal)
   allocate (Fglobal(DimMat*NumDof)); call sparse_zero (fs,Fglobal)
   allocate (Qglobal(NumDof));        Qglobal= 0.d0
@@ -206,7 +214,7 @@ module cbeam3_solv
 
 ! Assembly matrices and functional.
   Qglobal=0.d0
-  call sparse_zero (ks,Kglobal)
+  call sparse_zero (ks,Kglobal) ! sm BUG: isn't this repeated
   call sparse_zero (fs,Fglobal)
 
   call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,AppForces, &

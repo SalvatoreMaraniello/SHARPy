@@ -111,6 +111,8 @@ module lib_cbeam3
 
 
 ! Define Gauss points and loop on them.
+! sm: because the local frame goes from (-1,1), the result of this call does only
+! depend on the NumGauss
   allocate (CoordGauss(NumGauss))
   allocate (WeightGauss(NumGauss))
   call fem_1d_gauss_val (NumGauss,CoordGauss,WeightGauss)
@@ -128,6 +130,7 @@ module lib_cbeam3
     Jacobian =sqrt(dot_product (dr0_g(1:3),dr0_g(1:3)))
 
 ! Rescale the derivatives to be in the physical coordinates.
+! sm: this accounts for the actuall element length
     ShapeDer=ShapeDer/Jacobian
     dr0_g=dr0_g/Jacobian
 

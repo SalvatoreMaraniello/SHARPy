@@ -78,22 +78,31 @@ module cbeam3_asbly
   do iElem=1,NumE
     Kelem=0.d0; Felem=0.d0; Qelem=0.d0; SB2B1=0.d0
 
-! Determine if the element nodes are master (Flag=T) or slave.
+  ! Determine if the element nodes are master (Flag=T) or slave.
     Flags=.false.
     do i=1,Elem(iElem)%NumNodes
       if (Node(Elem(iElem)%Conn(i))%Master(1).eq.iElem) Flags(i)=.true.
     end do
 
-! Extract components of the displacement and rotation vector at the element nodes
-! and for the reference and current configurations.
+  ! Extract components of the displacement and rotation vector at the element nodes
+  ! and for the reference and current configurations.
+  ! sm: given the node nn (global numbering), associated to the node ii (local) of
+  ! the element iElem, the function allocates in LocCoords(ii,:) the row Coords(nn,:)
+  ! NumNE is here recomputed and allocated
+  ! rElem0 and rElem are the output of this call.
     call fem_glob2loc_extract (Elem(iElem)%Conn,Coords, rElem0(:,1:3),NumNE)
     call fem_glob2loc_extract (Elem(iElem)%Conn,PosDefor,rElem(:,1:3),NumNE)
 
+  ! same is done here but there is no need to call fem_glob2loc_extract as the
+  ! Psi arrays are already organised by elements.
     rElem0(:,4:6)= Psi0    (iElem,:,:)
     rElem (:,4:6)= PsiDefor(iElem,:,:)
+
+  ! this adds or subtract 2 pi to the CRVs to ensure that they are all in the
+  ! same part of the of the discontinuity [-pi,pi]
     call rotvect_boundscheck2(rElem(1,4:6),rElem(2,4:6))
     if (NumNE.eq.3) &
-&   call rotvect_boundscheck2(rElem(3,4:6),rElem(2,4:6))
+    &   call rotvect_boundscheck2(rElem(3,4:6),rElem(2,4:6))
 
 ! Extract current applied forces/moments at the element nodes.
     call fem_glob2loc_extract (Elem(iElem)%Conn,Force,ForceElem,NumNE)

@@ -118,8 +118,12 @@ program main
 
  select case (Options%Solution)
  case (102,302)
+   ! sm: NumDof is 6*NumberIndepNodes
+   ! ForceStatic is a matrix (row: global numbering; columns: forces and Moments)
+   ! PsiIni: CRV at the nodes [Psi0(NumElems,MaxElNod,3)]
    call cbeam3_solv_linstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni, &
 &                              PosDef,PsiDef,Options)
+
 
  case (112,142,312,322)
    call cbeam3_solv_nlnstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni, &
