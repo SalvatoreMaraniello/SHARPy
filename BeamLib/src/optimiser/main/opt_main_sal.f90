@@ -16,6 +16,9 @@
 ! a. in function call, in & out are intended as:
 !     - in : goes inside the function
 !     - out: is returned from the function
+! b. Memory usage:
+!     - variables for the forward problem are allocated in the fed_main module.
+!     - this allowed a more clear division of the main into modules
 !
 ! -> Bugs/Iusses:
 ! a. fwd_main to be moved in src once all input/output modifications are completed
@@ -46,9 +49,9 @@ program opt_main
  integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
  integer:: NumSteps                            ! Number of time steps.
  integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
- type(xbopts)            :: Options            ! Solution options (structure defined in xbeam_shared).
- type(xbelem),allocatable:: Elem(:)            ! Element information.
- type(xbnode),allocatable:: Node(:)            ! Nodal information.
+ type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
+ type(xbelem), allocatable:: Elem(:)            ! Element information.
+ type(xbnode), allocatable:: Node(:)            ! Nodal information.
  integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
  real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
  real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
@@ -82,71 +85,54 @@ program opt_main
  character(len=3) :: gradmode ! gradient method
  character(len=3) :: solmode  ! solution mode
 
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+call fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
+                    &                      Elem,         &   ! from opt_main_xxx
+                    &                  NumNodes,         &   ! from input_elem
+                    & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
+                    &                  OutGrids)   ! from pt_main_xxx
+
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Read input data.
- call input_setup (NumElems,OutFile,Options)
+ ! Optimiser Input
  call opt_setup(gradmode,solmode)
 
- allocate (Elem(NumElems)) ! sm: initial orientation stored here
- call input_elem (NumElems,NumNodes,Elem)
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! Define a Pointer to Function:
+ ! This is required to access the appropriate pre_solve and solve routines!
 
- allocate(PosIni     (NumNodes,3)); PosIni     = 0.d0 ! sm: coord in input_xxx.f90
- allocate(ForceStatic(NumNodes,6)); ForceStatic= 0.d0
- allocate(PhiNodes   (NumNodes));   PhiNodes   = 0.d0
- allocate(BoundConds (NumNodes));   BoundConds = 0
- call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic,PhiNodes)
- ! sm: in input_xxx.f90
- !    input_node (NumNodes,Elem,BoundConds,Coords,     Forces,PhiNodes)
- !    input_node (      in,  in,       out,   out,        out,     out)
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Open main output file and select grid points where output will be written.
- ! Unit 12 is opened here but subprocesses can access it - not preferred solution
- open (unit=12,file=OutFile(1:11)//'.mrb',status='replace')
- allocate(OutGrids(NumNodes))
- OutGrids          = .false.
- OutGrids(NumNodes)= .true.
- call out_title (12,'GLOBAL CONSTANTS IN THE MODEL:')
- write (12,'(14X,A,I12)')    'Number of Beam DOFs:    ', 6
- call out_title (12,'OUTPUT OPTIONS:')
- write (12,'(14X,A,I12)')    'Number of Output Nodes: ', 1
- write (12,'(14X,A,I12)')    'Print Displacements:    ', 1
- write (12,'(14X,A,I12)')    'Print Velocities:       ', 1
-
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Compute initial (undeformed) geometry.
- allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
- call xbeam_undef_geom ( Elem,PosIni,PhiNodes,PsiIni,Options)
- !    xbeam_undef_geom (inout,    in,      in,   out,     in)
- ! - PosIni (in): Coords in unput_xxx.f90
- ! - PhiNodes (in): pretwist
- ! - PsiIni (out): CRV at the node
-
- ! Store undeformed geometry in external text file.
- open (unit=11,file=OutFile(1:11)//'_und.txt',status='replace')
-     call output_elems (11,Elem,PosIni,PsiIni)
- close (11)
-
- ! Identify nodal degrees of freedom.
- allocate (Node(NumNodes))
- call xbeam_undef_dofs (Elem,BoundConds,  Node,NumDof)
- ! xbeam_undef_dofs    (  in,        in, inout,   out)
- ! Node: Nodal information [type(xbnode)]
- !NumDof Number of independent degrees of freedom.
-
+ ! Reads Forward Problem Input and allocates the required variables for the
+ ! forward static problem solution
+ call fwd_static_presolver(NumElems,OutFile,Options,     &   ! from input_setup
+                    &                      Elem,         &   ! from opt_main_xxx
+                    &                  NumNodes,         &   ! from input_elem
+                    & BoundConds,PosIni,       PhiNodes, &   ! from input_node
+                    &                    PsiIni,         &   ! from xbeam_undef_geom
+                    &              Node, NumDof,         &   ! from xbeam_undef_dofs
+                    & PosDef, PsiDef, InternalForces     )
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Static solution.
  ! Allocate memory for problem variables.
+ ! sm note: at this point the arrays have size 1
+ ! The allocation can be done in the solver function and the output array will
+ ! have whichever size given during the allocation.
+ ! Even if the allocation doesn't happen in here (but in the fwd main solver)
+ ! variables can be deallocated here!
+ !
+ ! Moved into fwd_solver or fwd_pre_static_solver
  !allocate (PosDef(NumNodes,3));          PosDef= PosIni
  !allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
  !allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
 
  call tic()
- call fwd_solver(NumElems,OutFile,Options,        &   ! from input_setup
+ call fwd_static_solver(NumElems,OutFile,Options,        &   ! from input_setup
              &                      Elem,         &   ! from opt_main_xxx
              &                  NumNodes,         &   ! from input_elem
              & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node

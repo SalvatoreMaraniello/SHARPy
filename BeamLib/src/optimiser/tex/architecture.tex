@@ -56,6 +56,7 @@ As per the original beam solver, the code needs to be recompiled at each run. Th
 
 \section{Reminders:}
 \bit
+\item the pre solver methods for coupled and dynamics need to be call the pre solver for static as they depend on it
 \item clean up the variable definition in \ffun{fwd\_main} when the structure is defined. Also check out the allocatable attribute in the same function, avoiding to overuse it
 \item in \ffun{fwd\_main} why the ForcedVel is allocated/deallocated outside the select/case?
 \eit

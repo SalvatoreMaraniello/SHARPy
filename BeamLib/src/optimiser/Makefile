@@ -21,6 +21,7 @@
 # - 'make run'    : runs the optimisation
 # - 'make opttest': cleans all files (excutable included), recompiles them and 
 #                   runs the optimiser 
+# - 'make rmout'  : removes output from simulation
 #
 # Unused:
 # - 'make xbeamso' : from makefile from HH and RP (not working)
@@ -57,6 +58,9 @@ opttest:
 	make clean
 	make opt
 	make run
+	
+rmout:
+	rm -f ./*_def.txt ./*und.txt ./*.mrb 
 	
 ################################################################################
 ##  COMPILER OPTIONS.

@@ -7,15 +7,30 @@
 !
 !-> Language.- FORTRAN90, Free format.
 !
-!-> Description.- This module contains the xbeam forward solver.
-! It has been recasted into a module structure from the Main xbeam program
-! (proj_root/BeamLib/src/fortran/main/main_xxx.f90) to allow the solver to
-! be called from the outside.
+!-> Description.-
+!   - This module contains the xbeam forward solver.
+!   - It has been recasted into a module structure from the Main xbeam program
+!   (proj_root/BeamLib/src/fortran/main/main_xxx.f90) to allow the solver to
+!   be called from the outside.
+!   - The original Main has been divided into subroutines to allow a more
+!   flexible access from the 'outside'
+!   - All printing statements have been kept in here as well.
 !
-! -> subroutines:
-!   - fwd_solver: contains the subroutine version of the xbeam Main program
-!       - The input to this function are passed in the same 'order of
-!         appearence' as in the opt_main_xxx file
+! -> Subroutines:
+!   - fwd_static_input: reads input for static problem
+!   - pre_static_solver: prepares and allocates variables for static solver;
+!   - fwd_static_solver: points to the static solver;
+!   - pre_dynamic_solver: reads and allocates variables for dynamic solver;
+!   - fwd_dynamic_solver: contains the subroutine version of the xbeam Main program;
+!   - pre_coupled_solver: reads and allocates variables for dynamic solver;
+!   - fwd_coupled_solver: points to the coupled solver;
+!   - The input to this function are passed in the same 'order of  appearence'
+!     as in the opt_main_xxx file;
+!
+! -> Bugs/Reminders:
+!  - The pre_solver for dynamic and couple dproblems need to be developed. These
+!     require a call to the static pre solver
+!
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -33,8 +48,138 @@ module fwd_main
 
 contains
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! fwd_static_input
+!
+! Calls input function for static forward problem. The routine is a
+! pre_requisite for dynamic and coupled solutions as well.
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
- subroutine fwd_solver(NumElems,OutFile,Options,         &   ! from input_setup
+subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
+                    &                      Elem,         &   ! from opt_main_xxx
+                    &                  NumNodes,         &   ! from input_elem
+                    & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
+                    &                  OutGrids)             ! from pt_main_xxx
+
+ ! Interface
+ integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
+ type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
+ type(xbelem), allocatable:: Elem(:)           ! Element information.
+ integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
+ real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+ logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
+ character(len=25)        :: OutFile           ! Output file.
+ real(8),      allocatable:: PosIni   (:,:)    ! Initial nodal Coordinates.
+ real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! Read input data.
+ call input_setup (NumElems,OutFile,Options)
+ allocate (Elem(NumElems)) ! sm: initial orientation stored here
+ call input_elem (NumElems,NumNodes,Elem)
+
+ allocate(PosIni     (NumNodes,3)); PosIni     = 0.d0 ! sm: coord in input_xxx.f90
+ allocate(ForceStatic(NumNodes,6)); ForceStatic= 0.d0
+ allocate(PhiNodes   (NumNodes));   PhiNodes   = 0.d0
+ allocate(BoundConds (NumNodes));   BoundConds = 0
+ call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic,PhiNodes)
+ ! sm: in input_xxx.f90
+ !    input_node (NumNodes,Elem,BoundConds,Coords,     Forces,PhiNodes)
+ !    input_node (      in,  in,       out,   out,        out,     out)
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! Open main output file and select grid points where output will be written.
+ ! Unit 12 is opened here but subprocesses can access it - not preferred solution
+ open (unit=12,file=OutFile(1:11)//'.mrb',status='replace')
+ allocate(OutGrids(NumNodes))
+ OutGrids          = .false.
+ OutGrids(NumNodes)= .true.
+ call out_title (12,'GLOBAL CONSTANTS IN THE MODEL:')
+ write (12,'(14X,A,I12)')    'Number of Beam DOFs:    ', 6
+ call out_title (12,'OUTPUT OPTIONS:')
+ write (12,'(14X,A,I12)')    'Number of Output Nodes: ', 1
+ write (12,'(14X,A,I12)')    'Print Displacements:    ', 1
+ write (12,'(14X,A,I12)')    'Print Velocities:       ', 1
+
+end subroutine fwd_static_input
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! fwd_static_pre_solver
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ subroutine fwd_static_presolver(NumElems,OutFile,Options, & ! from input_setup
+                    &                      Elem,         &   ! from opt_main_xxx
+                    &                  NumNodes,         &   ! from input_elem
+                    & BoundConds,PosIni,PhiNodes,        & ! from input_node
+                    &                    PsiIni,         &   ! from xbeam_undef_geom
+                    &              Node, NumDof,         &   ! from xbeam_undef_dofs
+                    & PosDef, PsiDef, InternalForces     )
+
+ ! Interface
+ integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
+ integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
+ type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
+ type(xbelem), allocatable:: Elem(:)           ! Element information.
+ type(xbnode), allocatable:: Node(:)           ! Nodal information.
+ integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
+
+ real(8),      allocatable:: InternalForces(:,:) ! Internal force/moments at nodes.
+
+ character(len=25)        :: OutFile           ! Output file.
+ real(8),      allocatable:: PosIni   (:,:)    ! Initial nodal Coordinates.
+ real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
+ real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
+ real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
+
+ real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! Compute initial (undeformed) geometry.
+ allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
+ call xbeam_undef_geom ( Elem,PosIni,PhiNodes,PsiIni,Options)
+ !    xbeam_undef_geom (inout,    in,      in,   out,     in)
+ ! - PosIni (in): Coords in unput_xxx.f90
+ ! - PhiNodes (in): pretwist
+ ! - PsiIni (out): CRV at the node
+
+ ! Identify nodal degrees of freedom.
+ allocate (Node(NumNodes))
+ call xbeam_undef_dofs (Elem,BoundConds,  Node,NumDof)
+ ! xbeam_undef_dofs    (  in,        in, inout,   out)
+ ! Node: Nodal information [type(xbnode)]
+ !NumDof Number of independent degrees of freedom.
+
+ allocate (PosDef(NumNodes,3));          PosDef= PosIni
+ allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
+ allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
+
+ ! Store undeformed geometry in external text file.
+ open (unit=11,file=OutFile(1:11)//'_und.txt',status='replace')
+     call output_elems (11,Elem,PosIni,PsiIni)
+ close (11)
+
+end subroutine fwd_static_presolver
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! fwd_static_solver
+!
+! The routine points to:
+! - cbeam3_solv_linstatic
+! -
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ subroutine fwd_static_solver(NumElems,OutFile,Options,         &   ! from input_setup
                     &                      Elem,         &   ! from opt_main_xxx
                     &                  NumNodes,         &   ! from input_elem
                     & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
@@ -43,6 +188,74 @@ contains
                     &              Node, NumDof,         &   ! from xbeam_undef_dofs
                     & PosDef, PsiDef, InternalForces     )   ! OUTPUTS!!!
 
+ ! Interface
+ integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
+ integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
+ type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
+ type(xbelem), allocatable:: Elem(:)           ! Element information.
+ type(xbnode), allocatable:: Node(:)           ! Nodal information.
+ integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
+ real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+ real(8),      allocatable:: InternalForces(:,:) ! Internal force/moments at nodes.
+ logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
+ character(len=25)        :: OutFile           ! Output file.
+ real(8),      allocatable:: PosIni (:,:)      ! Initial nodal Coordinates.
+ real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
+ real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
+ real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
+
+ real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
+ ! Internal Variables
+ real(8),      allocatable:: ForcedVel(:,:)  ! Forced velocities at the support.
+
+     select case (Options%Solution)
+     case (102,302)
+       ! sm: NumDof is 6*NumberIndepNodes
+       ! ForceStatic is a matrix (row: global numbering; columns: forces and Moments)
+       ! PsiIni: CRV at the nodes [Psi0(NumElems,MaxElNod,3)]
+       call cbeam3_solv_linstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni, &
+    &                              PosDef,PsiDef,Options)
+
+
+     case (112,142,312,322)
+       call cbeam3_solv_nlnstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni, &
+    &                              PosDef,PsiDef,Options)
+
+     case default
+       print *, 'No static solution'
+     end select
+
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Vibration analysis.
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      ! CBEAM3: Tangent linear vibration analysis (around the current deformed beam).
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      select case (Options%Solution)
+      case (142)
+         ! sm: allocation of ForcedVel moved insuide the select case
+         allocate (ForcedVel(1,6)); ForcedVel   = 0.d0
+         call cbeam3_solv_modal (12,NumDof,Elem,Node,ForcedVel,PosIni,PsiIni,     &
+    &                            PosDef,PsiDef,Options)
+         deallocate(ForcedVel)
+      end select
+
+end subroutine fwd_static_solver
+
+
+
+ subroutine fwd_dynamic_solver(NumElems,OutFile,Options,         &   ! from input_setup
+                    &                      Elem,         &   ! from opt_main_xxx
+                    &                  NumNodes,         &   ! from input_elem
+                    & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
+                    &                  OutGrids,         &   ! from pt_main_xxx
+                    &                    PsiIni,         &   ! from xbeam_undef_geom
+                    &              Node, NumDof,         &   ! from xbeam_undef_dofs
+                    & PosDef, PsiDef, InternalForces     )   ! OUTPUTS!!!
 
      real(8):: t0,dt                               ! Initial time and time step.
      integer:: i,j                                 ! Counter.
@@ -80,50 +293,6 @@ contains
      real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
      real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
      real(8),      allocatable:: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
-
-
-
- allocate (PosDef(NumNodes,3));          PosDef= PosIni
- allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
- allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
-
-     select case (Options%Solution)
-     case (102,302)
-       ! sm: NumDof is 6*NumberIndepNodes
-       ! ForceStatic is a matrix (row: global numbering; columns: forces and Moments)
-       ! PsiIni: CRV at the nodes [Psi0(NumElems,MaxElNod,3)]
-       call cbeam3_solv_linstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni, &
-    &                              PosDef,PsiDef,Options)
-
-
-     case (112,142,312,322)
-       call cbeam3_solv_nlnstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni, &
-    &                              PosDef,PsiDef,Options)
-
-     case default
-       print *, 'No static solution'
-     end select
-
-
-
-
-
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    ! Vibration analysis.
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      ! CBEAM3: Tangent linear vibration analysis (around the current deformed beam).
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      select case (Options%Solution)
-      case (142)
-         ! sm: allocation of ForcedVel moved insuide the select case
-         allocate (ForcedVel(1,6)); ForcedVel   = 0.d0
-         call cbeam3_solv_modal (12,NumDof,Elem,Node,ForcedVel,PosIni,PsiIni,     &
-    &                            PosDef,PsiDef,Options)
-         deallocate(ForcedVel)
-      end select
 
 
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -288,5 +457,5 @@ contains
 
       end if     ! Dynamic analysis
 
- end subroutine fwd_solver
+ end subroutine fwd_dynamic_solver
 end module fwd_main
