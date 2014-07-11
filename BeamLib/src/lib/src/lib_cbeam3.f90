@@ -338,6 +338,10 @@ module lib_cbeam3
 !
 !   1) New values are added to those already in the vector.
 !
+! -> Reference:
+!
+!   sec.4.5, Three Noded Geometrically Nonlinear Composite Beam, Palacios (2009)
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine cbeam3_fstif (NumNodesElem,r0,Ri,ElemStiff,Qstiff,NumGauss)
   use lib_fem
@@ -387,32 +391,37 @@ module lib_cbeam3
 
   do iGauss=1,NumGauss
 
-! Obtain the shape functions and their derivatives.
+  ! Obtain the shape functions and their derivatives.
     call fem_1d_shapefun (NumNodesElem,CoordGauss(iGauss),ShapeFun,ShapeDer)
 
-! Global coordinates and their derivatives at the gauss points.
+  ! Global coordinates and their derivatives at the gauss points.
+  ! Important:
+  ! 1. r0 contains both position and rotations.
+  ! 2. The jacobian is evaluated based on the initial configuration.
     do i=1,6
       r0_g(i) = dot_product (ShapeFun(1:NumNodesElem),r0(1:NumNodesElem,i))
       dr0_g(i)= dot_product (ShapeDer(1:NumNodesElem),r0(1:NumNodesElem,i))
     end do
-    Jacobian =sqrt(dot_product (dr0_g(1:3),dr0_g(1:3)))
+      Jacobian =sqrt(dot_product (dr0_g(1:3),dr0_g(1:3))) ! absolute value
 
-! Rescale the derivatives to be in the physical coordinates.
+  ! Rescale the derivatives to be in the physical coordinates.
     ShapeDer=ShapeDer/Jacobian
     dr0_g=dr0_g/Jacobian
 
-! Compute the current position vector and rotations, and their derivatives.
+  ! Compute the current position vector and rotations, and their derivatives.
+  ! a. note that dRi is already scaled
     do i=1,6
       Ri_g(i) = dot_product (ShapeFun(1:NumNodesElem),Ri(1:NumNodesElem,i))
       dRi_g(i)= dot_product (ShapeDer(1:NumNodesElem),Ri(1:NumNodesElem,i))
     end do
 
-! Interpolation of finite rotation
-!    R=cbeam3_sqrtM(matmul(rotvect_psi2mat(Ri(2,4:6)),transpose(rotvect_psi2mat(Ri(1,4:6)))))
-!    CBa = matmul(R,rotvect_psi2mat(Ri(1,4:6)))
-!    Ri_g(4:6) = rotvect_mat2psi(CBa)
+  ! Interpolation of finite rotation
+  !    R=cbeam3_sqrtM(matmul(rotvect_psi2mat(Ri(2,4:6)),transpose(rotvect_psi2mat(Ri(1,4:6)))))
+  !    CBa = matmul(R,rotvect_psi2mat(Ri(1,4:6)))
+  !    Ri_g(4:6) = rotvect_mat2psi(CBa)
 
-! Compute element shape function.
+  ! Compute element shape function matrices.
+  ! N has size (6,6*MaxNodCB3) with MaxNodCB3 = 3
     N =0.d0
     dN=0.d0
     do i=1,6
@@ -422,17 +431,20 @@ module lib_cbeam3
       end do
     end do
 
-! Compute the current coordinate transformation matrix, the rotational operator, and
-! its spatial derivative at the Gauss point.
+  ! Compute the current coordinate transformation matrix, the rotational operator,
+  ! and its spatial derivative at the Gauss point.
+  ! Important: CBa is the transformation from a to B
     CBa= rotvect_psi2mat  (Ri_g(4:6))
     Rot= rotvect_psi2rot  (Ri_g(4:6))
     dRot=rotvect_drotdpsib(Ri_g(4:6),dRi_g(4:6))
 
-! Compute the current curvature and strain at the Gaussian point.
+  ! Compute the current curvature and strain at the Gaussian point.
+  ! eq. 2.7 (H. Hesse PhD thesis)
     gamma=matmul(CBa,dRi_g(1:3)) - matmul(rotvect_psi2mat(r0_g(4:6)),dr0_g(1:3))
+  ! eq. 6.15 Cardona and Geradin (2001)
     KB=matmul(Rot,dRi_g(4:6))
 
-!Operators for the strain matrix.
+  ! Operators for the strain matrix. D is (6,6)
     D=0.d0
     D(1:3,1:3)=transpose(CBa)
     D(4:6,4:6)=Unit
@@ -448,12 +460,12 @@ module lib_cbeam3
     AK(4:6,1:3)=-rot_skew(gamma+Unit(1,1:3))
     AK(4:6,4:6)=-rot_skew(KB)
 
-! Compute strain matrix operator and material tangent stiffness.
+  ! Compute strain matrix operator and material tangent stiffness.
     B= matmul(transpose(D), matmul(Yp,dN)) &
 &    + matmul(transpose(AK),matmul(Yp, N)) &
 &    + matmul(dYp,N)
 
-! Compute force/moment strains.
+  ! Compute force/moment strains.
     Strain(1:3)= gamma
     Strain(4:6)= KB - matmul(rotvect_psi2rot(r0_g(4:6)),dr0_g(4:6))
     Forces=matmul(ElemStiff,Strain)
@@ -2076,6 +2088,10 @@ module lib_cbeam3
 !   1) For a slave frame, 1 refers to the node on the master element and 2
 !      is the same node on the slave element.
 !
+!   2) Sample call: from cbeam_asbly_static
+!       call cbeam3_slave2master (NumNE,Elem(iElem)%Master(:,:),rElem0(:,4:6),Psi0,rElem(:,4:6),PsiDefor,SB2B1)
+!
+!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine cbeam3_slave2master (NNE,TreeConn,Psi02_0,AllPsi_0,Psi02_t, &
 &                                AllPsi_t,S21)
@@ -2112,16 +2128,21 @@ module lib_cbeam3
   do iNode=1,NNE
     S21n= Unit
 
-! For each slave node, determine the constant rotation with respect to its master.
+  ! For each slave node, determine the constant rotation with respect to its master.
+  !
+  ! Reminder:
+  ! TreeConn(iNode,1)=0: the node is a master
+  ! TreeConn(iNode,1)=(ee,nn): the node is a slave of the nn-th node (local) of
+  ! the ee-th element
     if (TreeConn(iNode,1).ne.0) then
-      Psi01= AllPsi_0(TreeConn(iNode,1),TreeConn(iNode,2),:)
-      Psi21= rotvect_addpsi(-Psi02_0(iNode,:),Psi01)
+      Psi01= AllPsi_0(TreeConn(iNode,1),TreeConn(iNode,2),:) ! CRV of master node
+      Psi21= rotvect_addpsi(-Psi02_0(iNode,:),Psi01) !
 
-! If the rotation is non-zero, slave-node equations need to be transformed.
+  ! If the rotation is non-zero, slave-node equations need to be transformed.
       if (dot_product(Psi21,Psi21).ne.0.d0) then
         C_12=  rotvect_psi2mat(Psi21)
 
-! Transformation operator from local to global rotations.
+  ! Transformation operator from local to global rotations.
         Psi01= AllPsi_t(TreeConn(iNode,1),TreeConn(iNode,2),:)
         T02= rotvect_psi2rot(Psi02_t(iNode,:))
         T01= rotvect_psi2rot(Psi01)

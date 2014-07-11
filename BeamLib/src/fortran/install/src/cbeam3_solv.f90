@@ -205,7 +205,8 @@ module cbeam3_solv
 
 ! Allocate memory for solver (Use a conservative estimate of the size of the matrix Kglobal).
 ! - DimMat=24 is a parameter
-! - ks and fs are defined by the sparse_zero call. Same for Kglobal and Fglobal.
+! - ks and fs are defined by the sparse_zero call and initialised to zero.
+! - Kglobal and Fglobal are empty (0 at (0,0) element)
 ! - They are both output
   allocate (Kglobal(DimMat*NumDof)); call sparse_zero (ks,Kglobal)
   allocate (Fglobal(DimMat*NumDof)); call sparse_zero (fs,Fglobal)
@@ -214,11 +215,11 @@ module cbeam3_solv
 
 ! Assembly matrices and functional.
   Qglobal=0.d0
-  call sparse_zero (ks,Kglobal) ! sm BUG: isn't this repeated
+  call sparse_zero (ks,Kglobal) ! sm BUG: isn't this repeated?
   call sparse_zero (fs,Fglobal)
 
-  call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,AppForces, &
-&                           ks,Kglobal,fs,Fglobal,Qglobal,Options)
+  call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,AppForces, & ! input
+&                           ks,Kglobal,fs,Fglobal,Qglobal,Options)               ! output (except for Options)
 
 ! Forces on the unconstrained nodes.
   Qglobal= sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))

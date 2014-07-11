@@ -104,26 +104,33 @@ module cbeam3_asbly
     if (NumNE.eq.3) &
     &   call rotvect_boundscheck2(rElem(3,4:6),rElem(2,4:6))
 
-! Extract current applied forces/moments at the element nodes.
+  ! Extract current applied forces/moments at the element nodes.
     call fem_glob2loc_extract (Elem(iElem)%Conn,Force,ForceElem,NumNE)
 
-! Compute the element tangent stiffness matrix and force vectors.
+  ! Compute the element tangent stiffness matrix and force vectors.
+  ! inportant:
+  ! 1. rElem and rEleme0 contain both positions and rotations!
+  ! 2. cbeam_fstif adds to Qelem (inout) the contribution given by the internal
+  !    forces. Note that Qelem at this point is zero.
     call cbeam3_kmat  (NumNE,rElem0,rElem,Elem(iElem)%Stiff,Kelem,Options%NumGauss)
     call cbeam3_kgeom (NumNE,rElem0,rElem,Elem(iElem)%Stiff,Kelem,Options%NumGauss)
     call cbeam3_fstif (NumNE,rElem0,rElem,Elem(iElem)%Stiff,Qelem,Options%NumGauss)
 
-! Project equations to the orientation of the "master" degrees of freedom.
-!    call cbeam3_projs2m (NumNE,Elem(iElem)%Master(:,:),Psi0(iElem,:,:),Psi0,SB2B1)
+  ! Project equations to the orientation of the "master" degrees of freedom.
+  !    call cbeam3_projs2m (NumNE,Elem(iElem)%Master(:,:),Psi0(iElem,:,:),Psi0,SB2B1)
+  ! Important:
+  ! 1. The function returns the transformation matrix master-to-slave for the
+  ! current node.
     call cbeam3_slave2master (NumNE,Elem(iElem)%Master(:,:),rElem0(:,4:6),Psi0,rElem(:,4:6),PsiDefor,SB2B1)
     Kelem=matmul(transpose(SB2B1),matmul(Kelem,SB2B1))
     Qelem=matmul(transpose(SB2B1),Qelem)
 
-! Compute the influence coefficients multiplying the vector of external forces.
-! (rotate if follower forces and filter out slave nodes).
+  ! Compute the influence coefficients multiplying the vector of external forces.
+  ! (rotate if follower forces and filter out slave nodes).
     call cbeam3_fext  (NumNE,rElem,Flags(1:NumNE),Felem,Options%FollowerForce,Options%FollowerForceRig,Unit)
     call cbeam3_dqext (NumNE,rElem,ForceElem,Flags(1:NumNE),Kelem,Options%FollowerForce)
 
-! Add to global matrix. Remove columns and rows at clamped points.
+  ! Add to global matrix. Remove columns and rows at clamped points.
     do i=1,NumNE
       i1=Node(Elem(iElem)%Conn(i))%Vdof
       if (i1.ne.0) then

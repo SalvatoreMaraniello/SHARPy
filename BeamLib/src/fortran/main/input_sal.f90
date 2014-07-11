@@ -70,6 +70,8 @@ module input
  character(len=4),private,save:: ElemType            ! ='STRN','DISP'
  character(len=4),private,save:: TestCase            ! Define the test case (CANT,ARCH).
  character(len=2),private,save:: BConds              ! ='CC': Clamped-Clamped
+
+ !real(8), parameter :: pi = 4.d0!*datan(1.d0)
                                                      ! ='CF': Clamped-Free'
  contains
 
@@ -97,7 +99,7 @@ module input
   real(8) :: sigma
 
 ! INPUT START
-  TestCase='BEND'
+  TestCase='PTW2'! 'BEND'!'NCB1'
   Options%Solution=112
 
 ! Default values.
@@ -108,11 +110,43 @@ module input
 
   select case (trim(TestCase))
 
+     case ('PTW1', 'PTW2') ! Check effect of pre-twist
+      ! Inputs are as per NCB1 but:
+      ! a. GA and EI of cross-section 2 are halved to make the bean asimetric
+        NumElems    = 25
+        NumNodesElem= 3
+        ThetaRoot   = 0.d0
+        ThetaTip    = Pi/6.d0 ! ps: Pi defined in xbeam_shared
+        BeamLength1 = 5.0d0
+
+        BConds  ='CF'
+        ExtForce=(/ 0.d0, 0.d0, 600.d3 /)
+        ExtMomnt=(/ 0.d0, 0.d0,   0.d0 /)
+        Options%FollowerForce = .false.
+
+        Options%NumLoadSteps  = 10!NumElems
+        Options%MinDelta      = 1.d-5
+        Options%MaxIterations = 200
+
+        BeamStiffness(1,1)= 4.8d8   ! EA [Nm]
+        BeamStiffness(2,2)= 0.5 * 3.231d8 ! GA
+        BeamStiffness(3,3)= 3.231d8
+        BeamStiffness(4,4)= 1.d6    ! GJ
+        BeamStiffness(5,5)= 0.5 * 9.346d6 ! EI
+        BeamStiffness(6,6)= 9.346d6
+
+        BeamMass(1,1)=100.d0        ! m [kg/m]
+        BeamMass(2,2)=BeamMass(1,1)
+        BeamMass(3,3)=BeamMass(1,1)
+        BeamMass(4,4)=10.d0         ! J [kgm]
+        BeamMass(5,5)=10.d0
+        BeamMass(6,6)=10.d0
+
      case ('NCB1')
       ! Analytical NatFreqs (rad/s): 43.0(B1), 99.3(T1), 269.4(B2),
       ! 298.0(T2), 496.7(T3), 699.9(A1), 759.5(B3)
-        NumElems    = 3
-        NumNodesElem= 2
+        NumElems    = 10
+        NumNodesElem= 3
         ThetaRoot   = 0.d0
         ThetaTip    = 0.d0
         BeamLength1 = 5.0d0
@@ -176,7 +210,7 @@ module input
         BeamMass(6,6)=10.d0
 
     case ('BEND')
-        NumElems= 4
+        NumElems= 6
         NumNodesElem=2
         BeamLength1=100.d0
 
@@ -453,6 +487,13 @@ subroutine input_elem (NumElems,NumNodes,Elem)
     case default  ! straight beam ('HALE','GOLD','TPY0','CANT','NCB1')
         Elem(i)%Vector(2)= 1.d0
 
+    case ('PTW2') ! rotate the Elem(i)%Vector
+        Elem(i)%Vector= 0.d0
+        Elem(i)%Vector(2)= dcos( ThetaRoot+(ThetaTip - ThetaRoot)*(dble(i-1)/dble(NumElems)) ) !-cos(ThetaRoot + (ThetaTip - ThetaRoot) * y/L)
+        Elem(i)%Vector(3)= dsin( ThetaRoot+(ThetaTip - ThetaRoot)*(dble(i-1)/dble(NumElems)) ) ! sin( * y/L)
+        !sm 7 july 2014: lines below commented for twist-orientation vector investigation, case 3
+        ThetaTip=0.d0 !ThetaTip/100.d0
+        ThetaRoot=0.d0 !ThetaRoot/100.d0
     case ('BEND') ! the beam develops in the Oxy plane
     ! sm: the case is set up as per input_rafa,f90 but I'd set Elem%Vector=(/0,0,1/)
         Elem(i)%Vector= 0.d0
@@ -520,9 +561,14 @@ subroutine input_elem (NumElems,NumNodes,Elem)
     end select
 
 ! Initial pretwist angle.
-  do i=1,NumNodes
+select case (trim(TestCase))
+  case default
+    do i=1,NumNodes
       PhiNodes(i)=ThetaRoot+(ThetaTip-ThetaRoot)*(dble(i-1)/dble(NumNodes-1))
-  end do
+    end do
+  !case ('PTW2')
+  !  PhiNodes(i)=0 ! this leads to error after the execution is terminated...
+end select
 
 ! Static point forces.
   !ffvec=0
