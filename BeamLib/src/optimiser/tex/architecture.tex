@@ -1,0 +1,140 @@
+\documentclass[a4paper,10pt]{article}
+%\documentclass[a4paper,10pt]{scrartcl}
+
+\usepackage{graphicx}	
+\usepackage{fullpage}
+\usepackage[utf8x]{inputenc}
+\usepackage[round,compress]{natbib}
+
+\title{OptSHARP}
+	\date{\today}
+
+\pdfinfo{
+  /Title    (Optimiser Architecture)
+  /Author   (Salvatore Maraniello)
+  /Creator  ()
+  /Producer ()
+  /Subject  (PhD, dep. Aeronautics)
+ /Keywords ()}
+
+
+\newcommand{\bit}{\begin{itemize}}
+\newcommand{\eit}{\end{itemize}}
+\newcommand{\pder}[2]{\frac{\partial{#1}}{\partial{#2}}}	% partial derivate
+
+\newcommand{\ffile}[1]{\textsl{{#1}.f90}} % fortran file - extention added automatically
+\newcommand{\ffun}[1]{\textbf{{#1}}}  % fortran function
+\newcommand{\for}{FoR }
+\newcommand{\myv}[1]{\mathbf{#1}}
+\newcommand{\rv}{\myv{r}}
+
+\begin{document}
+\maketitle
+
+
+
+\section{Optimiser Architecture}
+As per the original beam solver, the code needs to be recompiled at each run. The main file is \ffile{opt\_main\_xxx} (where xxx is the user name).
+\bit
+\item Input: two input files (\ffile{opt\_input\_xxx} and \ffile{input\_xxx}) need to be filled, one having the optimisation input, the other defining the forward problem (i.e. the initial condition for the optimisation problem).
+
+\item The beam solver code (sec.\ref{sec:xbeam}) Main program has been adapted to run as a function (\ffun{fwd\_solver}, contained in \ffile{fwd\_main}). 
+
+
+\eit
+
+
+
+\section{Issues}
+\bit
+\item unified process: static and dynamic problems require different variables and the allocation of these happens at different stages of the code. Unless we accept to leave the allocation inside the \ffun{fwd\_main}, which means that all the process of defining the problem is done at each forward call, we have to allocate them at the level of the \ffun{opt\_main}.
+\item From a memory usage point of view, what is actually better? Cause allocating stuff in the \ffun{opt\_main} would 
+\item The \ffile{input\_xxx} functions cannot be called by the \ffile{fwd\_main} unless they are in the same folder (compiling issues otherwise). Not a major issue but it would be nice to have a more clear hierarchy.
+\item types: using types for the design parameters would be very handy.
+\eit
+
+
+\section{Reminders:}
+\bit
+\item clean up the variable definition in \ffun{fwd\_main} when the structure is defined. Also check out the allocatable attribute in the same function, avoiding to overuse it
+\item in \ffun{fwd\_main} why the ForcedVel is allocated/deallocated outside the select/case?
+\eit
+
+
+
+
+\newpage
+\section{Beam Solver Main Structure}
+\label{sec:xbeam}
+We try to collect here the calls from the \ffile{main\_xxx} file. The structure is sequential
+\bit
+\item input set up: the input are allocated into different functions inside \ffile{input\_xxx}. These are called at different steps in the main file (therefore the need to use more than one input function).
+	\bit
+	\item 
+	\eit
+	
+\item \ffun{xbeam\_undef\_geom}: the purpose here is to define the undeformed geometry of the beam. As the coordinates of the nodes are passed and defined by the user in input, what this step really does is to define a local frame of reference at each node of the beam. According to par. 4.4 of \cite{Palacios2009}, this \for will have one direction along the element tangent. Already here we can see that the \for are discontinuous across different elements, so multiple FoR will be defined at nodes shared by more than one element. For \emph{each element}, the following steps are followed.
+	\bit
+	\item The coordinates (i.e. position vector in the global frame) of each element are extracted (\ffun{fem\_glob2loc\_extract}). The same is done with the pre-twist angle at the element nodes.
+	\item An element \for is defined. The convention for this frame are:
+		\bit
+		\item the x axis will be along the $\rv_2 - \rv_1$ line.
+		\item the y axis is given by the element orientation vector (defined in input). This must be perpendicular to the reference line (or the code will stop). I believe we define the section properties in respect to the element orientation vector, so that's why it is required.
+		\eit
+	\item A nodal \for is then defined (\ffun{bgeom\_nodeframe}). This is done in two steps:
+		\bit
+		\item The Frenet-Serret \for is defined \citep{Palacios2009}. This has the x axis tangent to the reference line (also referred to as tangent unit vector) and:
+			\bit
+			\item for quadratic elements z axis (binormal unit vector) normal to the tangent line and the plane described by the deformed beam. If the element is linear, or if it's quadratic but straight, a plane cannot be identified. In that case, the y direction is defined first.
+			\item y axis normal to the tangent and binormal unit vector or, in case the element is straight and undeformedor if linear elements are being used, this is taken to be the element \for y axis (user defined). 
+			\eit
+		\item the Frenet-Serret \for so defined is rotated around the tangent unit vector to account for the pretwist. This will define the local \for.
+		\eit
+	\item additionally, the element length (\ffun{bgeom\_elemlength}) is computed and the element curvature (\ffun{bgeom\_elemcurv2}) are computed. The element curvature is computed only for linear elements. It is not clear how this information is used.
+	\eit
+	\item The tree of connectivities, i.e. master and slave nodes, is defined into \ffun{xbeam\_undef\_relatree}. The algorithm only depends on the connectivity (to check if two nodes overlap) and on the elements ordering. All nodes of the first element will be master, while nodes of following elements coinciding with any of the the first element nodes will be slave.
+	\item \ffun{xbeam\_undef\_dofs} allocates the array of structures Node (of type xbnode): this has size equal to the total number of nodes, its i$^{th}$ element being associated to the i$^th$ node in the global numbering. The field master of Node is allocated here. For each node, the function locates element and local number of the master node. \ffun{xbeam\_undef\_nodeindep}
+	\item Solution: this is treated in detail in the next section.
+\eit
+
+
+\subsection{Linear Solver}
+The linear solver is \ffun{cbeam3\_solv\_linstatic} and is called for both the static (102) and dynamic structural solution. In the latter case, the static solution serves to initialise the initial condition of the problem. 
+\bit
+\item input: positions (in global \for) and CRV (for each node and each element - remind the CRV is discontinuous at the nodes) are passed together with applied static forces and connectivity/elements informations (Elem and Node) structures. 
+\item pre-solver: stiffness and influence coefficient matrices are allocated as sparse. Also the applied forces.
+\item assembly (\ffun{cbeam3\_asbly\_static}): this is used also by the non linear solve \ffun{cbeam3\_solv\_nnlstatic}, so not all the terms will be used in the linear solution.
+    \bit
+	\item for each element of the structure, the local tangent stiffness, influence force coefficients and applied forces are initialised.
+	\item initial position and deformed position (in the global \for) of the nodes are extracted via the subroutine \ffun{fem\_glob2loc\_extract}. Same thing is done for the CRVs related to the initial and deformed configuration.
+	\item Being the solution static, only the tangent and geometrical stiffness matrix are allocated (\ffun{cbeam3\_kmat} and \ffun{cbeam3\_kgeom}). 
+	\item The internal forces  are also computed in \ffun{cbeam3\_fstif}. The strsin matrix B is computed at the current configuration and at the terms doen't need to be linearised. The computation follows closely the notation from sec. 4.5 from \cite{Palacios2009} but it should be (proof not completed) equivalent to \cite{Geradin2001}.
+	\eit 
+\eit
+
+
+\subsection{Auxiliary Routines}
+
+\subsubsection{Rotations}
+These are in the \ffile{lib\_rotvect} library.
+\bit
+\item \ffun{rotvect\_psi2rot} Returns the rotational tangential operator from CRV as per eq. (4.11) of \cite{Geradin2001}; This is necessary for computing the beam curvature and, therefore, the internal forces.
+\item \ffun{rotvect\_drotdpsib} is used to compute the tangent operator derivative $T' = \pder{T}{\Phi_i}{\Phi'}$;
+\eit
+
+
+
+
+\subsection{Finite Difference Sensitivity Module}
+\bit
+\item a module to test matrices of linearised problem has already been developed by Henrik. Part of it can be used and integrated for the adjoint - even if, actually, all this block is available analytically.
+\item An external module to drive the problem has to be created. The code doesn't need to be recompiled if the module is there. A compilation will be required to setup the optimisation problem - for which a similar structure as the input file already available can be used. The problem will be defined and run. The results - only cost and/or constraint function values - will be allocated. After that the code can go through the design parameters, change them and without recompiling re-run stuff. This may be ok for both time dependent and static simulations.
+	\bit
+	\item define list of cost functions
+	\item define list of parameters
+	\item done, you can loop into it cause you've a matrix done.
+	\eit
+\eit
+
+
+\end{document}
