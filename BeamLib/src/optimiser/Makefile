@@ -4,7 +4,7 @@
 #
 # Reference: 
 # a. ../install/Makefile (HH and RP)
-# b. ../../wrapper/Makefile
+# b. ../../wrapper/Makefile (ADR)
 # c. http://oreilly.com/catalog/make3/book/
 # 
 # Prerequisites:
@@ -31,8 +31,8 @@
 # - 'make objlist'
 # - 'make dirprint'
 # - 'make 'dirlist'
-# - make libtest: compiles libraries for forward problem
-# - make xbeamtest: compiles libraries first and xbeam solver and assembly
+# - 'make libtest': compiles libraries for forward problem
+# - 'make xbeamtest': compiles libraries first and xbeam solver and assembly
 #
 # Developer Notes:
 # - The current makefile does not include all the compile options of:
@@ -73,9 +73,14 @@ rmout:
 # -o: specify output name
 # -c: tells to compile an object file
 # -J: mod files destination
+# -std: 'f95',f2003', f2008',gnu', or legacy' to force compiling with a 
+#
+# notes;
+# gnu: default; works
+# f95, f2003: low level error (interface_lapack_v3.f90
 
 F90COMP= gfortran
-F90OPTS= -g -m64 -cpp -J $(OBJDIR)
+F90OPTS= -std=gnu -g -m64 -cpp -J $(OBJDIR)
 F90FLAG=-fPIC -Wextra -cpp -DNOLAPACK -g
 LIBFLAG=-fPIC -shared -ffree-form -g
 LIBS= -llapack -lblas
@@ -168,8 +173,8 @@ OBJWRAP=\
 OBJOPTLIB=\
     $(OPTOBJDIR)/lib_perf.o
 
-OBJOPTSRC= 
-#    $(OPTOBJDIR)/fwd_main.o
+OBJOPTSRC=\
+	$(OPTOBJDIR)/opt_fd_perturb.o
     
 OBJOPTMAIN=\
     $(OPTOBJDIR)/input_$(TESTCASE).o     \
