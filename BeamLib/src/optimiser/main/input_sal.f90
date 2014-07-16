@@ -49,6 +49,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module input
  use xbeam_shared
+
  implicit none
 
  ! Shared variables.
@@ -99,7 +100,7 @@ module input
   real(8) :: sigma
 
 ! INPUT START
-  TestCase='PTW2'! 'BEND'!'NCB1'
+  TestCase='OPTT'! 'BEND'!'NCB1'
   Options%Solution=112
 
 ! Default values.
@@ -109,6 +110,28 @@ module input
   BeamMass     =0.d0
 
   select case (trim(TestCase))
+
+  case ('OPTT') ! Tests Input Output process
+        NumElems    = 25
+        NumNodesElem= 3
+        ThetaRoot   = 0.2
+        ThetaTip    = Pi/6.d0 ! ps: Pi defined in xbeam_shared
+        BeamLength1 = 5.0d0
+        BConds  ='CF'
+        ExtForce=(/ 1.d0, 2.d0, 600.d3 /)
+        ExtMomnt=(/ 4.d0, 5.d0,   6.d0 /)
+        Options%FollowerForce = .false.
+        Options%NumLoadSteps  = 10!NumElems
+        Options%MinDelta      = 1.d-5
+        Options%MaxIterations = 200
+        BeamStiffness = 11.0
+        BeamMass = 13.0
+        TipMass =15.0
+        TipMassY=17.0
+        TipMassZ=19.0
+        SectWidth=23.0
+        SectHeight=29.0
+        Omega=31.0
 
      case ('PTW1', 'PTW2') ! Check effect of pre-twist
       ! Inputs are as per NCB1 but:
@@ -770,6 +793,7 @@ subroutine input_forcedvel (NumNodes,Time,ForcedVel,ForcedVelDot)
   return
  end subroutine input_forcedvel
 
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine OUTPUT_ELEMS
 !
@@ -811,4 +835,133 @@ subroutine output_elems (iuOut,Elem,Coords,Psi)
 
 end subroutine output_elems
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine read_shared_input
+!
+!-> Description:
+!
+!    Allows exernal modules to read the Shared Variables
+!
+!-> Remarks.-
+!
+!    - This routine acts as a bridge between the optimisation module and the
+!    original code.
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ subroutine read_shared_input( OUT_BeamLength1, OUT_BeamLength2,   &
+                       & OUT_BeamStiffness, OUT_BeamMass,          &
+                       & OUT_ExtForce, OUT_ExtMomnt,               &
+                       & OUT_SectWidth, OUT_SectHeight,            &
+                       & OUT_ThetaRoot, OUT_ThetaTip,              &
+                       & OUT_TipMass, OUT_TipMassY, OUT_TipMassZ,  &
+                       & OUT_Omega                                 )
+
+  real(8), intent(out)  :: OUT_BeamLength1, OUT_BeamLength2
+  real(8), intent(out)  :: OUT_BeamStiffness(6,6)
+  real(8), intent(out)  :: OUT_BeamMass(6,6)
+  real(8), intent(out)  :: OUT_ExtForce(3)
+  real(8), intent(out)  :: OUT_ExtMomnt(3)
+  real(8), intent(out)  :: OUT_SectWidth, OUT_SectHeight
+  real(8), intent(out)  :: OUT_ThetaRoot
+  real(8), intent(out)  :: OUT_ThetaTip
+  real(8), intent(out)  :: OUT_TipMass
+  real(8), intent(out)  :: OUT_TipMassY
+  real(8), intent(out)  :: OUT_TipMassZ
+  real(8), intent(out)  :: OUT_Omega
+
+  OUT_BeamLength1   = BeamLength1  ; OUT_BeamLength2 = BeamLength2;
+  OUT_BeamStiffness = BeamStiffness; OUT_BeamMass    = BeamMass;
+  OUT_ExtForce      = ExtForce     ; OUT_ExtMomnt    = ExtMomnt;
+  OUT_SectWidth     = SectWidth    ; OUT_SectHeight  = SectHeight;
+  OUT_ThetaRoot     = ThetaRoot    ; OUT_ThetaTip    = ThetaTip;
+  OUT_TipMass = TipMass; OUT_TipMassY = TipMassY; OUT_TipMassZ = TipMassZ;
+  OUT_Omega         = Omega;
+
+ end subroutine read_shared_input
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine update_shared_input
+!
+!-> Description:
+!
+!    Allows exernal modules to update the Shared Variables values
+!
+!-> Remarks.-
+!
+!    - This routine acts as a bridge between the optimisation module and the
+!    original code.
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+subroutine update_shared_input( IN_BeamLength1, IN_BeamLength2,  &
+                       & IN_BeamStiffness, IN_BeamMass,          &
+                       & IN_ExtForce, IN_ExtMomnt,               &
+                       & IN_SectWidth, IN_SectHeight,            &
+                       & IN_ThetaRoot, IN_ThetaTip,              &
+                       & IN_TipMass, IN_TipMassY, IN_TipMassZ,   &
+                       & IN_Omega                                 )
+
+   real(8)  :: IN_BeamLength1, IN_BeamLength2
+   real(8), intent(in)  :: IN_BeamStiffness(6,6)
+   real(8), intent(in)  :: IN_BeamMass(6,6)
+   real(8), intent(in)  :: IN_ExtForce(3)
+   real(8), intent(in)  :: IN_ExtMomnt(3)
+   real(8), intent(in)  :: IN_SectWidth,IN_SectHeight
+   real(8), intent(in)  :: IN_ThetaRoot
+   real(8), intent(in)  :: IN_ThetaTip
+   real(8), intent(in)  :: IN_TipMass
+   real(8), intent(in)  :: IN_TipMassY
+   real(8), intent(in)  :: IN_TipMassZ
+   real(8), intent(in)  :: IN_Omega
+
+  BeamLength1   = IN_BeamLength1   ; BeamLength2 = IN_BeamLength2 ;
+  BeamStiffness = IN_BeamStiffness ; BeamMass    = IN_BeamMass ;
+  ExtForce      = IN_ExtForce      ; ExtMomnt    = IN_ExtMomnt ;
+  SectWidth     = IN_SectWidth     ; SectHeight  = IN_SectHeight ;
+  ThetaRoot     = IN_ThetaRoot     ; ThetaTip    = IN_ThetaTip ;
+  TipMass = IN_TipMass ; TipMassY = IN_TipMassY ; TipMassZ = IN_TipMassZ ;
+  Omega         = IN_Omega ;
+
+
+ end subroutine update_shared_input
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine print_shared_input
+!
+!-> Description:
+!
+!    Allows exernal modules to update the Shared Variables values
+!
+!-> Remarks.-
+!
+!    - This routine acts as a bridge between the optimisation module and the
+!    original code.
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+ subroutine print_shared_input
+
+   print *, 'SHARED INPUT:'
+   print *, 'BeamLength1, BeamLength2'   ,  BeamLength1, BeamLength2
+   print *, 'BeamStiffness'              ,  BeamStiffness
+   print *, 'BeamMass'                   ,  BeamMass
+   print *, 'ExtForce'                   ,  ExtForce
+   print *, 'ExtMomnt'                   ,  ExtMomnt
+   print *, 'SectWidth,SectHeight'       ,  SectWidth,SectHeight
+   print *, 'ThetaRoot,ThetaTip'         ,  ThetaRoot,ThetaTip
+   print *, 'TipMass, TipMassY, TipMassZ',  TipMass, TipMassY, TipMassZ
+   print *, 'Omega'                      ,  Omega
+
+ end subroutine print_shared_input
+
+
 end module input
+
+
+
+
+

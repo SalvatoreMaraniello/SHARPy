@@ -47,6 +47,9 @@ As per the original beam solver, the code needs to be recompiled at each run. Th
 
 \section{Issues}
 \bit
+\item types... they could be good to create arrays of variables to optimise in respect to...
+\item the BeamMass and BeamStiffness variables perturbed in the need to be perturbed for each element
+\item in \ffile{opt\_input\_xxx} we need to import the \ffun{input\_xxx} module, which is not a very general thing to do [no! the file is name dependent, but not the module]
 \item unified process: static and dynamic problems require different variables and the allocation of these happens at different stages of the code. Unless we accept to leave the allocation inside the \ffun{fwd\_main}, which means that all the process of defining the problem is done at each forward call, we have to allocate them at the level of the \ffun{opt\_main}.
 \item From a memory usage point of view, what is actually better? Cause allocating stuff in the \ffun{opt\_main} would 
 \item The \ffile{input\_xxx} functions cannot be called by the \ffile{fwd\_main} unless they are in the same folder (compiling issues otherwise). Not a major issue but it would be nice to have a more clear hierarchy.
@@ -136,6 +139,11 @@ These are in the \ffile{lib\_rotvect} library.
 	\item done, you can loop into it cause you've a matrix done.
 	\eit
 \eit
+
+\subsubsection{Step Size}
+All real variables are defined as kind 8,  i.e. 15 digits precision on this machine; a step of $10^{-8}$ is therefore chosen. The step represents the ratio on the current design variable size, unless the current design variable can be assumed to be zero. This is computed in fortran using the \ffun{epsilon} function. For reals of kind 8, the epsilon is of order $10^{-16}$ (for the precision $2.22 \ 10^{-16}
+$). For more detauls, run: workspace/Fortran/machine\_precision.
+
 
 
 \end{document}

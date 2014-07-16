@@ -36,7 +36,8 @@ program opt_main
  use opt_input                                 ! Optimisation Modules
  use fwd_main
  use lib_perf
- use opt_fd_perturb
+ use opt_shared
+ use opt_perturb
 
  implicit none
 
@@ -82,6 +83,7 @@ program opt_main
  character(len=3) :: solmode  ! solution mode
 
 
+
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Set Up Input for Static Problem
  ! (stage required also for dynamic and coupled solutions)
@@ -94,6 +96,7 @@ program opt_main
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input
  call opt_setup(gradmode,solmode)
+
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Reads Forward Problem Input and allocates the required variables for the
@@ -137,6 +140,7 @@ program opt_main
 
 
 
+
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Set Next Step
  select case (solmode)
@@ -144,11 +148,16 @@ program opt_main
     case ('FWD')
         print *, 'Forward Problem Completed'
 
-    case ('OPT')
-        print *, 'Optimisation'
-
-    case ('SNS')
+    case ('OPT','SNS')
         print *, 'Sensitivity Analysis'
+
+         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         ! Perturb shared Variables
+         print *, 'initial value'
+         call print_shared_input
+         call opt_update_shared_input( (FLAG_DESIGN_SHARED) ) ! JUST TO CHECK THE EXECUTION
+         print *, 'After Perturbation'
+         call print_shared_input
 
  end select
 

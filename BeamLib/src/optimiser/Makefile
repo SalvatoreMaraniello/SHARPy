@@ -11,7 +11,8 @@
 # - check out the path to llapack and lblas libraries (LIBSDIR variable);
 # - Change TESTCASE to consider different test problems;
 #	- the input_xxx.f90 for the forward code compilation is under the fortran folder
-#	- the input_xxx.f90 for the optimiser is under ./main
+#	- the opt_input_xxx.f90 for the optimiser is under ./main
+# - In opt_input_xxx.f90 select the right input_xxx module 
 #
 # Usage: 
 # - 'make all'    : see 'make exe'
@@ -19,9 +20,11 @@
 # - 'make opt'    : to compile the optimiser 
 # - 'make clean'  : clean up fwd and optimiser
 # - 'make run'    : runs the optimisation
-# - 'make opttest': cleans all files (excutable included), recompiles them and 
+# - 'make optgo'  : cleans all files (excutable included), recompiles them and 
 #                   runs the optimiser 
+# - 'make test'   : compiles program to test the optimiser src
 # - 'make rmout'  : removes output from simulation
+# - 'make test'   : runs test cases for opt_xxxxxx libraries 
 #
 # Unused:
 # - 'make xbeamso' : from makefile from HH and RP (not working)
@@ -46,18 +49,31 @@ all: xbeam
 exe: xbeam
 
 clean:
-	rm -f $(OBJOPT) $(OBJFWD) $(OBJWRAP) $(OBJDIR)/*.mod $(OBJDIR)/*.a $(OPTOBJDIR)/*.mod $(OPTOBJDIR)/*.mod
+	rm -f $(OBJOPT) $(OBJFWD) $(OBJWRAP) $(OPTOBJDIR)/opt_test.o 
+	rm -f $(OBJDIR)/*.mod $(OPTOBJDIR)/*.mod $(OPTOBJDIR)/*.mod
+	rm -f $(OBJDIR)/*.a
 
 opt: xbeamopt
+
+test: xbeamopt_test
 
 run: 
 	./bin/xbeamopt.exe
 	
-opttest:
+runtest: 
+	./bin/xbeamopt_test.exe	
+	
+optgo:
 	rm -f ./bin/xbeamopt.exe 
 	make clean
 	make opt
 	make run
+
+testgo:
+	rm -f ./bin/xbeamopt_test.exe 
+	make clean
+	make test
+	make runtest
 	
 rmout:
 	rm -f ./*_def.txt ./*und.txt ./*.mrb 
@@ -77,7 +93,7 @@ rmout:
 #
 # notes;
 # gnu: default; works
-# f95, f2003: low level error (interface_lapack_v3.f90
+# f95, f2003: low level error (interface_lapack_v3.f90)
 
 F90COMP= gfortran
 F90OPTS= -std=gnu -g -m64 -cpp -J $(OBJDIR)
@@ -174,13 +190,17 @@ OBJOPTLIB=\
     $(OPTOBJDIR)/lib_perf.o
 
 OBJOPTSRC=\
-	$(OPTOBJDIR)/opt_fd_perturb.o
+	$(OPTOBJDIR)/opt_shared.o \
+	$(OPTOBJDIR)/opt_perturb.o
+	
     
 OBJOPTMAIN=\
     $(OPTOBJDIR)/input_$(TESTCASE).o     \
     $(OPTOBJDIR)/fwd_main.o              \
     $(OPTOBJDIR)/opt_input_$(TESTCASE).o \
     $(OPTOBJDIR)/opt_main_$(TESTCASE).o  
+#\
+#$(OPTOBJDIR)/input_perturb.o 
 
 
 OBJOPT = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN)
@@ -198,6 +218,9 @@ OBJOPT = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN)
 #--------------------------------------------------------------------- Optimiser
 xbeamopt: $(OBJOPT)
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt.exe $(OBJOPT) $(LIBS) $(LIBSDIR)	
+	
+xbeamopt_test: $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
+	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
 	
 #--------------------------------------------------------------- Forward Problem
 xbeam: $(OBJFWD) 
