@@ -34,6 +34,7 @@ program opt_main
  use input
  use lib_out
  use opt_input                                 ! Optimisation Modules
+ use opt_fd
  use fwd_main
  use lib_perf
  use opt_shared
@@ -81,85 +82,117 @@ program opt_main
  ! Optimisation
  character(len=3) :: gradmode ! gradient method
  character(len=3) :: solmode  ! solution mode
+ character(len=3) :: fdmode   ! finite differences method
+ integer          :: NOPT_MAX ! Max Number of iterations for the optimisation
+ integer          :: NOPT     ! number of iteration for the optimisation
 
-
-
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Set Up Input for Static Problem
- ! (stage required also for dynamic and coupled solutions)
- call fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
-                    &                      Elem,         &   ! from opt_main_xxx
-                    &                  NumNodes,         &   ! from input_elem
-                    & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
-                    &                  OutGrids)   ! from pt_main_xxx
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input
- call opt_setup(gradmode,solmode)
+ call opt_setup(gradmode,solmode,fdmode,NOPT_MAX)
+
+NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
+do while (NOPT<NOPT_MAX)
+
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Set Up Input for Static Problem
+     ! (stage required also for dynamic and coupled solutions)
+     call fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
+                        &                      Elem,         &   ! from opt_main_xxx
+                        &                  NumNodes,         &   ! from input_elem
+                        & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
+                        &                  OutGrids)   ! from pt_main_xxx
 
 
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Reads Forward Problem Input and allocates the required variables for the
- ! forward static problem solution
- call fwd_presolver (NumElems,OutFile,Options,    &   ! from input_setup
-                &                        Elem,    &   ! from opt_main_xxx
-                &                    NumNodes,    &   ! from input_elem
-                &  BoundConds,PosIni,PhiNodes,    &   ! from input_node
-                &                      PsiIni,    &   ! from xbeam_undef_geom
-                &                Node, NumDof,    &   ! from xbeam_undef_dofs
-                & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-                &            NumSteps, t0, dt,    &   ! input_dyn_setup
-                &       ForceDynAmp,ForceTime,    &   ! input_dynforce
-                &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
-                & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
-                & RefVel, RefVelDot, Quat)
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Reads Forward Problem Input and allocates the required variables for the
+     ! forward static problem solution
+     call fwd_presolver (NumElems,OutFile,Options,    &   ! from input_setup
+                    &                        Elem,    &   ! from opt_main_xxx
+                    &                    NumNodes,    &   ! from input_elem
+                    &  BoundConds,PosIni,PhiNodes,    &   ! from input_node
+                    &                      PsiIni,    &   ! from xbeam_undef_geom
+                    &                Node, NumDof,    &   ! from xbeam_undef_dofs
+                    & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
+                    &            NumSteps, t0, dt,    &   ! input_dyn_setup
+                    &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                    &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
+                    & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                    & RefVel, RefVelDot, Quat)
+
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Forward Solution.
+     call tic()
+     call fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
+                     &                        Elem,    &   ! from opt_main_xxx
+                     &                    NumNodes,    &   ! from input_elem
+                     &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                     &                  OutGrids,         &   ! from pt_main_xxx
+                     &                      PsiIni,    &   ! from xbeam_undef_geom
+                     &                Node, NumDof,    &   ! from xbeam_undef_dofs
+                     & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
+                     &            NumSteps, t0, dt,    &   ! input_dyn_setup
+                     &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                     &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
+                     & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                     & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
+     call toc()
+
+     ! Store results in text file.
+     open (unit=11,file=OutFile(1:11)//'_def.txt',status='replace')
+     call output_elems (11,Elem,PosDef,PsiDef)
+     close (11)
 
 
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Forward Solution.
- call tic()
- call fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
-                 &                        Elem,    &   ! from opt_main_xxx
-                 &                    NumNodes,    &   ! from input_elem
-                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
-                 &                  OutGrids,         &   ! from pt_main_xxx
-                 &                      PsiIni,    &   ! from xbeam_undef_geom
-                 &                Node, NumDof,    &   ! from xbeam_undef_dofs
-                 & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-                 &            NumSteps, t0, dt,    &   ! input_dyn_setup
-                 &       ForceDynAmp,ForceTime,    &   ! input_dynforce
-                 &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
-                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
-                 & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
- call toc()
-
- ! Store results in text file.
- open (unit=11,file=OutFile(1:11)//'_def.txt',status='replace')
- call output_elems (11,Elem,PosDef,PsiDef)
- close (11)
 
 
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Loop control
+     select case (solmode)
+
+        case default ! ('FWD')
+            print *, 'Forward Problem Completed!'
+            exit
+
+        case ('OPT','SNS')
+
+            ! ----------------------------------------- Sensitivity analysis ---
+            print *, 'Sensitivity Analysis started'
+            select case (gradmode)
+                case ('FDF')
+                    print *, 'Gradients will be computed via Finite Differences'
+                    call fd_main(NOPT,fdmode)
+                case default
+                    stop 'Only FD method available!'
+            end select
+
+            ! ---------------------------------------------------- Save Etc. ---
+            !
+            ! -> To be Developed
 
 
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Set Next Step
- select case (solmode)
+            ! ------------------------------- Terminate sensitivity Analysis ---
+            if (solmode == 'SNS') then
+                print *, 'Sensitivity Analysis Completed!'
+                exit
+            end if
 
-    case ('FWD')
-        print *, 'Forward Problem Completed'
+     end select
 
-    case ('OPT','SNS')
-        print *, 'Sensitivity Analysis'
 
-         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-         ! Perturb shared Variables
-         print *, 'initial value'
-         call print_shared_input
-         call opt_update_shared_input( (FLAG_DESIGN_SHARED) ) ! JUST TO CHECK THE EXECUTION
-         print *, 'After Perturbation'
-         call print_shared_input
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! Perturb shared Variables
+    print *, 'initial value'
+    call print_shared_input
+    call opt_update_shared_input( (FLAG_DESIGN_SHARED) ) ! JUST TO CHECK THE EXECUTION
+    print *, 'After Perturbation'
+    call print_shared_input
 
- end select
+
+            ! ------------------------------------------ Terminate iteration ---
+            NOPT = NOPT+1
+
+end do
 
 end program opt_main
 

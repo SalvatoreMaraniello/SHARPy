@@ -52,7 +52,6 @@ module opt_input
     logical,private :: FLAG_BeamMass(6,6)=.false.                ! Beam element mass matrix (assumed constant).
     logical,private :: FLAG_SectWidth=.false.,FLAG_SectHeight=.false.    ! Height and width of the cross section.
 
-
    ! Deltas for Perturbations
    real(8) :: d_BeamLength1, d_BeamLength2
    real(8) :: d_BeamStiffness(6,6)
@@ -67,28 +66,41 @@ module opt_input
    real(8) :: d_TipMassZ
    real(8) :: d_Omega
 
+   real(8), allocatable :: XSH(:,:) ! SHARED DESIGN VARIABLES
+
 
 contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
-    subroutine opt_setup(gradmode,solmode)
+    subroutine opt_setup(gradmode,solmode,fdmode,NOPT_MAX)
 
         character(len=3), intent(out) :: gradmode ! gradient method
         character(len=3), intent(out) :: solmode  ! solution mode
+        character(len=3), intent(out) :: fdmode   ! finite differences method
+
+        integer         , intent(out) :: NOPT_MAX ! Max Number of iterations for the optimisation
+
+
         ! ----------------------------------------------------------------------
-
-
-
         gradmode='FDF' ! gradient method: DIR: direct
                        !                  ADJ: adjointfinite differences
                        !                  FDF: Finite Differences
-        solmode ='SNS' ! solution mode:   FWD: forward
+        solmode ='OPT' ! solution mode:   FWD: forward
                        !                  OPT: optimisation
                        !                  SNS: sensitivity analysis
+        fdmode ='FWD'  ! FD method:       FWD: forward differences
+                       !                  BKW: backward differences
+                       !                  CNT: central differences
+        NOPT_MAX = 3  ! Maximum number of iterations for the optimiser
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: shared variables
+        !
+        ! Remark: the value of these flags is set to zero at the end of the
+        !   subroutine and changed during the code execution (e.g. to update the
+        !   the design or perform FDs based sensitivity analysis.
+        !   FLAG_DESIGN_SHARED is used to keep memory of the design variables.
         FLAG_BeamLength1 = .true.
         FLAG_TipMassY =.true.
         FLAG_ExtForce(3)=.true.
@@ -97,15 +109,24 @@ contains
         FLAG_ExtMomnt(2)=.true.
         FLAG_BeamStiffness(6,6)=.true.
 
+        ! ----------------------------------------------------------------------
+        ! Design Parameters: element dependent
+        !
+        ! -> TO BE IMPLEMENTED
+
+
+        ! ----------------------------------------------------------------------
+        ! PreProcessing:
 
         ! assign all the flags to FLAG_DESIGN_SHARED
         call opt_pack_FLAG_DESIGN_SHARED
-        !print *, 'FLAG_DESIGN_SHARED(1:8) '  , FLAG_DESIGN_SHARED(1:8)
-        !print *, 'FLAG_DESIGN_SHARED(9:14) ' , FLAG_DESIGN_SHARED(9:14)
-        !print *, 'FLAG_DESIGN_SHARED(15:16) ', FLAG_DESIGN_SHARED(15:16)
-        !print *, 'FLAG_DESIGN_SHARED(17:52) ', FLAG_DESIGN_SHARED(17:52)
-        !print *, 'FLAG_DESIGN_SHARED(53:) '  , FLAG_DESIGN_SHARED(53:)
+        !!!!call opt_print_FLAG_DESIGN_SHARED
         call opt_set_shared_FLAGS_to_false
+
+
+        ! set up XSH vector
+        allocate( XSH(size(FLAG_DESIGN_SHARED), 0:NOPT_MAX ) )
+        call opt_pack_DESIGN_SHARED(0)
 
     end subroutine opt_setup
 
@@ -311,4 +332,150 @@ subroutine opt_set_shared_FLAGS_to_false
 end subroutine opt_set_shared_FLAGS_to_false
 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine opt_print_FLAG_DESIGN_SHARED
+!
+!-> Description:
+!    prints FLAG_DESIGN_SHARED
+!
+!-> Remark:
+!   only for testing purposed
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine opt_print_FLAG_DESIGN_SHARED
+
+     print *, 'FLAG_DESIGN_SHARED(1:8) '  , FLAG_DESIGN_SHARED(1:8)
+     print *, 'FLAG_DESIGN_SHARED(9:14) ' , FLAG_DESIGN_SHARED(9:14)
+     print *, 'FLAG_DESIGN_SHARED(15:16) ', FLAG_DESIGN_SHARED(15:16)
+     print *, 'FLAG_DESIGN_SHARED(17:52) ', FLAG_DESIGN_SHARED(17:52)
+     print *, 'FLAG_DESIGN_SHARED(53:) '  , FLAG_DESIGN_SHARED(53:)
+
+ end subroutine opt_print_FLAG_DESIGN_SHARED
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine opt_pack_DESIGN_SHARED
+!
+!-> Description:
+!    This routine packs all the shared design variables into the
+!    multidimensional array XSH.
+!    As XSH is also used to keep track of all the designs explored, the iteration
+!    of the optimisation process is also required (NOPT).
+!
+!-> Remark:
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine opt_pack_DESIGN_SHARED(NOPT)
+
+   integer, optional :: NOPT            ! Number of iteration for the optimisation
+
+   ! Shared variables from module input
+   real(8) :: BeamLength1, BeamLength2     ! Beam defining lengths.
+   real(8) :: BeamStiffness(6,6)           ! Beam element stiffness matrix (assumed constant).
+   real(8) :: BeamMass(6,6)                ! Beam element mass matrix (assumed constant).
+   real(8) :: ExtForce(3)                  ! Applied forces at the tip.
+   real(8) :: ExtMomnt(3)                  ! Applied moments at the tip.
+   real(8) :: SectWidth,SectHeight         ! Height and width of the cross section.
+   real(8) :: ThetaRoot                    ! Pretwist angle at root.
+   real(8) :: ThetaTip                     ! Pretwist angle at tip.
+   real(8) :: TipMass                      ! Mass at the beam tip.
+   real(8) :: TipMassY                     ! Y offset of the tip mass.
+   real(8) :: TipMassZ                     ! Z offset of the tip mass.
+   real(8) :: Omega                        ! Frequency of oscillatory motions.
+
+
+   !if (present(NOPT) .eqv. .false.) then
+   !    NOPT=0
+   !    print *, NOPT
+   !end if
+
+
+    ! ------------------------------------------------- General Design Variables
+    ! scalars
+    XSH(1,NOPT) = BeamLength1
+    XSH(2,NOPT) = BeamLength2
+    XSH(3,NOPT) = ThetaRoot
+    XSH(4,NOPT) = ThetaTip
+    XSH(5,NOPT) = TipMass
+    XSH(6,NOPT) = TipMassY
+    XSH(7,NOPT) = TipMassZ
+    XSH(8,NOPT) = Omega
+    ! vectors
+    XSH( 9:11,NOPT) = ExtForce
+    XSH(12:14,NOPT) = ExtMomnt
+
+    ! ------------------------------------------- Constant Beam Design Variables
+    ! scalars
+    XSH(15,NOPT)=SectWidth
+    XSH(16,NOPT)=SectHeight
+    ! matrices
+    XSH(17:17+35,NOPT)=reshape(BeamStiffness,(/36/))
+    XSH(53:53+35,NOPT)=reshape(     BeamMass,(/36/))
+
+end subroutine opt_pack_DESIGN_SHARED
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine opt_unpack_DESIGN_SHARED
+!
+!-> Description:
+!    This routine unpacks all the shared design variables from the
+!    multidimensional array XSH.
+!    As XSH is also used to keep track of all the designs explored, the iteration
+!    of the optimisation process is also required.
+!
+!-> Remark:
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine opt_unpack_DESIGN_SHARED_TO_COMPLETE(NOPT)
+
+   integer, optional :: NOPT               ! Number of iteration for the optimisation
+
+   ! Shared variables from module input
+   real(8) :: BeamLength1, BeamLength2     ! Beam defining lengths.
+   real(8) :: BeamStiffness(6,6)           ! Beam element stiffness matrix (assumed constant).
+   real(8) :: BeamMass(6,6)                ! Beam element mass matrix (assumed constant).
+   real(8) :: ExtForce(3)                  ! Applied forces at the tip.
+   real(8) :: ExtMomnt(3)                  ! Applied moments at the tip.
+   real(8) :: SectWidth,SectHeight         ! Height and width of the cross section.
+   real(8) :: ThetaRoot                    ! Pretwist angle at root.
+   real(8) :: ThetaTip                     ! Pretwist angle at tip.
+   real(8) :: TipMass                      ! Mass at the beam tip.
+   real(8) :: TipMassY                     ! Y offset of the tip mass.
+   real(8) :: TipMassZ                     ! Z offset of the tip mass.
+   real(8) :: Omega                        ! Frequency of oscillatory motions.
+
+    ! ------------------------------------------------- General Design Variables
+    ! scalars
+    BeamLength1 = XSH(1,NOPT)
+    BeamLength2 = XSH(2,NOPT)
+    ThetaRoot   = XSH(3,NOPT)
+    ThetaTip    = XSH(4,NOPT)
+    TipMass     = XSH(5,NOPT)
+    TipMassY    = XSH(6,NOPT)
+    TipMassZ    = XSH(7,NOPT)
+    Omega       = XSH(8,NOPT)
+    ! vectors
+    ExtForce    = XSH( 9:11,NOPT)
+    ExtMomnt    = XSH(12:14,NOPT)
+
+    ! ------------------------------------------- Constant Beam Design Variables
+    ! scalars
+    SectWidth  = XSH(15,NOPT)
+    SectHeight = XSH(16,NOPT)
+    ! matrices
+    BeamStiffness = reshape( XSH(17:17+35,NOPT), (/6,6/))
+    BeamMass      = reshape( XSH(53:53+35,NOPT), (/6,6/))
+
+end subroutine opt_unpack_DESIGN_SHARED_TO_COMPLETE
+
+
 end module opt_input
+
+
+
+
+
+

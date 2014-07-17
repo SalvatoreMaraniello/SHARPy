@@ -47,6 +47,7 @@ As per the original beam solver, the code needs to be recompiled at each run. Th
 
 \section{Issues}
 \bit
+\item conditional allocation used inside the \ffun{fwd\_main} module to recycle the pieces of code used for the fwd execution
 \item types... they could be good to create arrays of variables to optimise in respect to...
 \item the BeamMass and BeamStiffness variables perturbed in the need to be perturbed for each element
 \item in \ffile{opt\_input\_xxx} we need to import the \ffun{input\_xxx} module, which is not a very general thing to do [no! the file is name dependent, but not the module]

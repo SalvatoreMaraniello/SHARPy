@@ -22,9 +22,13 @@
 # - 'make run'    : runs the optimisation
 # - 'make optgo'  : cleans all files (excutable included), recompiles them and 
 #                   runs the optimiser 
-# - 'make test'   : compiles program to test the optimiser src
 # - 'make rmout'  : removes output from simulation
-# - 'make test'   : runs test cases for opt_xxxxxx libraries 
+# - 'make test'   : compiles testing program for opt_xxxxxx libraries 
+# - 'make libtest': compiles testing program for the optimiser libraries
+# - 'make testgo' : cleans all files (excutable included), compiles and runs 
+#                   testing program for opt_xxxxxx libraries 
+# - 'make libtestgo': cleans all files (excutable included), compiles and runs 
+#                     testing program for the optimiser libraries
 #
 # Unused:
 # - 'make xbeamso' : from makefile from HH and RP (not working)
@@ -34,7 +38,7 @@
 # - 'make objlist'
 # - 'make dirprint'
 # - 'make 'dirlist'
-# - 'make libtest': compiles libraries for forward problem
+# - 'make 'fwdlibtest': compiles libraries for forward problem
 # - 'make xbeamtest': compiles libraries first and xbeam solver and assembly
 #
 # Developer Notes:
@@ -57,12 +61,17 @@ opt: xbeamopt
 
 test: xbeamopt_test
 
+libtest: optlib_test
+
 run: 
 	./bin/xbeamopt.exe
 	
 runtest: 
-	./bin/xbeamopt_test.exe	
+	./bin/xbeamopt_test.exe
 	
+runlibtest:
+	./bin/optlib_test.exe
+
 optgo:
 	rm -f ./bin/xbeamopt.exe 
 	make clean
@@ -74,6 +83,13 @@ testgo:
 	make clean
 	make test
 	make runtest
+	
+libtestgo:
+	rm -f ./bin/optlib_test.exe 
+	make clean
+	make libtest
+	make runlibtest
+
 	
 rmout:
 	rm -f ./*_def.txt ./*und.txt ./*.mrb 
@@ -187,7 +203,8 @@ OBJWRAP=\
 
 # -------------------------------------------------------------------- Optimiser
 OBJOPTLIB=\
-    $(OPTOBJDIR)/lib_perf.o
+    $(OPTOBJDIR)/lib_perf.o \
+	$(OPTOBJDIR)/lib_array.o
 
 OBJOPTSRC=\
 	$(OPTOBJDIR)/opt_shared.o \
@@ -198,6 +215,7 @@ OBJOPTMAIN=\
     $(OPTOBJDIR)/input_$(TESTCASE).o     \
     $(OPTOBJDIR)/fwd_main.o              \
     $(OPTOBJDIR)/opt_input_$(TESTCASE).o \
+    $(OPTOBJDIR)/opt_fd.o \
     $(OPTOBJDIR)/opt_main_$(TESTCASE).o  
 #\
 #$(OPTOBJDIR)/input_perturb.o 
@@ -222,6 +240,10 @@ xbeamopt: $(OBJOPT)
 xbeamopt_test: $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
 	
+optlib_test: $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o
+	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/optlib_test.exe $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o $(LIBS) $(LIBSDIR)	
+	
+	
 #--------------------------------------------------------------- Forward Problem
 xbeam: $(OBJFWD) 
 	$(F90COMP) $(F90OPTS) -o $(ROOTDIR)/fortran/bin/xbeam.exe $(OBJFWD) $(LIBS) $(LIBSDIR)
@@ -234,7 +256,7 @@ xbeamso: $(OBJLIB) $(OBJXBEAM) $(OBJWRAP)
 
 #----------------------------------------------------------------------- testing
 
-optlibtest: $(OBJOPTLIB)
+#optlibtest: $(OBJOPTLIB) # superceeded by optlib_test
 
 fwdlibtest: $(OBJLIB)
 	echo Success!

@@ -30,6 +30,7 @@
 ! -> Bugs/Reminders:
 !  - The pre_solver for dynamic and couple dproblems need to be developed. These
 !     require a call to the static pre solver
+!  - all allocation statemnets substituted with conditional allocation (lib_array)
 !
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -43,6 +44,8 @@ module fwd_main
  use xbeam_perturb
  use lib_out
  use input
+
+ use lib_array ! optimisation
 
  implicit none
 
@@ -175,7 +178,7 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
  type(xbnode), allocatable:: Node(:)            ! Nodal information.
  integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
 
- real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
+ real(8),      allocatable:: ForceDynAmp (:,:) ! Amplituif (allocated(Elem) .eqv. .false.) thende of the applied dynamic nodal forces.
  real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
  real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
  real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
@@ -261,13 +264,26 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Read input data.
  call input_setup (NumElems,OutFile,Options)
- allocate (Elem(NumElems)) ! sm: initial orientation stored here
+
+ ! if required for optimisation/sensitivity analysis
+ if (allocated(Elem) .eqv. .false.) then
+    allocate (Elem(NumElems)) ! sm: initial orientation stored here
+ end if
  call input_elem (NumElems,NumNodes,Elem)
 
- allocate(PosIni     (NumNodes,3)); PosIni     = 0.d0 ! sm: coord in input_xxx.f90
- allocate(ForceStatic(NumNodes,6)); ForceStatic= 0.d0
- allocate(PhiNodes   (NumNodes));   PhiNodes   = 0.d0
- allocate(BoundConds (NumNodes));   BoundConds = 0
+ ! conditional allocation
+ call array2_cond_alloc(     PosIni, NumNodes, 3, .true.)
+ call array2_cond_alloc(ForceStatic, NumNodes, 6, .true.)
+ call array1_cond_alloc(   PhiNodes, NumNodes   , .true.)
+ if ( allocated(BoundConds) .eqv. .false. ) then
+    allocate(BoundConds (NumNodes));   BoundConds = 0
+ end if
+ ! original code
+ !allocate(PosIni     (NumNodes,3)); PosIni     = 0.d0 ! sm: coord in input_xxx.f90
+ !allocate(ForceStatic(NumNodes,6)); ForceStatic= 0.d0
+ !allocate(PhiNodes   (NumNodes));   PhiNodes   = 0.d0
+ !allocate(BoundConds (NumNodes));   BoundConds = 0
+
  call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic,PhiNodes)
  ! sm: in input_xxx.f90
  !    input_node (NumNodes,Elem,BoundConds,Coords,     Forces,PhiNodes)
@@ -277,7 +293,11 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  ! Open main output file and select grid points where output will be written.
  ! Unit 12 is opened here but subprocesses can access it - not preferred solution
  open (unit=12,file=OutFile(1:11)//'.mrb',status='replace')
- allocate(OutGrids(NumNodes))
+
+ if ( allocated(OutGrids) .eqv. .false. ) then
+     allocate(OutGrids(NumNodes))
+ end if
+
  OutGrids          = .false.
  OutGrids(NumNodes)= .true.
  call out_title (12,'GLOBAL CONSTANTS IN THE MODEL:')
@@ -286,6 +306,7 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  write (12,'(14X,A,I12)')    'Number of Output Nodes: ', 1
  write (12,'(14X,A,I12)')    'Print Displacements:    ', 1
  write (12,'(14X,A,I12)')    'Print Velocities:       ', 1
+ close(12)
 
 end subroutine fwd_static_input
 
@@ -326,7 +347,8 @@ end subroutine fwd_static_input
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Compute initial (undeformed) geometry.
- allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
+ call array3_cond_alloc(PsiIni,NumElems,MaxElNod,3,.true.)
+ !allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
  call xbeam_undef_geom ( Elem,PosIni,PhiNodes,PsiIni,Options)
  !    xbeam_undef_geom (inout,    in,      in,   out,     in)
  ! - PosIni (in): Coords in unput_xxx.f90
@@ -334,15 +356,20 @@ end subroutine fwd_static_input
  ! - PsiIni (out): CRV at the node
 
  ! Identify nodal degrees of freedom.
- allocate (Node(NumNodes))
+ if ( allocated(Node) .eqv. .false. ) then
+    allocate (Node(NumNodes))
+ end if
  call xbeam_undef_dofs (Elem,BoundConds,  Node,NumDof)
  ! xbeam_undef_dofs    (  in,        in, inout,   out)
  ! Node: Nodal information [type(xbnode)]
  !NumDof Number of independent degrees of freedom.
 
- allocate (PosDef(NumNodes,3));          PosDef= PosIni
- allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
- allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
+ call array2_cond_alloc( PosDef,             NumNodes, 3, .true.);  PosDef= PosIni;
+ call array3_cond_alloc( PsiDef,   NumElems ,MaxElNod, 3, .true.);  PsiDef= PsiIni;
+ call array2_cond_alloc( InternalForces,     NumNodes, 6, .true.)
+ !allocate (PosDef(NumNodes,3));          PosDef= PosIni
+ !allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
+ !allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
 
  ! Store undeformed geometry in external text file.
  open (unit=11,file=OutFile(1:11)//'_und.txt',status='replace')
