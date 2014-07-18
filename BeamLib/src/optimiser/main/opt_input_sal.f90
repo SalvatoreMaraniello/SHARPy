@@ -29,6 +29,7 @@ module opt_input
 
     use input
     use opt_perturb
+    use opt_cost_utl
 
     implicit none
 
@@ -75,12 +76,11 @@ contains
 !
     subroutine opt_setup(gradmode,solmode,fdmode,NOPT_MAX)
 
-        character(len=3), intent(out) :: gradmode ! gradient method
-        character(len=3), intent(out) :: solmode  ! solution mode
-        character(len=3), intent(out) :: fdmode   ! finite differences method
+        character(len=3), intent(out) :: gradmode  ! gradient method
+        character(len=3), intent(out) :: solmode   ! solution mode
+        character(len=3), intent(out) :: fdmode    ! finite differences method
 
-        integer         , intent(out) :: NOPT_MAX ! Max Number of iterations for the optimisation
-
+        integer         , intent(out) :: NOPT_MAX  ! Max Number of iterations for the optimisation
 
         ! ----------------------------------------------------------------------
         gradmode='FDF' ! gradient method: DIR: direct
@@ -89,10 +89,10 @@ contains
         solmode ='OPT' ! solution mode:   FWD: forward
                        !                  OPT: optimisation
                        !                  SNS: sensitivity analysis
-        fdmode ='FWD'  ! FD method:       FWD: forward differences
+        fdmode  ='FWD' ! FD method:       FWD: forward differences
                        !                  BKW: backward differences
                        !                  CNT: central differences
-        NOPT_MAX = 3  ! Maximum number of iterations for the optimiser
+        NOPT_MAX= 3    ! Maximum number of iterations for the optimiser
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: shared variables
@@ -123,12 +123,74 @@ contains
         !!!!call opt_print_FLAG_DESIGN_SHARED
         call opt_set_shared_FLAGS_to_false
 
-
         ! set up XSH vector
-        allocate( XSH(size(FLAG_DESIGN_SHARED), 0:NOPT_MAX ) )
+        allocate( XSH(size(FLAG_DESIGN_SHARED), 0:NOPT_MAX ) ); XSH=0_8
         call opt_pack_DESIGN_SHARED(0)
 
+        ! TESTING:
+        !call print_shared_input
+        !call opt_print_XSH(0)
+        !call opt_unpack_DESIGN_SHARED(1) ! this deletes everything
+        !call print_shared_input
+        !call opt_unpack_DESIGN_SHARED(0)   ! this should reassign values
+        !call opt_print_XSH(0)
+        !call print_shared_input
+        !stop
+
     end subroutine opt_setup
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine opt_input_cost
+!
+!-> Description:
+!    Use this routine to set up the input for the cost/constraint functions
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    subroutine opt_input_cost(FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
+
+        logical         , intent(out) :: FLAG_COST  (1) ! Flag array for cost funcitons
+        logical         , intent(out) :: FLAG_CONSTR(1) ! Flag array for cost funcitons
+
+        real(8)         , intent(out) :: W_COST  (size(FLAG_COST))    ! arrays with weights/scaling factors...
+        real(8)         , intent(out) :: W_CONSTR(size(FLAG_COST))   ! ...for cost and constraint functions
+
+        ! input for displacement cost function
+        real(8)            ::  WEIGHT          ! wieght to apply to function
+        character(len= 4)  ::   ADDTO          ! determines whether to add the function
+                                               ! to cost, constraint or none
+                                               ! values: 'cost', 'cstr', 'none'
+        character(LEN=10)  ::   FUNID          ! link to function
+                                               ! 'node_disp': nodal displacement
+
+
+        ! ------------------------------------------------------- initialise ---
+        W_COST=0.0;W_CONSTR=0.0;FLAG_COST=.false.;FLAG_CONSTR=.false.
+
+
+        ! ------------------------------------------------------------ FLAG_DISP
+        ! node displacement
+        ! (cost_node_disp in opt_cost module)
+        FUNID='node_disp';     ADDTO='cost';     WEIGHT=1.0_8;
+        !NODE_DISP=0; ! <--- the passing interface for the option has not been implemented yet!!
+
+        call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &
+                            & FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
+
+
+        ! ADD HERE NEXT COST/CONSTRAINT FUNCTIONS
+        !
+        !FUNID='XXX';     ADDTO='XXX';     WEIGHT=XXX;
+        !call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &
+        !                        & FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR) !
+        ! ----------------------------------------------------------------------
+
+
+    end subroutine opt_input_cost
+
+
+
+
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -142,9 +204,7 @@ contains
 !    input_setup. This function can be called in a main after input_setup to
 !    perturb the design.
 !
-!
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
  subroutine opt_update_shared_input( FLAGS_vector )
 
    logical, intent(in) :: FLAGS_vector(size( FLAG_DESIGN_SHARED ))
@@ -333,29 +393,6 @@ end subroutine opt_set_shared_FLAGS_to_false
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!-> Subroutine opt_print_FLAG_DESIGN_SHARED
-!
-!-> Description:
-!    prints FLAG_DESIGN_SHARED
-!
-!-> Remark:
-!   only for testing purposed
-!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine opt_print_FLAG_DESIGN_SHARED
-
-     print *, 'FLAG_DESIGN_SHARED(1:8) '  , FLAG_DESIGN_SHARED(1:8)
-     print *, 'FLAG_DESIGN_SHARED(9:14) ' , FLAG_DESIGN_SHARED(9:14)
-     print *, 'FLAG_DESIGN_SHARED(15:16) ', FLAG_DESIGN_SHARED(15:16)
-     print *, 'FLAG_DESIGN_SHARED(17:52) ', FLAG_DESIGN_SHARED(17:52)
-     print *, 'FLAG_DESIGN_SHARED(53:) '  , FLAG_DESIGN_SHARED(53:)
-
- end subroutine opt_print_FLAG_DESIGN_SHARED
-
-
-
-
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine opt_pack_DESIGN_SHARED
 !
 !-> Description:
@@ -386,11 +423,14 @@ subroutine opt_pack_DESIGN_SHARED(NOPT)
    real(8) :: Omega                        ! Frequency of oscillatory motions.
 
 
-   !if (present(NOPT) .eqv. .false.) then
-   !    NOPT=0
-   !    print *, NOPT
-   !end if
-
+    ! -------------------------------------------- Read values from input module
+    call read_shared_input( BeamLength1, BeamLength2,  &
+                   & BeamStiffness, BeamMass,          &
+                   & ExtForce, ExtMomnt,               &
+                   & SectWidth, SectHeight,            &
+                   & ThetaRoot, ThetaTip,              &
+                   & TipMass, TipMassY, TipMassZ,      &
+                   & Omega                             )
 
     ! ------------------------------------------------- General Design Variables
     ! scalars
@@ -429,7 +469,7 @@ end subroutine opt_pack_DESIGN_SHARED
 !-> Remark:
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine opt_unpack_DESIGN_SHARED_TO_COMPLETE(NOPT)
+subroutine opt_unpack_DESIGN_SHARED(NOPT)
 
    integer, optional :: NOPT               ! Number of iteration for the optimisation
 
@@ -469,7 +509,66 @@ subroutine opt_unpack_DESIGN_SHARED_TO_COMPLETE(NOPT)
     BeamStiffness = reshape( XSH(17:17+35,NOPT), (/6,6/))
     BeamMass      = reshape( XSH(53:53+35,NOPT), (/6,6/))
 
-end subroutine opt_unpack_DESIGN_SHARED_TO_COMPLETE
+
+    ! ------------------------------------Update shared variable in input module
+    call update_shared_input( BeamLength1, BeamLength2,&
+                   & BeamStiffness, BeamMass,          &
+                   & ExtForce, ExtMomnt,               &
+                   & SectWidth, SectHeight,            &
+                   & ThetaRoot, ThetaTip,              &
+                   & TipMass, TipMassY, TipMassZ,      &
+                   & Omega                             )
+
+end subroutine opt_unpack_DESIGN_SHARED
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine opt_print_FLAG_DESIGN_SHARED
+!
+!-> Description:
+!    prints FLAG_DESIGN_SHARED
+!
+!-> Remark:
+!   only for testing purposed
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine opt_print_FLAG_DESIGN_SHARED
+
+     print *, 'FLAG_DESIGN_SHARED(1:8) '  , FLAG_DESIGN_SHARED(1:8)
+     print *, 'FLAG_DESIGN_SHARED(9:14) ' , FLAG_DESIGN_SHARED(9:14)
+     print *, 'FLAG_DESIGN_SHARED(15:16) ', FLAG_DESIGN_SHARED(15:16)
+     print *, 'FLAG_DESIGN_SHARED(17:52) ', FLAG_DESIGN_SHARED(17:52)
+     print *, 'FLAG_DESIGN_SHARED(53:) '  , FLAG_DESIGN_SHARED(53:)
+
+ end subroutine opt_print_FLAG_DESIGN_SHARED
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine opt_print_XSH
+!
+!-> Description:
+!    prints XSH
+!
+!-> Remark:
+!   only for testing purposed
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine opt_print_XSH(NOPT)
+
+     integer, optional :: NOPT               ! Number of iteration for the optimisation
+
+     print *, 'NOPT = ', NOPT
+     print *, 'XSH(1:8) '  , XSH(1:8,NOPT)
+     print *, 'XSH(9:14) ' , XSH(9:14,NOPT)
+     print *, 'XSH(15:16) ', XSH(15:16,NOPT)
+     print *, 'XSH(17:52) ', XSH(17:52,NOPT)
+     print *, 'XSH(53:) '  , XSH(53:,NOPT)
+
+ end subroutine opt_print_XSH
 
 
 end module opt_input

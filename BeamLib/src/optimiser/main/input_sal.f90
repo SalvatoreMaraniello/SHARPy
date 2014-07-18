@@ -100,7 +100,7 @@ module input
   real(8) :: sigma
 
 ! INPUT START
-  TestCase='PTW1'! 'BEND'!'NCB1'
+  TestCase='NCB1'! 'BEND'!'NCB1'
   Options%Solution=112
 
 ! Default values.
@@ -132,6 +132,9 @@ module input
         SectWidth=23.0
         SectHeight=29.0
         Omega=31.0
+
+        call print_shared_input
+
 
      case ('PTW1', 'PTW2') ! Check effect of pre-twist
       ! Inputs are as per NCB1 but:
@@ -934,12 +937,11 @@ subroutine update_shared_input( IN_BeamLength1, IN_BeamLength2,  &
 !
 !-> Description:
 !
-!    Allows exernal modules to update the Shared Variables values
+!    Prints current value of shared design variables
 !
 !-> Remarks.-
 !
-!    - This routine acts as a bridge between the optimisation module and the
-!    original code.
+!    - For testing purposes
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

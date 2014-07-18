@@ -39,6 +39,7 @@ program opt_main
  use lib_perf
  use opt_shared
  use opt_perturb
+ use opt_cost
 
  implicit none
 
@@ -86,6 +87,17 @@ program opt_main
  integer          :: NOPT_MAX ! Max Number of iterations for the optimisation
  integer          :: NOPT     ! number of iteration for the optimisation
 
+ logical          :: FLAG_COST  (1) ! Flag array for cost funcitons
+ logical          :: FLAG_CONSTR(1) ! Flag array for cost funcitons
+ real(8)          :: W_COST  (size(FLAG_COST))    ! arrays with weights/scaling factors...
+ real(8)          :: W_CONSTR(size(FLAG_COST))   ! ...for cost and constraint functions
+
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! set shared design variables for fwd problem
+ call input_setup (NumElems,OutFile,Options)
+ call opt_input_cost(FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
+
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input
@@ -94,7 +106,7 @@ program opt_main
 NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
 do while (NOPT<NOPT_MAX)
 
-     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Set Up Input for Static Problem
      ! (stage required also for dynamic and coupled solutions)
      call fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
@@ -156,6 +168,12 @@ do while (NOPT<NOPT_MAX)
 
         case ('OPT','SNS')
 
+
+            ! -------------- Evaluate cost and Constraints at current design ---
+            print *, cost_node_disp(PosIni,PosDef,5)
+
+
+
             ! ----------------------------------------- Sensitivity analysis ---
             print *, 'Sensitivity Analysis started'
             select case (gradmode)
@@ -182,11 +200,11 @@ do while (NOPT<NOPT_MAX)
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! Perturb shared Variables
-    print *, 'initial value'
-    call print_shared_input
-    call opt_update_shared_input( (FLAG_DESIGN_SHARED) ) ! JUST TO CHECK THE EXECUTION
-    print *, 'After Perturbation'
-    call print_shared_input
+    !print *, 'initial value'
+    !call print_shared_input
+    !call opt_update_shared_input( (FLAG_DESIGN_SHARED) ) ! JUST TO CHECK THE EXECUTION
+    !print *, 'After Perturbation'
+    !call print_shared_input
 
 
             ! ------------------------------------------ Terminate iteration ---

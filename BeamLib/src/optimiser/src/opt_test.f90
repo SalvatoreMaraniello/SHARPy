@@ -16,13 +16,19 @@ program opt_test
 
  use opt_shared
  use opt_perturb_test
+ use opt_cost_test
 
  implicit none
 
  character(len=11) :: testmodule ! module to test
+ !-----------------------------------------------------------------------------
 
- testmodule='opt_perturb'
- print *, 'START TESTING: ', testmodule
+
+ testmodule='opt_cost'       ! <--- change here!
+
+
+ !-----------------------------------------------------------------------------
+  print *, 'START TESTING: ', testmodule
 
  select case (trim(testmodule))
 
@@ -33,6 +39,8 @@ program opt_test
     case ('opt_shared')
         call generate_report
 
+    case ('opt_cost')
+        call cost_node_disp_test
 
     case default
         print *, 'TEST CASES NOT IMPLEMENTED FOR: ', testmodule

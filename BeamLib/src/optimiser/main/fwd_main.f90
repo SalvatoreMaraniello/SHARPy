@@ -262,8 +262,8 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Read input data.
- call input_setup (NumElems,OutFile,Options)
+ !!! sm: moved in opt_main Read input data.
+ !!!call input_setup (NumElems,OutFile,Options)
 
  ! if required for optimisation/sensitivity analysis
  if (allocated(Elem) .eqv. .false.) then
