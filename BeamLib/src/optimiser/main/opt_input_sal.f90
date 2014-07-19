@@ -171,7 +171,7 @@ contains
         ! ------------------------------------------------------------ FLAG_DISP
         ! node displacement
         ! (cost_node_disp in opt_cost module)
-        FUNID='node_disp';     ADDTO='cost';     WEIGHT=1.0_8;
+        FUNID='node_disp';     ADDTO='cstr';     WEIGHT=0.1_8;
         !NODE_DISP=0; ! <--- the passing interface for the option has not been implemented yet!!
 
         call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &

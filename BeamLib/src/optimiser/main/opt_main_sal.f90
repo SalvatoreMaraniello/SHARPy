@@ -91,17 +91,30 @@ program opt_main
  logical          :: FLAG_CONSTR(1) ! Flag array for cost funcitons
  real(8)          :: W_COST  (size(FLAG_COST))    ! arrays with weights/scaling factors...
  real(8)          :: W_CONSTR(size(FLAG_COST))   ! ...for cost and constraint functions
+ integer, allocatable :: CONN_CONSTR(:)          ! connectivity matrix for contrains array
+ real(8), allocatable :: COST(:)                 ! cost function
+ real(8), allocatable :: CONSTR(:,:)             ! constrain vector
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! set shared design variables for fwd problem
  call input_setup (NumElems,OutFile,Options)
- call opt_input_cost(FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input
  call opt_setup(gradmode,solmode,fdmode,NOPT_MAX)
+ if ( (solmode == 'OPT') .or. (solmode == 'SNS') ) then
+     call opt_input_cost(FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
+     call cost_utl_build_constraints_connectivity(FLAG_CONSTR,CONN_CONSTR)
+     if (solmode == 'SNS') then
+        NOPT_MAX=1
+     end if
+     allocate(CONSTR( size(CONN_CONSTR),0:NOPT_MAX ) )
+     allocate(  COST(                   0:NOPT_MAX ) )
+ end if
+
+
 
 NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
 do while (NOPT<NOPT_MAX)
@@ -168,9 +181,18 @@ do while (NOPT<NOPT_MAX)
 
         case ('OPT','SNS')
 
+            COST(NOPT) = cost_global( FLAG_COST, W_COST,  &
+                                     & PosIni,PosDef      )
+                                     print *, size(CONSTR)
+            CONSTR(:,NOPT) = cost_constrains( W_CONSTR, CONN_CONSTR,   &
+                                           & PosIni,PosDef )
 
             ! -------------- Evaluate cost and Constraints at current design ---
-            print *, cost_node_disp(PosIni,PosDef,5)
+            !print *, 'node displ: ', cost_node_disp(PosIni,PosDef)
+            !print *, 'cost function:', cost_global( FLAG_COST, W_COST,  &
+            !            & PosIni,PosDef               )
+            !print *, 'constrains:', cost_constrains( W_CONSTR, CONN_CONSTR,   &
+            !                & PosIni,PosDef           )
 
 
 
@@ -194,6 +216,10 @@ do while (NOPT<NOPT_MAX)
                 print *, 'Sensitivity Analysis Completed!'
                 exit
             end if
+
+
+    print *, 'COST=', COST
+    PRINT *, 'CONSTR=', CONSTR
 
      end select
 

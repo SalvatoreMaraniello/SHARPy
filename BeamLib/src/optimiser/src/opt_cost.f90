@@ -17,17 +17,20 @@
 
 module opt_cost
 
-implicit none
+ use opt_cost_utl
+ implicit none
 
-contains
+ contains
 
 
 !-------------------------------------------------------------------------------
-    function cost_node_disp(PosIni,PosDef,Nnode)
+! function cost_node_disp
+!------------------------
     ! the function returns the absolute value of the displacements of the node
     ! Nnode.
     ! If Nnode is not passed, this wil be taken as the higher node in the
     ! model (presumely the tip?)
+    function cost_node_disp(PosIni,PosDef,Nnode)
 
         real(8)                :: cost_node_disp  ! absolute value of node displacement
         real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
@@ -48,8 +51,139 @@ contains
 
     end function cost_node_disp
 
-end module opt_cost
 
+!-------------------------------------------------------------------------------
+! function cost_global:
+! ---------------------
+    ! This function evaluates the global cost for those cases in which the cost
+    ! function is a weighted combination of several cost functions.
+    ! the function takes in input all the input of all the cost functions
+    ! implemented in the model.
+
+    function cost_global( FLAG_COST, W_COST,        &  ! to determine which functions and weight to evaluate
+                        & PosIni,PosDef,            &  ! input for cost_node_disp
+                        & Nnode                     &  ! optional input for cost_node_disp
+                        )                              ! add here other input
+
+        ! see cost_utl_allocate_flags_and_weights
+        logical         , intent(in) :: FLAG_COST  (:)    ! determines which functions to evaluate
+        real(8)         , intent(in) :: W_COST     (:)    ! arrays with weights/scaling factors...
+
+        ! from cost_node_disp
+        real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
+        real(8),    intent(in) :: PosDef (:,:)    ! Current nodal position vector
+        integer, optional      :: Nnode           ! Number of the node at which to evaluate the displacements.
+
+        integer                :: nn              ! counter for FLAG_COST & W_COST
+
+        ! output
+        real(8) :: cost_global
+
+
+        ! Initialise:
+        cost_global=0.0_8
+
+        ! ------------------------------------- Evaluate functions one by one ---
+
+        do nn=1,size(FLAG_COST)
+            if (FLAG_COST(nn) .eqv. .true.) then
+                cost_global = cost_global +                                    &
+                            & W_COST(nn)*eval_function  ( nn,                  &
+                                                        & PosIni,PosDef,       &
+                                                        & Nnode                &
+                                                                               )
+            end if
+       end do
+
+    end function cost_global
+
+
+!-------------------------------------------------------------------------------
+! function constraint_vector:
+! --------------------------
+    ! This function evaluates the constraint vector for a certain status
+    ! the function takes in input all the input of all the cost functions
+    ! implemented in the model.
+    ! As per cost_global, FLAG and WEIGHT arrays are required.
+    ! The connectivity array (cost_utl_build_constraints_connectivity) is also
+    ! needed.
+    function cost_constrains( W_CONSTR, CONN_CONSTR,   &  ! to determine which functions and weight to use
+                            & PosIni,PosDef,            &  ! input for cost_node_disp
+                            & Nnode                     &  ! optional input for cost_node_disp
+                            )                              ! add here other input
+
+        ! see cost_utl_allocate_flags_and_weights
+        !logical         , intent(in) :: FLAG_CONSTR  (:)    ! determines which functions to evaluate
+        real(8)         , intent(in) :: W_CONSTR     (:)    ! arrays with weights/scaling factors...
+        integer         , intent(in) :: CONN_CONSTR  (:)    ! connectivity array for constrains
+
+        ! from cost_node_disp
+        real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
+        real(8),    intent(in) :: PosDef (:,:)    ! Current nodal position vector
+        integer, optional      :: Nnode           ! Number of the node at which to evaluate the displacements.
+
+        ! output
+        real(8) :: cost_constrains(size(CONN_CONSTR))
+
+        integer                :: ii        ! counter for cost_constrains
+        integer                :: nn        ! counter for FLAG_CONSTR & W_CONSTR
+
+
+        ! Initialise:
+        cost_constrains=0.0_8
+
+        do ii=1,size(cost_constrains)
+            nn=CONN_CONSTR(ii)
+            cost_constrains(ii) = W_CONSTR(nn)*eval_function( nn,             &
+                                                            & PosIni,PosDef,  &
+                                                            & Nnode           &
+                                                            &                 )
+       end do
+
+    end function cost_constrains
+
+
+
+!-------------------------------------------------------------------------------
+! function eval_function:
+! --------------------------
+    ! This function evaluates the cost/constraint functions. The function id nn
+    ! (see cost_utl_allocate_flags_and_weights) is required for the evaluation.
+    function eval_function  ( NN,                   &  ! to determine which function
+                            & PosIni,PosDef,        &  ! input for cost_node_disp
+                            & Nnode                 &  ! optional input for cost_node_disp
+                            )                          ! add here other input
+
+        integer                :: NN              ! function ID according to cost_utl_allocate_flags_and_weights
+
+        ! from cost_node_disp
+        real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
+        real(8),    intent(in) :: PosDef (:,:)    ! Current nodal position vector
+        integer, optional      :: Nnode           ! Number of the node at which to evaluate the displacements.
+
+        ! output
+        real(8) :: eval_function
+
+
+        select case (NN)
+
+            case (1)
+            ! cost_node_disp
+                if ( present(Nnode)) then
+                    eval_function = cost_node_disp( PosIni,PosDef,Nnode )
+                else
+                    eval_function = cost_node_disp( PosIni,PosDef )
+                end if
+
+            case default
+                stop 'ID not valid! The ID must be according to cost_utl_allocate_flags_and_weights!'
+
+        end select
+
+    end function
+
+
+end module opt_cost
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

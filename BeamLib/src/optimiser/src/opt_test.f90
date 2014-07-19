@@ -17,14 +17,15 @@ program opt_test
  use opt_shared
  use opt_perturb_test
  use opt_cost_test
+ use opt_cost_utl_test
 
  implicit none
 
- character(len=11) :: testmodule ! module to test
+ character(len=15) :: testmodule ! module to test
  !-----------------------------------------------------------------------------
 
 
- testmodule='opt_cost'       ! <--- change here!
+ testmodule='opt_cost_utl'       ! <--- change here!
 
 
  !-----------------------------------------------------------------------------
@@ -41,6 +42,9 @@ program opt_test
 
     case ('opt_cost')
         call cost_node_disp_test
+
+    case ('opt_cost_utl')
+        call cost_utl_build_constraints_connectivity_test
 
     case default
         print *, 'TEST CASES NOT IMPLEMENTED FOR: ', testmodule
