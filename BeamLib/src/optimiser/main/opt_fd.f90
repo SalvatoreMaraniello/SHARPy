@@ -24,6 +24,7 @@ module opt_fd
  use opt_input   ! to access the FLAGS for design variables and their values XSH
  use fwd_main    ! to run the fwd problem
  use opt_perturb
+ use opt_cost
 
  implicit none
 
@@ -33,35 +34,150 @@ module opt_fd
 
  contains
 
-    subroutine fd_main(NOPT,fdmode )
+ ! subroutine fd_main
+ !-------------------
+    ! The subroutine starts from the current design cost & constrains and,
+    ! perturbing each design variable at the time, computes the FD gradient.
+    ! Because the forward problem needs to be executed as many time as the number
+    ! of design parameters for each cost/constraints, all the variables required
+    ! for the forward problem need to be available.
+    subroutine fd_main( NumElems,OutFile,Options,                    &
+                      & Elem,                                        &
+                      & NumNodes,                                    &
+                      & BoundConds,PosIni,ForceStatic,PhiNodes,      &
+                      & OutGrids,                                    &
+                      & PsiIni,                                      &
+                      & Node, NumDof,                                &
+                      & PosDef, PsiDef, InternalForces,              &
+                      & NumSteps, t0, dt,                            &
+                      & ForceDynAmp,ForceTime,                       &
+                      & ForcedVel,ForcedVelDot,                      &
+                      & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, &
+                      & RefVel, RefVelDot, Quat,                      &
+                      & NOPT, fdmode, COST, CONSTR,  &  ! cost and constraint at current design point!
+                      & FLAG_COST, W_COST, W_CONSTR, &  ! flags and weights
+                      & CONN_CONSTR, CONN_XSH,       &  ! connectivity matrices
+                      & DCDXSH, DCONDXSH,            &  ! gradients   ! storage for gradients
+                      & Nnode                        )  ! optional argument for cost_node_disp
+
+     real(8):: t0,dt                               ! Initial time and time step.
+
+     integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
+     integer:: NumSteps                            ! Number of time steps.
+     integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
+     type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
+     type(xbelem), allocatable:: Elem(:)            ! Element information.
+     type(xbnode), allocatable:: Node(:)            ! Nodal information.
+     integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
+
+     real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
+     real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
+     real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
+     real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
+     real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+     real(8),      allocatable:: InternalForces(:,:)  ! Internal force/moments at nodes.
+     character(len=25)        :: OutFile           ! Output file.
+     real(8),      allocatable:: PosIni   (:,:)    ! Initial nodal Coordinates.
+     real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
+     real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
+     real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
+     real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
+     real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
+
+     real(8),      allocatable:: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
+     real(8),      allocatable:: ForcesTime(:,:)   ! History of the force/moment vector at the beam root element.
+     real(8),      allocatable:: VelocTime(:,:)    ! History of velocities.
+
+     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+     logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
+
+     ! Rigid-body variables
+     real(8),      allocatable:: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
+     real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
+     real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
+     real(8),      allocatable:: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
+
+        character(len=3), intent(in) :: fdmode          ! finite differences method
+        integer                      :: NOPT            ! number of iteration for the optimisation - required to understand which column of XSH to modify
+        real(8), intent(in)          :: COST(0:)         ! cost function value at current design point
+        real(8), intent(in)          :: CONSTR(:,0:)     ! constrain vector at current design point
+        real(8), intent(in)          :: W_CONSTR(:), W_COST(:)       ! arrays with weights/scaling factors...
+        integer, intent(in)          :: CONN_CONSTR(:), CONN_XSH(:)  ! connectivity array for constrains
+        logical, intent(in)          :: FLAG_COST(:)    ! determines which functions to evaluate
+        integer, optional            :: Nnode           ! Number of the node at which to evaluate the displacements.
+
+        real(8), intent(inout) :: DCDXSH  (:,0:)  ! gradient of cost in respect to shared design
+        real(8), intent(inout) :: DCONDXSH(:,:,0:)! gradient of constrain in respect to design
+
+        real(8)              :: DXSH( size(XSH) ), XSH_COPY( size(XSH) ) ! deltas for shared design variables and copy of current design
+        integer              :: nn, ii              ! counters for target design variables
+        real(8)              :: cost_val                        ! value of cost function at perturbed points
+        real(8)              :: constr_val(size(CONN_CONSTR))   ! value of constraint array at perturbed points
 
 
-    character(len=3), intent(in) :: fdmode   ! finite differences method
-    integer                      :: NOPT     ! number of iteration for the optimisation - required to understand which column of XSH to modify
-    real(8) :: DXSH( size(XSH,1) )           ! deltas for shared design variables
+
+        ! ------------------ Compute Deltas for Design current design (NOPT) ---
+        where (FLAG_DESIGN_SHARED .eqv. .true.)
+            DXSH = fperturb_delta_1d_array( XSH(:,NOPT) )
+        elsewhere
+            DXSH = 0.0_8
+        end where
+        ! -------------------------- Testing: result without where statement ---
+        !call opt_print_XSH(NOPT)
+        !call opt_print_FLAG_DESIGN_SHARED
+        !print *, 'Delta only on target design variables: ', DXSH
+        !DXSH = fperturb_delta_1d_array( XSH(:,NOPT) )
+        !print *, 'Delta without over all array: ', DXSH
+        !stop
 
 
-    ! ---------------------- Compute Deltas for Design current design (NOPT) ---
-    where (FLAG_DESIGN_SHARED .eqv. .true.)
-        DXSH = fperturb_delta_1d_array( XSH(:,NOPT) )
-    elsewhere
-        DXSH = 0.0_8
-    end where
-
-
-    ! ------------------------------ Testing: result without where statement ---
-    !call opt_print_XSH(NOPT)
-    !call opt_print_FLAG_DESIGN_SHARED
-    !print *, 'Delta only on target design variables: ', DXSH
-    !DXSH = fperturb_delta_1d_array( XSH(:,NOPT) )
-    !print *, 'Delta without over all array: ', DXSH
-    !stop
-
-
-    ! ------------------------------------ Perturb each variable at the time ---
+        ! -------------------------------- Perturb each variable at the time ---
+        !call print_shared_input
+        XSH_COPY=XSH(:,NOPT)
+        do nn=1,size(CONN_XSH)
+            ii = CONN_XSH(nn)
 
 
 
+            ! compute xsh perturbed:
+            XSH(       :     , NOPT ) = XSH_COPY
+            XSH( ii, NOPT ) = XSH_COPY( ii ) + DXSH( ii )
+            print *, 'NOPT:', NOPT,  'Variable No.', ii, '=', XSH_COPY(ii), '(before pert.)', XSH( ii, NOPT ), '(after pert.)'
+            call opt_unpack_DESIGN_SHARED(NOPT)
+
+            ! execute forward
+            call fwd_problem(NumElems,OutFile,Options,    &    ! from input_setup
+                 &                        Elem,           &   ! from opt_main_xxx
+                 &                    NumNodes,           &   ! from input_elem
+                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                 &                  OutGrids,         &   ! from pt_main_xxx
+                 &                      PsiIni,    &   ! from xbeam_undef_geom
+                 &                Node, NumDof,    &   ! from xbeam_undef_dofs
+                 & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
+                 &            NumSteps, t0, dt,    &   ! input_dyn_setup
+                 &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                 &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
+                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                 & RefVel, RefVelDot, Quat)
+
+
+            ! -------------------------------- allocate cost and constraints ---
+            cost_val= cost_global( FLAG_COST, W_COST, PosIni, PosDef )
+            constr_val = cost_constrains( W_CONSTR, CONN_CONSTR, PosIni, PosDef )
+
+            ! -------------------------------------------- Compute Gradients ---
+            DCDXSH(nn,NOPT)     = (   cost_val - COST(NOPT)     ) /  DXSH(ii)
+            DCONDXSH(:,nn,NOPT) = ( constr_val - CONSTR(:,NOPT) ) /  DXSH(ii)
+
+
+            print *, 'cost: ', COST(NOPT), '(old)', cost_val, '(new)' ,  (cost_val - COST(NOPT)), '(delta)'
+            print *, 'Cost Gradient:', DCDXSH(nn,NOPT)
+            print *, 'Constrain Gradient:', DCONDXSH(:,nn,NOPT)
+
+        end do
+
+        ! go back to original design
+        XSH(:,NOPT)=XSH_COPY
 
     end subroutine fd_main
 

@@ -74,14 +74,14 @@ contains
 
 
 !------------------------------------------------------------------------------
-! subroutine cost_utl_build_constraints_connectivity
+! subroutine cost_utl_build_connectivity
 ! --------------------------------------------------
     ! generates a connectivity matrix from the FLAG_CONSTR array to an array of
     ! reduced size (CONN_CONSTR) containing the IDs of the constraint funcitons
     ! used in the problem.
     ! CONN_CONTR(ii)=nn  <--> the ii-th entry of the contraint array is related
     ! to the nn-th function of the mapping determined in cost_utl_get_fun_position
-    subroutine cost_utl_build_constraints_connectivity(FLAG_CONSTR,CONN_CONSTR)
+    subroutine cost_utl_build_connectivity(FLAG_CONSTR,CONN_CONSTR)
 
         logical, intent(in)               :: FLAG_CONSTR(:)
         integer, intent(out), allocatable :: CONN_CONSTR(:) ! CONN_CONTR(II)=NN
@@ -105,7 +105,7 @@ contains
             end if
         end do
 
-    end subroutine cost_utl_build_constraints_connectivity
+    end subroutine cost_utl_build_connectivity
 
 
 
@@ -150,7 +150,7 @@ module opt_cost_utl_test
  contains
 
 !-------------------------------------------------------------------------------
- subroutine cost_utl_build_constraints_connectivity_test
+ subroutine cost_utl_build_connectivity_test
 
         logical               :: FLAG_CONSTR(10)
         integer, allocatable  :: CONN_CONSTR(:)
@@ -161,10 +161,10 @@ module opt_cost_utl_test
         FLAG_CONSTR(9)  =.true.
 
         print*, FLAG_CONSTR
-        call  cost_utl_build_constraints_connectivity(FLAG_CONSTR,CONN_CONSTR)
+        call  cost_utl_build_connectivity(FLAG_CONSTR,CONN_CONSTR)
         print *, CONN_CONSTR
 
- end subroutine cost_utl_build_constraints_connectivity_test
+ end subroutine cost_utl_build_connectivity_test
 
 
 end module opt_cost_utl_test

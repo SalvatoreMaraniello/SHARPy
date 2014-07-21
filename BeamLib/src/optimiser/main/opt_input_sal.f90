@@ -171,7 +171,7 @@ contains
         ! ------------------------------------------------------------ FLAG_DISP
         ! node displacement
         ! (cost_node_disp in opt_cost module)
-        FUNID='node_disp';     ADDTO='cstr';     WEIGHT=0.1_8;
+        FUNID='node_disp';     ADDTO='cost';     WEIGHT=0.1_8;
         !NODE_DISP=0; ! <--- the passing interface for the option has not been implemented yet!!
 
         call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &
@@ -189,10 +189,6 @@ contains
     end subroutine opt_input_cost
 
 
-
-
-
-
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine opt_update_shared_input
 !
@@ -205,79 +201,15 @@ contains
 !    perturb the design.
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine opt_update_shared_input( FLAGS_vector )
+ subroutine opt_update_shared_input( NOPT )
 
-   logical, intent(in) :: FLAGS_vector(size( FLAG_DESIGN_SHARED ))
-
-   ! Shared variables from module input
-   real(8) :: BeamLength1, BeamLength2     ! Beam defining lengths.
-   real(8) :: BeamStiffness(6,6)           ! Beam element stiffness matrix (assumed constant).
-   real(8) :: BeamMass(6,6)                ! Beam element mass matrix (assumed constant).
-   real(8) :: ExtForce(3)                  ! Applied forces at the tip.
-   real(8) :: ExtMomnt(3)                  ! Applied moments at the tip.
-   real(8) :: SectWidth,SectHeight         ! Height and width of the cross section.
-   real(8) :: ThetaRoot                    ! Pretwist angle at root.
-   real(8) :: ThetaTip                     ! Pretwist angle at tip.
-   real(8) :: TipMass                      ! Mass at the beam tip.
-   real(8) :: TipMassY                     ! Y offset of the tip mass.
-   real(8) :: TipMassZ                     ! Z offset of the tip mass.
-   real(8) :: Omega                        ! Frequency of oscillatory motions.
-
-   ! imports input module shared variables
-   call read_shared_input( BeamLength1, BeamLength2,   &
-                   & BeamStiffness, BeamMass,          &
-                   & ExtForce, ExtMomnt,               &
-                   & SectWidth, SectHeight,            &
-                   & ThetaRoot, ThetaTip,              &
-                   & TipMass, TipMassY, TipMassZ,      &
-                   & Omega                             )
-
-
-    call opt_assigns_shared_FLAGS( FLAGS_vector )
-
-    ! Flags to Perturb Shared Variables
-    if ( FLAG_BeamLength1 .eqv. .true. ) then
-        d_BeamLength1 = fperturb_delta_scalar(BeamLength1)
-        BeamLength1 = BeamLength1 + d_BeamLength1
-    end if
-
-    ! Flags to Perturb Shared Variables
-    if ( FLAG_BeamLength2 .eqv. .true. ) then
-        d_BeamLength2 = fperturb_delta_scalar(BeamLength2)
-        BeamLength2 = BeamLength2 + d_BeamLength2
-    end if
-
-!    if ( FLAG_BeamLength2=.true. ) then
-!    if ( FLAG_SectWidth=.true. ) then
-!    if ( FLAG_SectHeight=.true. ) then
-!    if ( FLAG_ThetaRoot=.true. ) then
-!    if ( FLAG_ThetaTip =.true. ) then
-!    if ( FLAG_TipMass =.true. ) then
-!    if ( FLAG_TipMassY =.true. ) then
-!    if ( FLAG_TipMassZ=.true. ) then
-!    if ( FLAG_Omega=.true. ) then
-
-
-     where ( FLAG_BeamMass .eqv. .true. )
-         d_BeamMass = fperturb_delta_2d_array(BeamMass)
-         BeamMass = BeamMass+d_BeamMass
-     end where
+    integer :: NOPT                        ! value in XSH to allocate
 
 
 
-!    if ( FLAG_BeamStiffness(6,6)=.true. ) then
-!    if ( FLAG_BeamMass(6,6)=.true. ) then
-!    if ( FLAG_ExtForce(3)=.true. ) then
-!    if ( FLAG_ExtMomnt(3)=.true. ) then
+    call opt_unpack_DESIGN_SHARED(NOPT)
+    print *, 'unpacked: ',XSH(:,NOPT)
 
-
-    call update_shared_input( BeamLength1, BeamLength2, &
-                   & BeamStiffness, BeamMass,          &
-                   & ExtForce, ExtMomnt,               &
-                   & SectWidth, SectHeight,            &
-                   & ThetaRoot, ThetaTip,              &
-                   & TipMass, TipMassY, TipMassZ,      &
-                   & Omega                             )
 
  end subroutine opt_update_shared_input
 
