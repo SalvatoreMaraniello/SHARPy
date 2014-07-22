@@ -102,6 +102,7 @@ module input
 ! INPUT START
   TestCase='NCB1'! 'BEND'!'NCB1'
   Options%Solution=112
+  Options%PrintInfo    =.false.
 
 ! Default values.
   ExtForce(1:3)=0.d0

@@ -90,8 +90,65 @@ contains
     end subroutine array3_cond_alloc
 
 
-end module lib_array
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+
+! array1_cond_dealloc(X,Nrows,IC)
+!-------------------------------------------------------------------------------
+    ! If the 1D array X is allocated, the routine will deallocate it.
+    ! Nrows will specify the length of the array.
+    ! Whether the array will be allocated or not, if setzero is equal to .true.
+    ! the array will be set to zero
+    ! --------------------------------------------------------------------------
+    subroutine array1_cond_dealloc(X)
+
+        real(8),    intent(inout), allocatable :: X(:)  ! 1D array
+
+        if (allocated(X)) then
+            deallocate( X )
+        end if
+
+    end subroutine array1_cond_dealloc
+
+
+! array2_cond_dealloc(X,Nrows,IC)
+!-------------------------------------------------------------------------------
+    ! If the 2D array X is allocated, the routine will deallocate it.
+    ! Nrows will specify the length of the array.
+    ! Whether the array will be allocated or not, if setzero is equal to .true.
+    ! the array will be set to zero
+    ! --------------------------------------------------------------------------
+    subroutine array2_cond_dealloc(X)
+
+        real(8),    intent(inout), allocatable :: X(:,:)  ! 1D array
+
+        if (allocated(X)) then
+            deallocate( X )
+        end if
+
+    end subroutine array2_cond_dealloc
+
+
+! array3_cond_dealloc(X,Nrows,IC)
+!-------------------------------------------------------------------------------
+    ! If the 3D array X is allocated, the routine will deallocate it.
+    ! Nrows will specify the length of the array.
+    ! Whether the array will be allocated or not, if setzero is equal to .true.
+    ! the array will be set to zero
+    ! --------------------------------------------------------------------------
+    subroutine array3_cond_dealloc(X)
+
+        real(8),    intent(inout), allocatable :: X(:,:,:)  ! 1D array
+
+        if (allocated(X)) then
+            deallocate( X )
+        end if
+
+    end subroutine array3_cond_dealloc
+
+
+
+end module lib_array
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -140,6 +197,25 @@ module lib_array_test
         print *, 'Try to reallocate with  initialise to zero:'
         call array3_cond_alloc(Z,1,3,2,.true.)
         print *, 'Z should be zero now: Z=', Z
+
+        !------------------------------------------------------------------------
+
+        print *, '-------------------------------------- Test array1_cond_dealloc'
+        print *, 'Allocate X without initialising to zero'
+        call array1_cond_dealloc(X)
+        print *, 'done! X= ', X
+
+        print *, '-------------------------------------- Test array2_cond_dealloc'
+        print *, 'Allocate Y without initialising to zero'
+        call array2_cond_dealloc(Y)
+        print *, 'done! Y= ', Y
+
+
+        print *, '-------------------------------------- Test array3_cond_dealloc'
+        print *, 'Allocate Z without initialising to zero'
+        call array3_cond_dealloc(Z)
+        print *, 'done! Z= ', Z
+
 
     end subroutine array_cond_alloc_test
 

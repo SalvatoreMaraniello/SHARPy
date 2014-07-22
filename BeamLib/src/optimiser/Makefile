@@ -210,7 +210,8 @@ OBJOPTSRC=\
 	$(OPTOBJDIR)/opt_shared.o \
 	$(OPTOBJDIR)/opt_perturb.o \
 	$(OPTOBJDIR)/opt_cost_utl.o \
-	$(OPTOBJDIR)/opt_cost.o 	
+	$(OPTOBJDIR)/opt_cost.o \
+	$(OPTOBJDIR)/opt_driver.o 		
 	  
 OBJOPTMAIN=\
     $(OPTOBJDIR)/input_$(TESTCASE).o     \

@@ -51,6 +51,109 @@ module fwd_main
 
 contains
 
+! This subroutine executes all the main program with exeption of the input setup
+! routine.
+ subroutine fwd_problem(NumElems,OutFile,Options,    &   ! from input_setup
+                 &                        Elem,    &   ! from opt_main_xxx
+                 &                    NumNodes,    &   ! from input_elem
+                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                 &                  OutGrids,         &   ! from pt_main_xxx
+                 &                      PsiIni,    &   ! from xbeam_undef_geom
+                 &                Node, NumDof,    &   ! from xbeam_undef_dofs
+                 & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
+                 &            NumSteps, t0, dt,    &   ! input_dyn_setup
+                 &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                 &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
+                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                 & RefVel, RefVelDot, Quat)
+
+     real(8):: t0,dt                               ! Initial time and time step.
+
+     integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
+     integer:: NumSteps                            ! Number of time steps.
+     integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
+     type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
+     type(xbelem), allocatable:: Elem(:)            ! Element information.
+     type(xbnode), allocatable:: Node(:)            ! Nodal information.
+     integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
+
+     real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
+     real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
+     real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
+     real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
+     real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+     real(8),      allocatable:: InternalForces(:,:)  ! Internal force/moments at nodes.
+     character(len=25)        :: OutFile           ! Output file.
+     real(8),      allocatable:: PosIni   (:,:)    ! Initial nodal Coordinates.
+     real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
+     real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
+     real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
+     real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
+     real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
+
+     real(8),      allocatable:: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
+     real(8),      allocatable:: ForcesTime(:,:)   ! History of the force/moment vector at the beam root element.
+     real(8),      allocatable:: VelocTime(:,:)    ! History of velocities.
+
+     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+     logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
+
+     ! Rigid-body variables
+     real(8),      allocatable:: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
+     real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
+     real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
+     real(8),      allocatable:: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
+
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Set Up Input for Static Problem
+     ! (stage required also for dynamic and coupled solutions)
+     call fwd_static_input( NumElems, OutFile, Options,                &   ! from input_setup
+                          &                       Elem,                &   ! from opt_main_xxx
+                          &                   NumNodes,                &   ! from input_elem
+                          & BoundConds, PosIni, ForceStatic, PhiNodes, &   ! from input_node
+                          & OutGrids                                   )   ! from pt_main_xxx
+
+    print *, 'Check on Elem'
+    print *, allocated(Elem)
+
+
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Reads Forward Problem Input and allocates the required variables for the
+     ! forward static problem solution
+     call fwd_presolver (NumElems,OutFile,Options,    &   ! from input_setup
+                    &                        Elem,    &   ! from opt_main_xxx
+                    &                    NumNodes,    &   ! from input_elem
+                    &  BoundConds,PosIni,PhiNodes,    &   ! from input_node
+                    &                      PsiIni,    &   ! from xbeam_undef_geom
+                    &                Node, NumDof,    &   ! from xbeam_undef_dofs
+                    & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
+                    &            NumSteps, t0, dt,    &   ! input_dyn_setup
+                    &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                    &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
+                    & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                    & RefVel, RefVelDot, Quat)
+
+     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+     ! Forward Solution.
+     call fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
+                     &                        Elem,    &   ! from opt_main_xxx
+                     &                    NumNodes,    &   ! from input_elem
+                     &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                     &                  OutGrids,      &   ! from pt_main_xxx
+                     &                      PsiIni,    &   ! from xbeam_undef_geom
+                     &                Node, NumDof,    &   ! from xbeam_undef_dofs
+                     & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
+                     &            NumSteps, t0, dt,    &   ! input_dyn_setup
+                     &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                     &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
+                     & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                     & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
+
+ end subroutine fwd_problem
+
+
+
+
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

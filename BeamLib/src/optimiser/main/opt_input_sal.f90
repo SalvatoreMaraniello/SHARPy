@@ -74,13 +74,13 @@ contains
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
-    subroutine opt_setup(gradmode,solmode,fdmode,NOPT_MAX)
+    subroutine opt_setup(gradmode,solmode,fdmode,NOPTMAX)
 
         character(len=3), intent(out) :: gradmode  ! gradient method
         character(len=3), intent(out) :: solmode   ! solution mode
         character(len=3), intent(out) :: fdmode    ! finite differences method
 
-        integer         , intent(out) :: NOPT_MAX  ! Max Number of iterations for the optimisation
+        integer         , intent(out) :: NOPTMAX   ! Max Number of iterations for the optimisation
 
         ! ----------------------------------------------------------------------
         gradmode='FDF' ! gradient method: DIR: direct
@@ -92,7 +92,7 @@ contains
         fdmode  ='FWD' ! FD method:       FWD: forward differences
                        !                  BKW: backward differences
                        !                  CNT: central differences
-        NOPT_MAX= 3    ! Maximum number of iterations for the optimiser
+        NOPTMAX= 2     ! Maximum number of iterations for the optimiser
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: shared variables
@@ -124,7 +124,7 @@ contains
         call opt_set_shared_FLAGS_to_false
 
         ! set up XSH vector
-        allocate( XSH(size(FLAG_DESIGN_SHARED), 0:NOPT_MAX ) ); XSH=0_8
+        allocate( XSH(size(FLAG_DESIGN_SHARED), 0:NOPTMAX ) ); XSH=0_8
         call opt_pack_DESIGN_SHARED(0)
 
         ! TESTING:

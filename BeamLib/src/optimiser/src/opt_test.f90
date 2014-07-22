@@ -18,6 +18,8 @@ program opt_test
  use opt_perturb_test
  use opt_cost_test
  use opt_cost_utl_test
+ use opt_driver
+ use opt_driver_test
 
  implicit none
 
@@ -25,7 +27,7 @@ program opt_test
  !-----------------------------------------------------------------------------
 
 
- testmodule='opt_cost_utl'       ! <--- change here!
+ testmodule='opt_driver'       ! <--- change here!
 
 
  !-----------------------------------------------------------------------------
@@ -44,7 +46,10 @@ program opt_test
         call cost_node_disp_test
 
     case ('opt_cost_utl')
-        call cost_utl_build_constraints_connectivity_test
+        call cost_utl_build_connectivity_test
+
+    case('opt_driver')
+        call simple_driver_test
 
     case default
         print *, 'TEST CASES NOT IMPLEMENTED FOR: ', testmodule

@@ -41,7 +41,7 @@ program opt_main
  use opt_perturb
  use opt_cost
  use opt_cost_utl
- !use opt_driver
+ use opt_driver
 
  implicit none
 
@@ -86,7 +86,7 @@ program opt_main
  character(len=3) :: gradmode ! gradient method
  character(len=3) :: solmode  ! solution mode
  character(len=3) :: fdmode   ! finite differences method
- integer          :: NOPT_MAX ! Max Number of iterations for the optimisation
+ integer          :: NOPTMAX  ! Max Number of iterations for the optimisation
  integer          :: NOPT     ! number of iteration for the optimisation
 
  logical          :: FLAG_COST  (1) ! Flag array for cost funcitons
@@ -114,7 +114,7 @@ program opt_main
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input
- call opt_setup(gradmode,solmode,fdmode,NOPT_MAX)
+ call opt_setup(gradmode,solmode,fdmode,NOPTMAX)
  if ( (solmode == 'OPT') .or. (solmode == 'SNS') ) then
      call opt_input_cost(FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
      ! note: cost_utl_build_connectivity is in the opt_cost_utl module.
@@ -126,20 +126,21 @@ program opt_main
      !print *, 'Design: ', CONN_XSH
      !stop
      if (solmode == 'SNS') then        ! this is only needed for the allocation
-        NOPT_MAX=0
+        NOPTMAX=0
      end if
-     allocate(CONSTR( size(CONN_CONSTR),0:NOPT_MAX ) ); CONSTR=0.0_8
-     allocate(  COST(                   0:NOPT_MAX ) ); COST=0.0_8
+     allocate(CONSTR( size(CONN_CONSTR),0:NOPTMAX ) ); CONSTR=0.0_8
+     allocate(  COST(                   0:NOPTMAX ) ); COST=0.0_8
 
-     allocate(   DCDXSH(                    size(CONN_XSH),0:NOPT_MAX ) ); DCDXSH=0.0_8
-     allocate( DCONDXSH( size(CONN_CONSTR), size(CONN_XSH),0:NOPT_MAX ) ); DCONDXSH=0.0_8
+     allocate(   DCDXSH(                    size(CONN_XSH),0:NOPTMAX ) ); DCDXSH=0.0_8
+     allocate( DCONDXSH( size(CONN_CONSTR), size(CONN_XSH),0:NOPTMAX ) ); DCONDXSH=0.0_8
 
  end if
 
 
 
-NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
-do while (NOPT<=NOPT_MAX)
+!NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
+!do while (NOPT<=NOPTMAX)
+do NOPT=0,NOPTMAX
 
     ! print current design
     !print *, 'current design:'
@@ -276,26 +277,62 @@ do while (NOPT<=NOPT_MAX)
 
      end select
 
-
-    ! ------------------------------------------------ Set next Design Point ---
-    if (NOPT < NOPT_MAX) then
-
-        !call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
-        PRINT *, 'UPDATE DESIGN'
-        XSH(:,NOPT+1)=XSH(:,NOPT)
-        !call opt_unpack_DESIGN_SHARED(NOPT+1)
+    ! --------------------------------------------------------- Deallocation ---
+    if (1<0) then
+        print *, 'deallocating everything!'
+        if (allocated(Elem) ) then
+            deallocate (Elem)
+        end if
+        print *, 'ok'
+        call array2_cond_dealloc(PosIni)
+                print *, 'ok'
+        call array2_cond_dealloc(ForceStatic)
+                print *, 'ok'
+        call array1_cond_dealloc(PhiNodes)
+                print *, 'ok'
+        if ( allocated(BoundConds) .eqv. .true. ) then
+            deallocate(BoundConds)
+        end if
+                print *, 'ok'
+        if ( allocated(OutGrids) ) then
+            deallocate(OutGrids)
+        end if
+                print *, 'ok'
+        if ( allocated(Node) ) then
+            deallocate (Node)
+        end if
+                print *, 'ok'
+        call array2_cond_dealloc( PosDef)
+                print *, 'ok'
+        call array3_cond_dealloc( PsiDef)
+                print *, 'ok'
+        call array2_cond_dealloc( InternalForces)
+                print *, 'ok'
 
     end if
 
 
-    NOPT = NOPT+1
+
+
+    ! ------------------------------------------------ Set next Design Point ---
+    if (NOPT < NOPTMAX) then
+
+        call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
+        PRINT *, 'UPDATE DESIGN for optimisation loop No.', NOPT
+        XSH(:,NOPT+1)=XSH(:,NOPT)
+        call opt_unpack_DESIGN_SHARED(NOPT+1)
+
+    end if
+
+
+    !NOPT = NOPT+1
 
 end do
 
 
  print *, 'Optimisation Terminated: '
  print *, 'cost: ', COST
- print *, 'constrains:', CONSTR
+ !print *, 'constrains:', CONSTR
 
 end program opt_main
 

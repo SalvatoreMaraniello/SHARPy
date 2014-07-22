@@ -137,8 +137,6 @@ module opt_fd
         do nn=1,size(CONN_XSH)
             ii = CONN_XSH(nn)
 
-
-
             ! compute xsh perturbed:
             XSH(       :     , NOPT ) = XSH_COPY
             XSH( ii, NOPT ) = XSH_COPY( ii ) + DXSH( ii )
@@ -150,7 +148,7 @@ module opt_fd
                  &                        Elem,           &   ! from opt_main_xxx
                  &                    NumNodes,           &   ! from input_elem
                  &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
-                 &                  OutGrids,         &   ! from pt_main_xxx
+                 &                    OutGrids,    &   ! from pt_main_xxx
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
@@ -159,7 +157,6 @@ module opt_fd
                  &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
                  & RefVel, RefVelDot, Quat)
-
 
             ! -------------------------------- allocate cost and constraints ---
             cost_val= cost_global( FLAG_COST, W_COST, PosIni, PosDef )
