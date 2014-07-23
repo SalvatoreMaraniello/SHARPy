@@ -36,7 +36,7 @@ module opt_fd
 
  ! subroutine fd_main
  !-------------------
-    ! The subroutine starts from the current design cost & constrains and,
+    ! The subroutine starts from the current design cost & constraints and,
     ! perturbing each design variable at the time, computes the FD gradient.
     ! Because the forward problem needs to be executed as many time as the number
     ! of design parameters for each cost/constraints, all the variables required
@@ -100,14 +100,14 @@ module opt_fd
         character(len=3), intent(in) :: fdmode          ! finite differences method
         integer                      :: NOPT            ! number of iteration for the optimisation - required to understand which column of XSH to modify
         real(8), intent(in)          :: COST(0:)         ! cost function value at current design point
-        real(8), intent(in)          :: CONSTR(:,0:)     ! constrain vector at current design point
+        real(8), intent(in)          :: CONSTR(:,0:)     ! constraint vector at current design point
         real(8), intent(in)          :: W_CONSTR(:), W_COST(:)       ! arrays with weights/scaling factors...
-        integer, intent(in)          :: CONN_CONSTR(:), CONN_XSH(:)  ! connectivity array for constrains
+        integer, intent(in)          :: CONN_CONSTR(:), CONN_XSH(:)  ! connectivity array for constraints
         logical, intent(in)          :: FLAG_COST(:)    ! determines which functions to evaluate
         integer, optional            :: Nnode           ! Number of the node at which to evaluate the displacements.
 
         real(8), intent(inout) :: DCDXSH  (:,0:)  ! gradient of cost in respect to shared design
-        real(8), intent(inout) :: DCONDXSH(:,:,0:)! gradient of constrain in respect to design
+        real(8), intent(inout) :: DCONDXSH(:,:,0:)! gradient of constraint in respect to design
 
         real(8)              :: DXSH( size(XSH) ), XSH_COPY( size(XSH) ) ! deltas for shared design variables and copy of current design
         integer              :: nn, ii              ! counters for target design variables
@@ -159,8 +159,8 @@ module opt_fd
                  & RefVel, RefVelDot, Quat)
 
             ! -------------------------------- allocate cost and constraints ---
-            cost_val= cost_global( FLAG_COST, W_COST, PosIni, PosDef )
-            constr_val = cost_constrains( W_CONSTR, CONN_CONSTR, PosIni, PosDef )
+            cost_val= cost_global( FLAG_COST, W_COST, PosIni, PosDef, Elem )
+            constr_val = cost_constraints( W_CONSTR, CONN_CONSTR, PosIni, PosDef, Elem )
 
             ! -------------------------------------------- Compute Gradients ---
             DCDXSH(nn,NOPT)     = (   cost_val - COST(NOPT)     ) /  DXSH(ii)

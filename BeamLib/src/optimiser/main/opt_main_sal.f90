@@ -89,22 +89,22 @@ program opt_main
  integer          :: NOPTMAX  ! Max Number of iterations for the optimisation
  integer          :: NOPT     ! number of iteration for the optimisation
 
- logical          :: FLAG_COST  (1) ! Flag array for cost funcitons
- logical          :: FLAG_CONSTR(1) ! Flag array for cost funcitons
+ logical          :: FLAG_COST  (2) ! Flag array for cost funcitons
+ logical          :: FLAG_CONSTR(2) ! Flag array for cost funcitons
  real(8)          :: W_COST  (size(FLAG_COST))   ! arrays with weights/scaling factors...
  real(8)          :: W_CONSTR(size(FLAG_COST))   ! ...for cost and constraint functions
  integer, allocatable :: CONN_CONSTR(:), CONN_XSH(:)   ! connectivity matrix for contrains and design variables array
  real(8), allocatable :: COST(:)                 ! cost function
- real(8), allocatable :: CONSTR(:,:)             ! constrain vector
+ real(8), allocatable :: CONSTR(:,:)             ! constraint vector
 
  real(8), allocatable :: DCDXSH  (:,:)  ! gradient of cost in respect to shared design
- real(8), allocatable :: DCONDXSH(:,:,:) ! gradient of constrain in respect to design
+ real(8), allocatable :: DCONDXSH(:,:,:) ! gradient of constraints in respect to design
 
 
  ! gradients ordering:
  !     DCDXSH(   ii,NOPT)           DCONDXSH(nn,ii,NOPT)
  ! where:
- !   nn-th constrain // ii-th design variable // NOPT: optimisation iteration
+ !   nn-th constraint // ii-th design variable // NOPT: optimisation iteration
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -121,10 +121,11 @@ program opt_main
      call cost_utl_build_connectivity(FLAG_CONSTR,CONN_CONSTR)
      call cost_utl_build_connectivity(FLAG_DESIGN_SHARED,CONN_XSH)
      ! for testing...
-     !print *, 'Connectivity Arrays'
-     !print *, 'Constr: ', CONN_CONSTR
+     print *, 'FLAG_COST:', FLAG_COST
+     print *, 'FLAG_CONSTR:', FLAG_CONSTR
+     print *, 'Constr. Connectivity: ', CONN_CONSTR
      !print *, 'Design: ', CONN_XSH
-     !stop
+
      if (solmode == 'SNS') then        ! this is only needed for the allocation
         NOPTMAX=0
      end if
@@ -209,7 +210,6 @@ do NOPT=0,NOPTMAX
      call output_elems (11,Elem,PosDef,PsiDef)
      close (11)
 
-
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Loop control
      select case (solmode)
@@ -221,10 +221,12 @@ do NOPT=0,NOPTMAX
         case ('OPT','SNS')
             ! -------------- Evaluate cost and Constraints at current design ---
             COST(NOPT) = cost_global( FLAG_COST, W_COST,  &
-                                    & PosIni, PosDef      )
+                                    & PosIni, PosDef,     &
+                                    & Elem                   )
 
-            CONSTR(:,NOPT) = cost_constrains( W_CONSTR, CONN_CONSTR, &
-                                            & PosIni,PosDef          )
+            CONSTR(:,NOPT) = cost_constraints( W_CONSTR, CONN_CONSTR, &
+                                            & PosIni,PosDef,         &
+                                            & Elem                   )
             !PRINT *, 'COST',    COST
             !PRINT *, 'CONSTR:', CONSTR
 
@@ -268,16 +270,14 @@ do NOPT=0,NOPTMAX
                 print *, 'COST',    COST
                 print *, 'CONSTR:', CONSTR
                 print *, 'cost gradient', DCDXSH
-                print *, 'constrain gradient', DCONDXSH
+                print *, 'constraints gradient', DCONDXSH
                 exit
-            else
-
-
             end if
 
      end select
 
     ! --------------------------------------------------------- Deallocation ---
+    ! This doens't seem to affect the process
     if (1<0) then
         print *, 'deallocating everything!'
         if (allocated(Elem) ) then
@@ -308,31 +308,47 @@ do NOPT=0,NOPTMAX
                 print *, 'ok'
         call array2_cond_dealloc( InternalForces)
                 print *, 'ok'
-
     end if
-
+    ! --------------------------------------------------------------------------
 
 
 
     ! ------------------------------------------------ Set next Design Point ---
     if (NOPT < NOPTMAX) then
 
-        call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
+        !call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
         PRINT *, 'UPDATE DESIGN for optimisation loop No.', NOPT
-        XSH(:,NOPT+1)=XSH(:,NOPT)
+
+
+        ! this line shows that the update works correctly and the input change
+        ! at each optimisation step
+        XSH(:,NOPT+1)=XSH(:,NOPT)+0.01_8 * XSH(:,NOPT)
         call opt_unpack_DESIGN_SHARED(NOPT+1)
 
     end if
-
-
-    !NOPT = NOPT+1
 
 end do
 
 
  print *, 'Optimisation Terminated: '
- print *, 'cost: ', COST
- !print *, 'constrains:', CONSTR
+ print '(A15,$)', 'cost: '
+ print '(F10.6,$)', COST
+ print *, ' '
+
+ print '(A15,$)', 'constraints: '
+ print '(F10.6,$)', CONSTR
+ print *, ' '
+
+ print '(A15,$)', 'cost grad.: '
+ print '(F10.6,$)', DCDXSH
+ print *, ' '
+
+ print '(A15,$)', 'constr. grad.: '
+ print '(F10.6,$)', DCONDXSH
+ print *, ' '
+
+
+ !print *, 'constraints:', CONSTR
 
 end program opt_main
 

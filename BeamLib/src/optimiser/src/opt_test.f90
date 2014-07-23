@@ -27,7 +27,7 @@ program opt_test
  !-----------------------------------------------------------------------------
 
 
- testmodule='opt_driver'       ! <--- change here!
+ testmodule='opt_cost'       ! <--- change here!
 
 
  !-----------------------------------------------------------------------------
@@ -44,6 +44,7 @@ program opt_test
 
     case ('opt_cost')
         call cost_node_disp_test
+        call cost_mass_total_test
 
     case ('opt_cost_utl')
         call cost_utl_build_connectivity_test

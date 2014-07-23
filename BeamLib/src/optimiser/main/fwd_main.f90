@@ -72,7 +72,7 @@ contains
      integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
      integer:: NumSteps                            ! Number of time steps.
      integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
-     type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
+     type(xbopts)           :: Options            ! Solution options (structure defined in xbeam_shared).
      type(xbelem), allocatable:: Elem(:)            ! Element information.
      type(xbnode), allocatable:: Node(:)            ! Nodal information.
      integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
@@ -113,10 +113,6 @@ contains
                           & BoundConds, PosIni, ForceStatic, PhiNodes, &   ! from input_node
                           & OutGrids                                   )   ! from pt_main_xxx
 
-    print *, 'Check on Elem'
-    print *, allocated(Elem)
-
-
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Reads Forward Problem Input and allocates the required variables for the
      ! forward static problem solution
@@ -148,6 +144,7 @@ contains
                      &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
                      & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
                      & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
+
 
  end subroutine fwd_problem
 

@@ -91,7 +91,7 @@ module opt_driver
             cf = -factor*cost
         end if
 
-        where (abs(gvec)<1e-6_8)
+        where (abs(gvec)<1e-10_8)
             steepest_descent=0.0_8
         elsewhere
             steepest_descent=cf/gvec

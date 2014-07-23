@@ -92,7 +92,7 @@ contains
         fdmode  ='FWD' ! FD method:       FWD: forward differences
                        !                  BKW: backward differences
                        !                  CNT: central differences
-        NOPTMAX= 2     ! Maximum number of iterations for the optimiser
+        NOPTMAX= 3     ! Maximum number of iterations for the optimiser
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: shared variables
@@ -102,12 +102,12 @@ contains
         !   the design or perform FDs based sensitivity analysis.
         !   FLAG_DESIGN_SHARED is used to keep memory of the design variables.
         FLAG_BeamLength1 = .true.
-        FLAG_TipMassY =.true.
+        !FLAG_TipMassY =.true.
         FLAG_ExtForce(3)=.true.
-        FLAG_BeamMass(1,1)=.true.
-        FLAG_BeamMass(2,4)=.true.
-        FLAG_ExtMomnt(2)=.true.
-        FLAG_BeamStiffness(6,6)=.true.
+        !FLAG_BeamMass(1,1)=.true.
+        !FLAG_BeamMass(2,4)=.true.
+        !FLAG_ExtMomnt(2)=.true.
+        !FLAG_BeamStiffness(6,6)=.true.
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: element dependent
@@ -149,8 +149,8 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     subroutine opt_input_cost(FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
 
-        logical         , intent(out) :: FLAG_COST  (1) ! Flag array for cost funcitons
-        logical         , intent(out) :: FLAG_CONSTR(1) ! Flag array for cost funcitons
+        logical         , intent(out) :: FLAG_COST  (2) ! Flag array for cost funcitons
+        logical         , intent(out) :: FLAG_CONSTR(2) ! Flag array for cost funcitons
 
         real(8)         , intent(out) :: W_COST  (size(FLAG_COST))    ! arrays with weights/scaling factors...
         real(8)         , intent(out) :: W_CONSTR(size(FLAG_COST))   ! ...for cost and constraint functions
@@ -171,18 +171,16 @@ contains
         ! ------------------------------------------------------------ FLAG_DISP
         ! node displacement
         ! (cost_node_disp in opt_cost module)
-        FUNID='node_disp';     ADDTO='cost';     WEIGHT=0.1_8;
+        FUNID='node_disp';     ADDTO='cost';     WEIGHT=1.0_8;
         !NODE_DISP=0; ! <--- the passing interface for the option has not been implemented yet!!
-
         call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &
                             & FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
 
-
-        ! ADD HERE NEXT COST/CONSTRAINT FUNCTIONS
-        !
-        !FUNID='XXX';     ADDTO='XXX';     WEIGHT=XXX;
-        !call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &
-        !                        & FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR) !
+        ! structural mass
+        ! (cost_total_mass in opt_cost module)
+        FUNID='mass_tot';     ADDTO='cstr';     WEIGHT=1.0_8;
+        call cost_utl_allocate_flags_and_weights(FUNID,ADDTO,WEIGHT, &
+                            & FLAG_COST,FLAG_CONSTR,W_COST,W_CONSTR)
         ! ----------------------------------------------------------------------
 
 

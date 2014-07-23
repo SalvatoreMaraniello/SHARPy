@@ -46,6 +46,7 @@ contains
                                                     ! values: 'cost', 'cstr', 'none'
         character(LEN=10), intent(in)  ::   FUNID   ! link to function
                                                     ! 'node_disp': nodal displacement
+                                                    ! 'mass_tot' : total structural mass
 
         ! --- output ---
         logical         , intent(out) :: FLAG_COST  (1)             ! Flag array for cost functions
@@ -119,10 +120,13 @@ contains
         integer                        ::   cost_utl_get_fun_position
         character(LEN=10), intent(in)  ::   FUNID   ! link to function
 
-        select case(FUNID)
+        select case(trim(FUNID))
 
             case ('node_disp')
                 cost_utl_get_fun_position=1
+
+            case ('mass_tot')
+                cost_utl_get_fun_position=2
 
             case default
                 stop 'FUNID not found! Check IDs for cost and constraint functions in the opt_input module'

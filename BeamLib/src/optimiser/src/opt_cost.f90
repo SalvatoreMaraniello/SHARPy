@@ -8,16 +8,21 @@
 !   a. Cost functions for optimisation problem;
 !
 !-> Subroutines.-
-!
 !   - Cost Functions:
 !     - cost_node_disp: returns the absolute value of a nodal displacement
 !
+!
+!
+!-> Ramarks.-
+! - The module required xbeam_shared to access xbelem type
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 module opt_cost
 
  use opt_cost_utl
+ use xbeam_shared
+
  implicit none
 
  contains
@@ -52,6 +57,27 @@ module opt_cost
     end function cost_node_disp
 
 
+
+!-------------------------------------------------------------------------------
+! function cost_total_mass
+!------------------------
+    ! the function returns the total mass of the structure.
+    ! Geometry data are taken from the undeformed structure configuration
+    function cost_total_mass(Elem)
+        type(xbelem), intent(in) :: Elem (:)       ! Element information
+        real(8)                  :: cost_total_mass ! structure mass
+        integer                  :: ii
+
+        cost_total_mass=0.0_8
+        do ii=1,size(Elem)
+            cost_total_mass = cost_total_mass + Elem(ii)%Mass(1,1)*Elem(ii)%Length
+        end do
+
+    end function cost_total_mass
+
+
+
+
 !-------------------------------------------------------------------------------
 ! function cost_global:
 ! ---------------------
@@ -62,23 +88,22 @@ module opt_cost
 
     function cost_global( FLAG_COST, W_COST,        &  ! to determine which functions and weight to evaluate
                         & PosIni,PosDef,            &  ! input for cost_node_disp
+                        & Elem,                     &  ! input for cost_total_mass
                         & Nnode                     &  ! optional input for cost_node_disp
                         )                              ! add here other input
 
         ! see cost_utl_allocate_flags_and_weights
         logical         , intent(in) :: FLAG_COST  (:)    ! determines which functions to evaluate
         real(8)         , intent(in) :: W_COST     (:)    ! arrays with weights/scaling factors...
-
         ! from cost_node_disp
         real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
         real(8),    intent(in) :: PosDef (:,:)    ! Current nodal position vector
         integer, optional      :: Nnode           ! Number of the node at which to evaluate the displacements.
-
-        integer                :: nn              ! counter for FLAG_COST & W_COST
-
+        ! from cost_total_mass
+        type(xbelem),intent(in):: Elem   (:)      ! Element information
         ! output
         real(8) :: cost_global
-
+        integer                :: nn              ! counter for FLAG_COST & W_COST
 
         ! Initialise:
         cost_global=0.0_8
@@ -90,6 +115,7 @@ module opt_cost
                 cost_global = cost_global +                                    &
                             & W_COST(nn)*eval_function  ( nn,                  &
                                                         & PosIni,PosDef,       &
+                                                        & Elem,                &
                                                         & Nnode                &
                                                                                )
             end if
@@ -107,40 +133,42 @@ module opt_cost
     ! As per cost_global, FLAG and WEIGHT arrays are required.
     ! The connectivity array (cost_utl_build_constraints_connectivity) is also
     ! needed.
-    function cost_constrains( W_CONSTR, CONN_CONSTR,   &  ! to determine which functions and weight to use
+    function cost_constraints( W_CONSTR, CONN_CONSTR,    &  ! to determine which functions and weight to use
                             & PosIni,PosDef,            &  ! input for cost_node_disp
+                            & Elem,                     &  ! input for cost_total_mass
                             & Nnode                     &  ! optional input for cost_node_disp
                             )                              ! add here other input
 
         ! see cost_utl_allocate_flags_and_weights
         !logical         , intent(in) :: FLAG_CONSTR  (:)    ! determines which functions to evaluate
         real(8)         , intent(in) :: W_CONSTR     (:)    ! arrays with weights/scaling factors...
-        integer         , intent(in) :: CONN_CONSTR  (:)    ! connectivity array for constrains
-
+        integer         , intent(in) :: CONN_CONSTR  (:)    ! connectivity array for constraints
         ! from cost_node_disp
         real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
         real(8),    intent(in) :: PosDef (:,:)    ! Current nodal position vector
         integer, optional      :: Nnode           ! Number of the node at which to evaluate the displacements.
-
+        ! from cost_total_mass
+        type(xbelem),intent(in):: Elem   (:)      ! Element information
         ! output
-        real(8) :: cost_constrains(size(CONN_CONSTR))
+        real(8) :: cost_constraints(size(CONN_CONSTR))
 
-        integer                :: ii        ! counter for cost_constrains
+        integer                :: ii        ! counter for cost_constraints
         integer                :: nn        ! counter for FLAG_CONSTR & W_CONSTR
 
 
         ! Initialise:
-        cost_constrains=0.0_8
+        cost_constraints=0.0_8
 
-        do ii=1,size(cost_constrains)
+        do ii=1,size(cost_constraints)
             nn=CONN_CONSTR(ii)
-            cost_constrains(ii) = W_CONSTR(nn)*eval_function( nn,             &
+            cost_constraints(ii) = W_CONSTR(nn)*eval_function( nn,             &
                                                             & PosIni,PosDef,  &
+                                                            & Elem,           &
                                                             & Nnode           &
                                                             &                 )
        end do
 
-    end function cost_constrains
+    end function cost_constraints
 
 
 
@@ -151,6 +179,7 @@ module opt_cost
     ! (see cost_utl_allocate_flags_and_weights) is required for the evaluation.
     function eval_function  ( NN,                   &  ! to determine which function
                             & PosIni,PosDef,        &  ! input for cost_node_disp
+                            & Elem,                 &  ! input for cost_total_mass
                             & Nnode                 &  ! optional input for cost_node_disp
                             )                          ! add here other input
 
@@ -160,7 +189,8 @@ module opt_cost
         real(8),    intent(in) :: PosIni (:,:)    ! Initial nodal Coordinates.
         real(8),    intent(in) :: PosDef (:,:)    ! Current nodal position vector
         integer, optional      :: Nnode           ! Number of the node at which to evaluate the displacements.
-
+        ! from cost_total_mass
+        type(xbelem),intent(in):: Elem   (:)      ! Element information
         ! output
         real(8) :: eval_function
 
@@ -174,6 +204,10 @@ module opt_cost
                 else
                     eval_function = cost_node_disp( PosIni,PosDef )
                 end if
+
+            case (2)
+            !cost_mass_total
+                eval_function = cost_total_mass(Elem)
 
             case default
                 stop 'ID not valid! The ID must be according to cost_utl_allocate_flags_and_weights!'
@@ -191,15 +225,19 @@ end module opt_cost
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
-
 module opt_cost_test
 
  use opt_cost
  implicit none
 
+ character(len=*), parameter :: nfmt='(A,F12.6)'
+ character(len=*), parameter :: mfmt='(F12.6,F12.6,F12.6)'
+
+
  contains
 
-
+! Test for cost_node_disp
+!-------------------------------------------------------------------------------
     subroutine cost_node_disp_test
 
         real(8) :: PosIni (4,3)    ! Initial nodal Coordinates.
@@ -215,16 +253,49 @@ module opt_cost_test
                                       &    4.4 ,  -1.0 ,  -2.2 ,  &
                                       &    4.2 ,   0.1 ,  2.0    /) , (/3,4/)) )
 
-        print *, PosIni
-        print *, PosDef
+        print *, '---------------------------------------------- cost_node_disp'
 
-        print *, 'Node 1:', cost_node_disp(PosIni,PosDef,1)
-        print *, 'Node 2:', cost_node_disp(PosIni,PosDef,2)
-        print *, 'Node 3:', cost_node_disp(PosIni,PosDef,3)
-        print *, 'Node 4:', cost_node_disp(PosIni,PosDef)
+        print *, 'Initial:'
+        print mfmt, PosIni
+        print *, 'Final:'
+        print mfmt, PosDef
 
+        print nfmt, 'Node 1:', cost_node_disp(PosIni,PosDef,1)
+        print nfmt, 'Node 2:', cost_node_disp(PosIni,PosDef,2)
+        print nfmt, 'Node 3:', cost_node_disp(PosIni,PosDef,3)
+        print nfmt, 'Node 4:', cost_node_disp(PosIni,PosDef)
 
+        ! other way to define the format is to place it here (after the print!)
+        ! print 100, 'Node 1:', cost_node_disp(PosIni,PosDef,1)
+        ! 100 FORMAT(A,F10.6)
     end subroutine cost_node_disp_test
+
+
+
+! Test for cost_mass-total
+!-------------------------------------------------------------------------------
+    subroutine cost_mass_total_test
+
+        type(xbelem) :: Elem      (5) ! Element information
+        real(8) :: M=100.0_8, L=2.0_8, Mtotal
+        integer :: ii
+        real(8) :: ratio
+
+        print *, '--------------------------------------------- cost_mass_total'
+
+        print '(A12,A12,A12)', 'Elem.', 'Mass.', 'Length'
+        do ii=1,size(Elem)
+            ratio = real(ii)/real(size(Elem))
+            Elem(ii)%Mass(1,1)=ratio*M
+            Elem(ii)%Length   =(ratio**2)*L
+            print '(I12,F12.6,F12.6)', ii, Elem(ii)%Mass(1,1), Elem(ii)%Length
+        end do
+
+        Mtotal = cost_total_mass(Elem)
+        print '(A,F12.6)', 'Total Mass:', Mtotal
+        print '(A,F12.6)', 'Expected:', ( 1.0_8 + (1.0_8 + 2.0_8**3 + 3.0_8**3 + 4.0_8**3)/(5.0_8**3) )*M*L
+
+    end subroutine cost_mass_total_test
 
 end module opt_cost_test
 
