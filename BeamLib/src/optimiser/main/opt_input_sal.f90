@@ -92,7 +92,7 @@ contains
         fdmode  ='FWD' ! FD method:       FWD: forward differences
                        !                  BKW: backward differences
                        !                  CNT: central differences
-        NOPTMAX= 3     ! Maximum number of iterations for the optimiser
+        NOPTMAX= 6     ! Maximum number of iterations for the optimiser
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: shared variables
@@ -102,12 +102,11 @@ contains
         !   the design or perform FDs based sensitivity analysis.
         !   FLAG_DESIGN_SHARED is used to keep memory of the design variables.
         FLAG_BeamLength1 = .true.
-        !FLAG_TipMassY =.true.
         FLAG_ExtForce(3)=.true.
-        !FLAG_BeamMass(1,1)=.true.
-        !FLAG_BeamMass(2,4)=.true.
-        !FLAG_ExtMomnt(2)=.true.
-        !FLAG_BeamStiffness(6,6)=.true.
+        FLAG_ExtMomnt(2:3)=.true.
+        FLAG_BeamStiffness(5,5)=.true.
+        FLAG_BeamStiffness(6,6)=.true.
+
 
         ! ----------------------------------------------------------------------
         ! Design Parameters: element dependent

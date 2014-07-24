@@ -109,7 +109,7 @@ module opt_fd
         real(8), intent(inout) :: DCDXSH  (:,0:)  ! gradient of cost in respect to shared design
         real(8), intent(inout) :: DCONDXSH(:,:,0:)! gradient of constraint in respect to design
 
-        real(8)              :: DXSH( size(XSH) ), XSH_COPY( size(XSH) ) ! deltas for shared design variables and copy of current design
+        real(8)              :: DXSH( size(XSH(:,NOPT)) ), XSH_COPY( size(XSH(:,NOPT)) ) ! deltas for shared design variables and copy of current design
         integer              :: nn, ii              ! counters for target design variables
         real(8)              :: cost_val                        ! value of cost function at perturbed points
         real(8)              :: constr_val(size(CONN_CONSTR))   ! value of constraint array at perturbed points
@@ -134,13 +134,15 @@ module opt_fd
         ! -------------------------------- Perturb each variable at the time ---
         !call print_shared_input
         XSH_COPY=XSH(:,NOPT)
+
         do nn=1,size(CONN_XSH)
             ii = CONN_XSH(nn)
 
             ! compute xsh perturbed:
-            XSH(       :     , NOPT ) = XSH_COPY
+            XSH(  :, NOPT ) = XSH_COPY
             XSH( ii, NOPT ) = XSH_COPY( ii ) + DXSH( ii )
-            print *, 'NOPT:', NOPT,  'Variable No.', ii, '=', XSH_COPY(ii), '(before pert.)', XSH( ii, NOPT ), '(after pert.)'
+            print  '(A8,I4,A8,I4,A3,$)', 'NOPT:', NOPT,  'Var. No.', ii, '='
+            print '(E14.8,A8,E14.8,A8)', XSH_COPY(ii), '(init.)', XSH( ii, NOPT ), '(pert.)'
             call opt_unpack_DESIGN_SHARED(NOPT)
 
             ! execute forward
@@ -167,9 +169,14 @@ module opt_fd
             DCONDXSH(:,nn,NOPT) = ( constr_val - CONSTR(:,NOPT) ) /  DXSH(ii)
 
 
-            print *, 'cost: ', COST(NOPT), '(old)', cost_val, '(new)' ,  (cost_val - COST(NOPT)), '(delta)'
-            print *, 'Cost Gradient:', DCDXSH(nn,NOPT)
-            print *, 'Constrain Gradient:', DCONDXSH(:,nn,NOPT)
+            !print '(A10,F16.8,A10,F16.8,A10,F16.8,A10)', 'cost: ', COST(NOPT), '(old)', cost_val, '(new)' ,  (cost_val - COST(NOPT)), '(delta)'
+            print '(A10,E14.8,A10,E14.8,A10,E14.8,A10)', 'cost: ', COST(NOPT), '(old)', cost_val, '(new)' ,  (cost_val - COST(NOPT)), '(delta)'
+
+
+
+            print '(A,E12.6)', 'Cost Gradient:', DCDXSH(nn,NOPT)
+            print '(A,$)', 'Constrain Gradient:'
+            print '(E12.6)', DCONDXSH(:,nn,NOPT)
 
         end do
 
@@ -177,6 +184,9 @@ module opt_fd
         XSH(:,NOPT)=XSH_COPY
 
     end subroutine fd_main
+
+
+
 
  end module opt_fd
 

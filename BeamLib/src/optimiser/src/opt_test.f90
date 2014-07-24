@@ -27,7 +27,7 @@ program opt_test
  !-----------------------------------------------------------------------------
 
 
- testmodule='opt_cost'       ! <--- change here!
+ testmodule='opt_driver'       ! <--- change here!
 
 
  !-----------------------------------------------------------------------------
@@ -40,7 +40,7 @@ program opt_test
         call perturb_array_test
 
     case ('opt_shared')
-        call generate_report
+        print *, 'Nothing to be done here...'
 
     case ('opt_cost')
         call cost_node_disp_test
@@ -50,7 +50,8 @@ program opt_test
         call cost_utl_build_connectivity_test
 
     case('opt_driver')
-        call simple_driver_test
+        call optimisers_test
+        call lin_solver_test
 
     case default
         print *, 'TEST CASES NOT IMPLEMENTED FOR: ', testmodule

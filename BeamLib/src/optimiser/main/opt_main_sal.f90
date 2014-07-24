@@ -89,10 +89,10 @@ program opt_main
  integer          :: NOPTMAX  ! Max Number of iterations for the optimisation
  integer          :: NOPT     ! number of iteration for the optimisation
 
- logical          :: FLAG_COST  (2) ! Flag array for cost funcitons
- logical          :: FLAG_CONSTR(2) ! Flag array for cost funcitons
- real(8)          :: W_COST  (size(FLAG_COST))   ! arrays with weights/scaling factors...
- real(8)          :: W_CONSTR(size(FLAG_COST))   ! ...for cost and constraint functions
+ logical          :: FLAG_COST  (NCOSTFUNS) ! Flag array for cost funcitons
+ logical          :: FLAG_CONSTR(NCOSTFUNS) ! Flag array for cost funcitons
+ real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors...
+ real(8)          :: W_CONSTR(NCOSTFUNS)   ! ...for cost and constraint functions
  integer, allocatable :: CONN_CONSTR(:), CONN_XSH(:)   ! connectivity matrix for contrains and design variables array
  real(8), allocatable :: COST(:)                 ! cost function
  real(8), allocatable :: CONSTR(:,:)             ! constraint vector
@@ -120,11 +120,11 @@ program opt_main
      ! note: cost_utl_build_connectivity is in the opt_cost_utl module.
      call cost_utl_build_connectivity(FLAG_CONSTR,CONN_CONSTR)
      call cost_utl_build_connectivity(FLAG_DESIGN_SHARED,CONN_XSH)
-     ! for testing...
-     print *, 'FLAG_COST:', FLAG_COST
-     print *, 'FLAG_CONSTR:', FLAG_CONSTR
-     print *, 'Constr. Connectivity: ', CONN_CONSTR
-     !print *, 'Design: ', CONN_XSH
+     !!! for testing...
+     !print *, 'FLAG_COST:', FLAG_COST
+     !print *, 'FLAG_CONSTR:', FLAG_CONSTR
+     !print *, 'Constr. Connectivity: ', CONN_CONSTR
+     !print *, 'Constr. XSH: ', CONN_XSH
 
      if (solmode == 'SNS') then        ! this is only needed for the allocation
         NOPTMAX=0
@@ -206,7 +206,7 @@ do NOPT=0,NOPTMAX
      !call toc()
 
      ! Store results in text file.
-     open (unit=11,file=OutFile(1:11)//'_def.txt',status='replace')
+     open (unit=11,file=OutFile(1:17)//'_def.txt',status='replace')
      call output_elems (11,Elem,PosDef,PsiDef)
      close (11)
 
@@ -316,13 +316,13 @@ do NOPT=0,NOPTMAX
     ! ------------------------------------------------ Set next Design Point ---
     if (NOPT < NOPTMAX) then
 
-        !call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
+        call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
         PRINT *, 'UPDATE DESIGN for optimisation loop No.', NOPT
 
 
         ! this line shows that the update works correctly and the input change
         ! at each optimisation step
-        XSH(:,NOPT+1)=XSH(:,NOPT)+0.01_8 * XSH(:,NOPT)
+        !XSH(:,NOPT+1)=XSH(:,NOPT)+0.01_8 * XSH(:,NOPT)
         call opt_unpack_DESIGN_SHARED(NOPT+1)
 
     end if
@@ -352,51 +352,3 @@ end do
 
 end program opt_main
 
-
- !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- ! ABORTED
- !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- !!! fwd_solvers interface
- !interface
- !   subroutine fwd_static_presolver(NumElems,OutFile,Options,  &   ! from input_setup
- !                   &                      Elem,         &   ! from opt_main_xxx
- !                   &                  NumNodes,         &   ! from input_elem
- !                   & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
- !                   &                  OutGrids,         &   ! from pt_main_xxx
- !                   &                    PsiIni,         &   ! from xbeam_undef_geom
- !                   &              Node, NumDof,         &   ! from xbeam_undef_dofs
- !                   & PosDef, PsiDef, InternalForces     )   ! OUTPUTS!!!
- !    integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
- !    integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
- !    type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
- !    type(xbelem), allocatable:: Elem(:)           ! Element information.
- !    type(xbnode), allocatable:: Node(:)           ! Nodal information.
- !    integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
- !    real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
- !    real(8),      allocatable:: InternalForces(:,:) ! Internal force/moments at nodes.
- !    logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
- !    character(len=25)        :: OutFile           ! Output file.
- !    real(8),      allocatable:: PosIni (:,:)      ! Initial nodal Coordinates.
- !    real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
- !    real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
- !    real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
- !    real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
- !    end subroutine
- !end interface
- !
- ! procedure (), pointer :: fwd_presolver => null ()
- ! procedure (), pointer :: fwd_solver => null ()
- !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Define a Pointer to Solver & Presolver:
- ! This is required to access the appropriate pre_solve and solve routines!
- !select case (Options%Solution)
- !   case (102,302, 112,142,312,322)
- !       print *, 'Linking to Static Solver...'
- !       fwd_presolver=> fwd_static_presolver
- !       fwd_solver   => fwd_static_solver
- !   case default
- !       fwd_presolver=> fwd_static_presolver ! dynamic presolver to be created
- !       fwd_solver   => fwd_dynamic_solver
- !end select

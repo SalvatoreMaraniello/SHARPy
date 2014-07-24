@@ -239,8 +239,8 @@ OBJOPT = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN)
 xbeamopt: $(OBJOPT)
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt.exe $(OBJOPT) $(LIBS) $(LIBSDIR)	
 	
-xbeamopt_test: $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
-	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
+xbeamopt_test: $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
+	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
 	
 optlib_test: $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/optlib_test.exe $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o $(LIBS) $(LIBSDIR)	

@@ -102,7 +102,7 @@ module input
 ! INPUT START
   TestCase='NCB1'! 'BEND'!'NCB1'
   Options%Solution=112
-  Options%PrintInfo    =.true.
+  Options%PrintInfo    =.false.
 
 ! Default values.
   ExtForce(1:3)=0.d0
@@ -398,8 +398,8 @@ module input
     end select
 
 ! Set name for output file.
-  OutFile(1:8)=trim(TestCase)//'_SOL'
-  write (OutFile(9:11),'(I3)') Options%Solution
+  OutFile(1:14)='./res/'//trim(TestCase)//'_SOL'
+  write (OutFile(15:17),'(I3)') Options%Solution
 
 ! Solver options.
   select case (Options%Solution)

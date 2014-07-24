@@ -392,7 +392,7 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Open main output file and select grid points where output will be written.
  ! Unit 12 is opened here but subprocesses can access it - not preferred solution
- open (unit=12,file=OutFile(1:11)//'.mrb',status='replace')
+ open (unit=12,file=OutFile(1:17)//'.mrb',status='replace')
 
  if ( allocated(OutGrids) .eqv. .false. ) then
      allocate(OutGrids(NumNodes))
@@ -472,7 +472,7 @@ end subroutine fwd_static_input
  !allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
 
  ! Store undeformed geometry in external text file.
- open (unit=11,file=OutFile(1:11)//'_und.txt',status='replace')
+ open (unit=11,file=OutFile(1:17)//'_und.txt',status='replace')
      call output_elems (11,Elem,PosIni,PsiIni)
  close (11)
 
@@ -629,7 +629,7 @@ end subroutine fwd_static_solver
         call input_forcedvel (NumNodes,Time,ForcedVel,ForcedVelDot)
         !    input_forcedvel (      in,  in,      out,         out)
 
-        open (unit=11,file=OutFile(1:11)//'_force.txt',status='replace')
+        open (unit=11,file=OutFile(1:17)//'_force.txt',status='replace')
           do i=1,NumSteps
             write (11,'(1X,1P14E13.5)') Time(i), ForceTime(i), ForcedVel(i,:), ForcedVelDot(i,:)
           end do
@@ -725,11 +725,11 @@ end subroutine fwd_static_solver
           end select
 
           ! Store rigid body velocities and accelerations of global reference frame
-          open (unit=11,file=OutFile(1:11)//'_rigid.txt',status='replace')
+          open (unit=11,file=OutFile(1:17)//'_rigid.txt',status='replace')
             do i=1,NumSteps+1;  write (11,'(1X,1P7E15.6)') Time(i),RefVel(i,:);  end do
           close (11)
 
-          open (unit=11,file=OutFile(1:11)//'_vreldot.txt',status='replace')
+          open (unit=11,file=OutFile(1:17)//'_vreldot.txt',status='replace')
             do i=1,NumSteps+1;  write (11,'(1X,1P7E15.6)') Time(i),RefVelDot(i,:);  end do
           close (11)
 
@@ -738,11 +738,11 @@ end subroutine fwd_static_solver
 
         ! Store results for general dynamic analysis.
         ! Dynamic response of specified node with respect to global frame a.
-        open (unit=11,file=OutFile(1:11)//'_dyn.txt',status='replace')
+        open (unit=11,file=OutFile(1:17)//'_dyn.txt',status='replace')
           do i=1,NumSteps-1;  write (11,'(1X,1P7E15.6)') Time(i),PosPsiTime(i,:);  end do
         close (11)
 
-        open (unit=11,file=OutFile(1:11)//'_vel.txt',status='replace')
+        open (unit=11,file=OutFile(1:17)//'_vel.txt',status='replace')
           do i=1,NumSteps-1;
             if (Time(i).ge.0.d0) then
               do j=1,NumNodes
@@ -753,7 +753,7 @@ end subroutine fwd_static_solver
         close (11)
 
         ! Position vector of every node wrt global frame a at each time step.
-        open (unit=11,file=OutFile(1:11)//'_shape.txt',status='replace')
+        open (unit=11,file=OutFile(1:17)//'_shape.txt',status='replace')
           do i=1,NumSteps-1;
             do j=1,NumNodes
                write (11,'(1X,1P7E15.6)') Time(i), DynOut((i-1)*NumNodes+j,:);

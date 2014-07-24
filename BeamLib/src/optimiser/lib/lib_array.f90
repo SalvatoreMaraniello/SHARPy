@@ -7,7 +7,10 @@
 !->Subroutines:
 ! - array1_cond_alloc: conditional allocation for arrays of dimension 1
 ! - array2_cond_alloc:                           "                    2
-! - array3_cond_alloc:                           "                    3                          
+! - array3_cond_alloc:                           "                    3 
+! - array1_cond_dealloc: conditional deallocation for arrays of dimension 1
+! - array2_cond_dealloc:                         "                        2
+! - array3_cond_dealloc:                         "                        3                          
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
