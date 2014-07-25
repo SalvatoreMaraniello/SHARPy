@@ -50,11 +50,12 @@ module opt_routine
 contains
 
 
-subroutine opt_main
+subroutine opt_main(NumElems, NumNodes,NOPTMAX)
 
  real(8):: t0,dt                               ! Initial time and time step.
  integer:: i,j                                 ! Counter.
- integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
+ integer, intent(inout) :: NumElems               ! Number of elements
+ integer, intent(inout) :: NumNodes               ! Number of nodes in the model.
  integer:: NumSteps                            ! Number of time steps.
  integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
  type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
@@ -93,7 +94,7 @@ subroutine opt_main
  character(len=3) :: gradmode ! gradient method
  character(len=3) :: solmode  ! solution mode
  character(len=3) :: fdmode   ! finite differences method
- integer          :: NOPTMAX  ! Max Number of iterations for the optimisation
+ integer, intent(inout)          :: NOPTMAX  ! Max Number of iterations for the optimisation
  integer          :: NOPT     ! number of iteration for the optimisation
 
  logical          :: FLAG_COST  (NCOSTFUNS) ! Flag array for cost funcitons
@@ -106,12 +107,18 @@ subroutine opt_main
 
  real(8), allocatable :: DCDXSH  (:,:)  ! gradient of cost in respect to shared design
  real(8), allocatable :: DCONDXSH(:,:,:) ! gradient of constraints in respect to design
-
-
  ! gradients ordering:
  !     DCDXSH(   ii,NOPT)           DCONDXSH(nn,ii,NOPT)
  ! where:
  !   nn-th constraint // ii-th design variable // NOPT: optimisation iteration
+
+ ! -----------------------------------------------------------------------------
+ ! Python Interface
+ ! -----------------------------------------------------------------------------
+
+
+
+
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

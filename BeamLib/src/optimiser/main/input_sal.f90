@@ -112,31 +112,6 @@ module input
 
   select case (trim(TestCase))
 
-  case ('OPTT') ! Tests Input Output process
-        NumElems    = 25
-        NumNodesElem= 3
-        ThetaRoot   = 0.2
-        ThetaTip    = Pi/6.d0 ! ps: Pi defined in xbeam_shared
-        BeamLength1 = 5.0d0
-        BConds  ='CF'
-        ExtForce=(/ 1.d0, 2.d0, 600.d3 /)
-        ExtMomnt=(/ 4.d0, 5.d0,   6.d0 /)
-        Options%FollowerForce = .false.
-        Options%NumLoadSteps  = 10!NumElems
-        Options%MinDelta      = 1.d-5
-        Options%MaxIterations = 200
-        BeamStiffness = 11.0
-        BeamMass = 13.0
-        TipMass =15.0
-        TipMassY=17.0
-        TipMassZ=19.0
-        SectWidth=23.0
-        SectHeight=29.0
-        Omega=31.0
-
-        call print_shared_input
-
-
      case ('PTW1', 'PTW2') ! Check effect of pre-twist
       ! Inputs are as per NCB1 but:
       ! a. GA and EI of cross-section 2 are halved to make the bean asimetric

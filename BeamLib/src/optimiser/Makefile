@@ -55,7 +55,7 @@ all: xbeam
 exe: xbeam
 
 clean:
-	rm -f $(OBJOPT) $(OBJFWD) $(OBJWRAP) $(OPTOBJDIR)/opt_test.o 
+	rm -f $(OBJOPTEXE) $(OBJOPTWRAP)  $(OBJFWD) $(OBJWRAP) $(OPTOBJDIR)/opt_test.o 
 	rm -f $(OBJDIR)/*.mod $(OPTOBJDIR)/*.mod $(OPTOBJDIR)/*.mod
 	rm -f $(OBJDIR)/*.a
 
@@ -67,6 +67,9 @@ libtest: optlib_test
 
 run: 
 	./bin/xbeamopt.exe
+	
+runwrap:
+	./bin/xbeamopt_wrap.exe
 	
 runtest: 
 	./bin/xbeamopt_test.exe
@@ -103,6 +106,10 @@ wrapexego:
 	make wrapexe
 	./bin/xbeamopt_wrap.exe
 	
+wrapso: wrapsharedlib
+
+py: pywrap
+	
 ################################################################################
 ##  COMPILER OPTIONS.
 # 
@@ -122,8 +129,9 @@ wrapexego:
 
 F90COMP= gfortran
 F90OPTS= -std=gnu -g -m64 -cpp -J $(OBJDIR)
-F90FLAG=-fPIC -Wextra -cpp -DNOLAPACK -g
-LIBFLAG=-fPIC -shared -ffree-form -g
+
+#F90OPTS=-fPIC -Wextra -cpp -DNOLAPACK -g # these 2 for dynamic library
+#LIBFLAG=-fPIC -shared -ffree-form -g
 LIBS= -llapack -lblas
 XBEAMLIB= -lxbeam
 
@@ -162,6 +170,7 @@ OPTSRCDIR=$(OPTDIR)/src
 OPTLIBDIR=$(OPTDIR)/lib
 OPTOBJDIR=$(OPTDIR)/obj
 OPTBINDIR=$(OPTDIR)/bin
+OPTWRAPDIR=$(OPTDIR)/wrapper
 
 # ----------------------------------------------- Wrapper and external Libraries
 WRAPDIR=$(ROOTDIR)/wrapper
@@ -205,6 +214,7 @@ OBJMAIN=\
 OBJFWD= $(OBJLIB) $(OBJXBEAM) $(OBJMAIN) 
 
 # ---------------------------------------------------------------------- Wrapper
+# directory of original wrapper
 OBJWRAP=\
      $(OBJDIR)/input_$(TESTCASE).o	\
 	 $(OBJDIR)/xbeam_input_wrap.o	\
@@ -229,7 +239,8 @@ OBJOPTMAIN=\
     $(OPTOBJDIR)/opt_fd.o   
 
 OBJOPTEXE = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_main_$(TESTCASE).o
-OBJOPTWRAP= $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_routine.o $(OPTOBJDIR)/opt_routine_test.o
+OBJOPTWRAP = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_routine.o
+OBJOPTWRAPEXE= $(OBJOPTWRAP) $(OPTOBJDIR)/opt_routine_test.o
 
 ################################################################################
 ## Define make targets
@@ -244,8 +255,17 @@ OBJOPTWRAP= $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTO
 xbeamopt: $(OBJOPTEXE)
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt.exe $(OBJOPTEXE) $(LIBS) $(LIBSDIR)	
 	
-xbeamopt_wrap: $(OBJOPTWRAP)
-	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_wrap.exe $(OBJOPTWRAP) $(LIBS) $(LIBSDIR)	
+xbeamopt_wrap: $(OBJOPTWRAPEXE)
+	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_wrap.exe $(OBJOPTWRAPEXE) $(LIBS) $(LIBSDIR)	
+	
+pywrap: $(OBJOPTWRAP)
+	make xbeamso
+	f2py -m $(OPTWRAPDIR)/opt_routine.f90 $(OBJBINDIR)/xbeamopt.so 
+#	f2py -m $(OPTWRAPDIR)/opt_routine.f90 $(OBJOPTWRAP)	
+#	f2py -m opt_main $(OPTWRAPDIR)/opt_routine.f90	$(OBJOPTWRAP)	
+
+wrapsharedlib: $(OBJOPTWRAP)
+	$(F90COMP) $(LIBFLAG) -o $(OPTBINDIR)/xbeamopt.so $(OBJOPTWRAP) $(LIBS) $(LIBSDIR)	
 
 xbeamopt_test: $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
@@ -309,6 +329,9 @@ objlist:
 ## COMPILE DEPENDENCIES
 
 # -------------------------------------------------------------------- Optimiser
+# Opt Wrapper
+$(OPTOBJDIR)/%.o: $(OPTWRAPDIR)/%.f90
+	$(F90COMP) $(F90OPTS) -o $@ -c $< 	
 # Opt Main
 $(OPTOBJDIR)/%.o: $(OPTMAINDIR)/%.f90
 	$(F90COMP) $(F90OPTS) -o $@ -c $< 	

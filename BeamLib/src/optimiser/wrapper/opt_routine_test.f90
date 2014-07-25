@@ -15,7 +15,16 @@ program opt_routine_test
  implicit none
 
 
- call opt_main
+ integer :: NumElems     ! Number of elements
+ integer :: NumNodes     ! Number of nodes in the model.
+
+
+
+ ! Define Input:
+ NumElems = 10
+ NumNodes = 3
+
+ call opt_main(NumElems, NumNodes )
 
 
 end program opt_routine_test
