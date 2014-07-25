@@ -8,8 +8,12 @@
 !-> Language.- FORTRAN90, Free format.
 !
 !-> Description.-
-!   Main programme for the core routines of the multibeam assembly.
-!
+!   Same as opt_main but in a routine form.
+!   The routine is suitable to be called by a main program or a wrapper.
+!   The routine can run the direct solution, sensitivity analysis and
+!   unconstrained optimisation.
+!   Though an optimisation option is present, the main driver for any optimisation
+!   should be located 'outside'.
 !
 ! -> Developer Notes:
 ! a. in function call, in & out are intended as:
@@ -17,23 +21,20 @@
 !     - out: is returned from the function
 ! b. Memory usage:
 !     - variables for the forward problem are allocated in the fwd_main module.
-!     - this allowed a more clear division of opt_main into modules
 !
-! -> Bugs/Iusses:
-! a. fwd_main to be moved in src once all input/output modifications are completed
-! b. NumElemes seems to be overwritten by input_elem
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-program opt_main
 
- use xbeam_shared                              ! Forward Solution Modules
+module opt_routine
+
+ use xbeam_shared   ! Forward Solution Modules
  use xbeam_undef
  use cbeam3_solv
  use xbeam_solv
  use xbeam_perturb
  use input
  use lib_out
- use opt_input                                 ! Optimisation Modules
+ use opt_input      ! Optimisation Modules
  use opt_fd
  use fwd_main
  use lib_perf
@@ -44,6 +45,12 @@ program opt_main
  use opt_driver
 
  implicit none
+
+
+contains
+
+
+subroutine opt_main
 
  real(8):: t0,dt                               ! Initial time and time step.
  integer:: i,j                                 ! Counter.
@@ -138,14 +145,9 @@ program opt_main
  end if
 
 
-
 !NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
 !do while (NOPT<=NOPTMAX)
 do NOPT=0,NOPTMAX
-
-    ! print current design
-    !print *, 'current design:'
-    !call opt_print_XSH(NOPT)
 
     call fwd_problem( NumElems,OutFile,Options,    &   ! from input_setup
                  &                        Elem,    &   ! from opt_main_xxx
@@ -160,50 +162,6 @@ do NOPT=0,NOPTMAX
                  &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
                  & RefVel, RefVelDot, Quat)
-
-     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-     !! Set Up Input for Static Problem
-     !! (stage required also for dynamic and coupled solutions)
-     !call fwd_static_input( NumElems, OutFile, Options,                &   ! from input_setup
-     !                     &                       Elem,                &   ! from opt_main_xxx
-     !                     &                   NumNodes,                &   ! from input_elem
-     !                     & BoundConds, PosIni, ForceStatic, PhiNodes, &   ! from input_node
-     !                     & OutGrids                                   )   ! from pt_main_xxx
-
-
-     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-     !! Reads Forward Problem Input and allocates the required variables for the
-     !! forward static problem solution
-     !call fwd_presolver (NumElems,OutFile,Options,    &   ! from input_setup
-     !               &                        Elem,    &   ! from opt_main_xxx
-     !               &                    NumNodes,    &   ! from input_elem
-     !               &  BoundConds,PosIni,PhiNodes,    &   ! from input_node
-     !               &                      PsiIni,    &   ! from xbeam_undef_geom
-     !               &                Node, NumDof,    &   ! from xbeam_undef_dofs
-     !               & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-     !               &            NumSteps, t0, dt,    &   ! input_dyn_setup
-     !               &       ForceDynAmp,ForceTime,    &   ! input_dynforce
-     !               &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
-     !               & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
-     !               & RefVel, RefVelDot, Quat)
-
-     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-     !! Forward Solution.
-     !call tic()
-     !call fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
-     !                &                        Elem,    &   ! from opt_main_xxx
-     !                &                    NumNodes,    &   ! from input_elem
-     !                &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
-     !                &                  OutGrids,      &   ! from pt_main_xxx
-     !                &                      PsiIni,    &   ! from xbeam_undef_geom
-     !                &                Node, NumDof,    &   ! from xbeam_undef_dofs
-     !                & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-     !                &            NumSteps, t0, dt,    &   ! input_dyn_setup
-     !                &       ForceDynAmp,ForceTime,    &   ! input_dynforce
-     !                &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
-     !                & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
-     !                & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
-     !call toc()
 
      ! Store results in text file.
      open (unit=11,file=OutFile(1:17)//'_def.txt',status='replace')
@@ -311,8 +269,6 @@ end do
  print '(F10.6,$)', DCONDXSH
  print *, ' '
 
+ end subroutine opt_main
 
- !print *, 'constraints:', CONSTR
-
-end program opt_main
-
+end module opt_routine

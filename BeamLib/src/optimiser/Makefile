@@ -18,6 +18,7 @@
 # - 'make all'    : see 'make exe'
 # - 'make exe'    : to create the forward solver exe from sources (good for debugging)
 # - 'make opt'    : to compile the optimiser 
+# - 'make wrapexe': to compile the optimiser using the opt_routine
 # - 'make clean'  : clean up fwd and optimiser
 # - 'make run'    : runs the optimisation
 # - 'make optgo'  : cleans all files (excutable included), recompiles them and 
@@ -29,6 +30,7 @@
 #                   testing program for opt_xxxxxx libraries 
 # - 'make libtestgo': cleans all files (excutable included), compiles and runs 
 #                     testing program for the optimiser libraries
+# - 'make wrapexe': delete everything, run make wrapexe and runs the main program
 #
 # Unused:
 # - 'make xbeamso' : from makefile from HH and RP (not working)
@@ -90,9 +92,16 @@ libtestgo:
 	make libtest
 	make runlibtest
 
-	
 rmout:
-	rm -f ./*_def.txt ./*und.txt ./*.mrb 
+	rm -f ./res/*_def.txt ./res/*und.txt ./res/*.mrb 
+	
+wrapexe: xbeamopt_wrap
+
+wrapexego: 
+	rm -f ./bin/xbeamopt_wrap.exe 
+	make clean
+	make wrapexe
+	./bin/xbeamopt_wrap.exe
 	
 ################################################################################
 ##  COMPILER OPTIONS.
@@ -217,14 +226,10 @@ OBJOPTMAIN=\
     $(OPTOBJDIR)/input_$(TESTCASE).o     \
     $(OPTOBJDIR)/fwd_main.o              \
     $(OPTOBJDIR)/opt_input_$(TESTCASE).o \
-    $(OPTOBJDIR)/opt_fd.o \
-    $(OPTOBJDIR)/opt_main_$(TESTCASE).o  
-#\
-#$(OPTOBJDIR)/input_perturb.o 
+    $(OPTOBJDIR)/opt_fd.o   
 
-
-OBJOPT = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN)
-
+OBJOPTEXE = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_main_$(TESTCASE).o
+OBJOPTWRAP= $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_routine.o $(OPTOBJDIR)/opt_routine_test.o
 
 ################################################################################
 ## Define make targets
@@ -236,9 +241,12 @@ OBJOPT = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN)
 # $? names of all prerequisites that are newer than the target, separated by spaces. 
 
 #--------------------------------------------------------------------- Optimiser
-xbeamopt: $(OBJOPT)
-	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt.exe $(OBJOPT) $(LIBS) $(LIBSDIR)	
+xbeamopt: $(OBJOPTEXE)
+	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt.exe $(OBJOPTEXE) $(LIBS) $(LIBSDIR)	
 	
+xbeamopt_wrap: $(OBJOPTWRAP)
+	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_wrap.exe $(OBJOPTWRAP) $(LIBS) $(LIBSDIR)	
+
 xbeamopt_test: $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
 	
