@@ -106,7 +106,7 @@ program opt_main
  ! where:
  !   nn-th constraint // ii-th design variable // NOPT: optimisation iteration
 
-
+ call tic
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! set shared design variables for fwd problem
  call input_setup (NumElems,OutFile,Options)
@@ -311,7 +311,8 @@ end do
  print '(F10.6,$)', DCONDXSH
  print *, ' '
 
-
+ print *, 'Total Process done is:'
+ call toc
  !print *, 'constraints:', CONSTR
 
 end program opt_main

@@ -18,14 +18,17 @@ program opt_routine_test
  integer :: NumElems     ! Number of elements
  integer :: NumNodes     ! Number of nodes in the model.
 
+ real(8), pointer, dimension(:) :: pCOST
+ real(8) :: W_COST(2)    ! <--- example of known size array, 2 is NCOSTFUNS into opt_shared
 
 
  ! Define Input:
  NumElems = 10
  NumNodes = 3
 
- call opt_main(NumElems, NumNodes )
+ call opt_main(NumElems, NumNodes, pCOST, W_COST)
 
+ print '(F10.5)', W_COST
 
 end program opt_routine_test
 

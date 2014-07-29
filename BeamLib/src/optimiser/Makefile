@@ -30,7 +30,8 @@
 #                   testing program for opt_xxxxxx libraries 
 # - 'make libtestgo': cleans all files (excutable included), compiles and runs 
 #                     testing program for the optimiser libraries
-# - 'make wrapexe': delete everything, run make wrapexe and runs the main program
+# - 'make wrapexego': delete everything, run make wrapexe and runs the main program
+# - 'make wrapso': shared library accessible from python
 #
 # Unused:
 # - 'make xbeamso' : from makefile from HH and RP (not working)
@@ -122,16 +123,18 @@ py: pywrap
 # -c: tells to compile an object file
 # -J: mod files destination
 # -std: 'f95',f2003', f2008',gnu', or legacy' to force compiling with a 
+# -fpic Generate position-independent code (PIC) suitable for use in a shared 
+# library, if supported for the target machine.
+# -free-form: free form used in source code. not stricktly necessary (default 
+# in gfortran for *.f90 files) 
 #
 # notes;
 # gnu: default; works
 # f95, f2003: low level error (interface_lapack_v3.f90)
 
 F90COMP= gfortran
-F90OPTS= -std=gnu -g -m64 -cpp -J $(OBJDIR)
-
-#F90OPTS=-fPIC -Wextra -cpp -DNOLAPACK -g # these 2 for dynamic library
-#LIBFLAG=-fPIC -shared -ffree-form -g
+F90OPTS= -std=gnu -m64 -cpp -J $(OBJDIR) -fPIC -ffree-form -g
+LIBFLAG=-fPIC -ffree-form -m64 -cpp -shared -g
 LIBS= -llapack -lblas
 XBEAMLIB= -lxbeam
 
@@ -257,10 +260,17 @@ xbeamopt: $(OBJOPTEXE)
 	
 xbeamopt_wrap: $(OBJOPTWRAPEXE)
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_wrap.exe $(OBJOPTWRAPEXE) $(LIBS) $(LIBSDIR)	
-	
-pywrap: $(OBJOPTWRAP)
-	make xbeamso
-	f2py -m $(OPTWRAPDIR)/opt_routine.f90 $(OBJBINDIR)/xbeamopt.so 
+
+pywrap: wrapsharedlib
+	make wrapso
+	f2py -c -m opt_routine only: opt_main : ./wrapper/opt_routine.f90 --link-./bin/xbeamopt.so
+#	f2py --link-./bin/xbeamopt.so -c ./wrapper/opt_routine.f90
+#	f2py -c -m opt_routine ./wrapper/opt_routine.f90 ./bin/xbeamopt.so
+#	f2py -m $(OPTWRAPDIR)/opt_routine.f90 $(OPTBINDIR)/xbeamopt.so	
+
+#pywrap: $(OBJOPTWRAP)
+#	make xbeamso
+#	f2py -m $(OPTWRAPDIR)/opt_routine.f90 $(OBJBINDIR)/xbeamopt.so 
 #	f2py -m $(OPTWRAPDIR)/opt_routine.f90 $(OBJOPTWRAP)	
 #	f2py -m opt_main $(OPTWRAPDIR)/opt_routine.f90	$(OBJOPTWRAP)	
 
@@ -283,6 +293,7 @@ xbeamlib: $(OBJLIB) $(OBJXBEAM) $(OBJWRAP)
 
 xbeamso: $(OBJLIB) $(OBJXBEAM) $(OBJWRAP)
 	$(F90COMP) -shared -o libadd.so $(OBJLIB) $(OBJXBEAM) $(OBJWRAP) $(LIBSDIR) $(LIBS)
+
 
 #----------------------------------------------------------------------- testing
 
@@ -362,7 +373,7 @@ $(OBJDIR)/%.o: $(WRAPDIR)/%.c;
 # Unused Code
 #
 # F90MAIN=$(MAINDIR)/*.f90       <-- gives the list BUT...
-# OBJMAIN=$(F90MAIN:.f90)=.o <--- ...this won't work
+# OBJMAIN=$(F90MAIN:.f90)=.o     <--- ...this won't work
 # 
 # Notes for Developer: failed attempts to list automatically the f90 files
 # ls $(MAINDIR)/*.f90                  <-- lists all files in a folder

@@ -50,7 +50,12 @@ module opt_routine
 contains
 
 
-subroutine opt_main(NumElems, NumNodes,NOPTMAX)
+subroutine opt_main(NumElems, NumNodes, pCOST, W_COST)
+
+
+
+
+
 
  real(8):: t0,dt                               ! Initial time and time step.
  integer:: i,j                                 ! Counter.
@@ -94,15 +99,16 @@ subroutine opt_main(NumElems, NumNodes,NOPTMAX)
  character(len=3) :: gradmode ! gradient method
  character(len=3) :: solmode  ! solution mode
  character(len=3) :: fdmode   ! finite differences method
- integer, intent(inout)          :: NOPTMAX  ! Max Number of iterations for the optimisation
+ integer          :: NOPTMAX  ! Max Number of iterations for the optimisation
  integer          :: NOPT     ! number of iteration for the optimisation
 
  logical          :: FLAG_COST  (NCOSTFUNS) ! Flag array for cost funcitons
  logical          :: FLAG_CONSTR(NCOSTFUNS) ! Flag array for cost funcitons
- real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors...
+real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors... ! no need to define size here
+ !!!!!!! real(8)          :: W_COST  (:)                                           ! this works just as fine
  real(8)          :: W_CONSTR(NCOSTFUNS)   ! ...for cost and constraint functions
  integer, allocatable :: CONN_CONSTR(:), CONN_XSH(:)   ! connectivity matrix for contrains and design variables array
- real(8), allocatable :: COST(:)                 ! cost function
+ real(8), target, allocatable :: COST(:)                 ! cost function
  real(8), allocatable :: CONSTR(:,:)             ! constraint vector
 
  real(8), allocatable :: DCDXSH  (:,:)  ! gradient of cost in respect to shared design
@@ -115,16 +121,17 @@ subroutine opt_main(NumElems, NumNodes,NOPTMAX)
  ! -----------------------------------------------------------------------------
  ! Python Interface
  ! -----------------------------------------------------------------------------
+ ! Create Pointers to arrays
+ real(8), pointer, dimension(:), intent(out) :: pCOST
 
 
+ !------------------------------------------------------------------------------
 
 
-
-
+ call tic
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! set shared design variables for fwd problem
  call input_setup (NumElems,OutFile,Options)
-
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input
@@ -145,10 +152,8 @@ subroutine opt_main(NumElems, NumNodes,NOPTMAX)
      end if
      allocate(CONSTR( size(CONN_CONSTR),0:NOPTMAX ) ); CONSTR=0.0_8
      allocate(  COST(                   0:NOPTMAX ) ); COST=0.0_8
-
      allocate(   DCDXSH(                    size(CONN_XSH),0:NOPTMAX ) ); DCDXSH=0.0_8
      allocate( DCONDXSH( size(CONN_CONSTR), size(CONN_XSH),0:NOPTMAX ) ); DCONDXSH=0.0_8
-
  end if
 
 
@@ -275,6 +280,12 @@ end do
  print '(A15,$)', 'constr. grad.: '
  print '(F10.6,$)', DCONDXSH
  print *, ' '
+
+ call toc
+
+ ! assign pointers to allow python interface
+ pCOST => COST
+ print *, pCOST
 
  end subroutine opt_main
 
