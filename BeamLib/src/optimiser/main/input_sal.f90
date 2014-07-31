@@ -58,8 +58,9 @@ module input
  real(8),private,save:: BeamMass(6,6)                ! Beam element mass matrix (assumed constant).
  real(8),private,save:: ExtForce(3)                  ! Applied forces at the tip.
  real(8),private,save:: ExtMomnt(3)                  ! Applied moments at the tip.
- integer,private,save:: NumNodesElem                 ! Number of nodes on each element.
- real(8),private,save:: SectWidth,SectHeight         ! Height and width of the cross section.
+
+ real(8),private,save:: SectWidth        ! Height and width of the cross section.
+ real(8),private,save:: SectHeight
  real(8),private,save:: ThetaRoot=0.d0               ! Pretwist angle at root.
  real(8),private,save:: ThetaTip =0.d0               ! Pretwist angle at tip.
  real(8),private,save:: TipMass  =0.d0               ! Mass at the beam tip.
@@ -68,6 +69,8 @@ module input
 
  real(8),private,save:: Omega   =0.d0                ! Frequency of oscillatory motions.
 
+
+ integer,         private,save:: NumNodesElem        ! Number of nodes on each element.
  character(len=4),private,save:: ElemType            ! ='STRN','DISP'
  character(len=4),private,save:: TestCase            ! Define the test case (CANT,ARCH).
  character(len=2),private,save:: BConds              ! ='CC': Clamped-Clamped
@@ -75,6 +78,7 @@ module input
  !real(8), parameter :: pi = 4.d0!*datan(1.d0)
                                                      ! ='CF': Clamped-Free'
  contains
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine INPUT_SETUP
@@ -100,7 +104,7 @@ module input
   real(8) :: sigma
 
 ! INPUT START
-  TestCase='NCB1'! 'BEND'!'NCB1'
+  TestCase='NCB1'!'PTW2'! 'BEND'!
   Options%Solution=112
   Options%PrintInfo    =.false.
 
@@ -373,8 +377,8 @@ module input
     end select
 
 ! Set name for output file.
-  OutFile(1:14)='./res/'//trim(TestCase)//'_SOL'
-  write (OutFile(15:17),'(I3)') Options%Solution
+  OutFile(1:8)=trim(TestCase)//'_SOL'
+  write (OutFile(9:11),'(I3)') Options%Solution
 
 ! Solver options.
   select case (Options%Solution)
@@ -403,6 +407,8 @@ module input
   print "(a4,i3,a)", TestCase, Options%Solution, ': input_setup done!' ! sm
   return
  end subroutine input_setup
+
+
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -866,7 +872,7 @@ end subroutine output_elems
 !
 !-> Description:
 !
-!    Allows exernal modules to update the Shared Variables values
+!    Allows exernal modules to update the Shared Design Variables values
 !
 !-> Remarks.-
 !
@@ -904,9 +910,32 @@ subroutine update_shared_input( IN_BeamLength1, IN_BeamLength2,  &
   TipMass = IN_TipMass ; TipMassY = IN_TipMassY ; TipMassZ = IN_TipMassZ ;
   Omega         = IN_Omega ;
 
-
  end subroutine update_shared_input
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine update_shared_setting
+!
+!-> Description:
+!
+!    Allows exernal modules to update the Shared Setting Variables values
+!
+!-> Remarks.-
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine update_shared_setting(IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds)
+
+     integer,          intent(in)  :: IN_NumNodesElem   ! Number of nodes on each element.
+     character(len=4), intent(in)  :: IN_ElemType       ! ='STRN','DISP'
+     character(len=4), intent(in)  :: IN_TestCase       ! Define the test case (CANT,ARCH).
+     character(len=2), intent(in)  :: IN_BConds         ! ='CC': Clamped-Clamped
+
+     NumNodesElem=IN_NumNodesElem
+     ElemType=IN_ElemType
+     TestCase=IN_TestCase
+     BConds=IN_BConds
+
+end subroutine update_shared_setting
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine print_shared_input

@@ -56,7 +56,7 @@ all: xbeam
 exe: xbeam
 
 clean:
-	rm -f $(OBJOPTEXE) $(OBJOPTWRAP)  $(OBJFWD) $(OBJWRAP) $(OPTOBJDIR)/opt_test.o 
+	rm -f $(OBJOPTEXE) $(OBJOPTWRAP)  $(OBJFWD) $(OBJWRAP) $(OPTOBJDIR)/opt_test.o $(OBJOPTWRAPEXE) $(OPTOBJDIR)/lib_test.o
 	rm -f $(OBJDIR)/*.mod $(OPTOBJDIR)/*.mod $(OPTOBJDIR)/*.mod
 	rm -f $(OBJDIR)/*.a
 
@@ -211,6 +211,7 @@ OBJXBEAM=\
 OBJMAIN=\
      $(OBJDIR)/input_$(TESTCASE).o \
      $(OBJDIR)/main_$(TESTCASE).o
+     
 
 # these have to be sequential, i.e. the order of compilation must follow the 
 # code hierarchy 
@@ -239,10 +240,14 @@ OBJOPTMAIN=\
     $(OPTOBJDIR)/input_$(TESTCASE).o     \
     $(OPTOBJDIR)/fwd_main.o              \
     $(OPTOBJDIR)/opt_input_$(TESTCASE).o \
-    $(OPTOBJDIR)/opt_fd.o   
+    $(OPTOBJDIR)/opt_fd.o
+ 
+# To access pack_xbopts - not required anymore  
+OBJOPT_FWDWRP=
+#    $(OPTOBJDIR)/FxWrapper_PyFx.o 
 
 OBJOPTEXE = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_main_$(TESTCASE).o
-OBJOPTWRAP = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_routine.o
+OBJOPTWRAP = $(OBJLIB) $(OBJXBEAM) $(OBJOPT_FWDWRP) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_routine.o
 OBJOPTWRAPEXE= $(OBJOPTWRAP) $(OPTOBJDIR)/opt_routine_test.o
 
 ################################################################################
@@ -352,6 +357,9 @@ $(OPTOBJDIR)/%.o: $(OPTSRCDIR)/%.f90
 # Opt Libraries
 $(OPTOBJDIR)/%.o: $(OPTLIBDIR)/%.f90
 	$(F90COMP) $(F90OPTS) -o $@ -c $< 
+# access fwd wrapper to get the pack_xbopts routine - not required anymore
+#$(OPTOBJDIR)/%.o: $(WRAPDIR)/%.f90
+#	$(F90COMP) $(F90OPTS) -o $@ -c $<
 	
 # -------------------------------------------------------------- Forward Problem
 # Main 
@@ -364,7 +372,7 @@ $(OBJDIR)/%.o: $(XBEAMDIR)/%.f90;
 $(OBJDIR)/%.o: $(LIBDIR)/%.f90
 	$(F90COMP) $(F90OPTS) -o $@ -c $< 
 	
-# ---------------------------------------------------------------------- Wrapper
+# Wrapper
 $(OBJDIR)/%.o: $(WRAPDIR)/%.c;
 	$(F90COMP) $(F90OPTS) -o $@ -c $< 
 

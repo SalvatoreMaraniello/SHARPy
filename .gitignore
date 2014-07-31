@@ -65,3 +65,4 @@ cmpc/
 /BeamLib/src/optimiser/tex/*.log
 /BeamLib/src/optimiser/tex/*.gz
 /.gitignore~
+/BeamLib/src/optimiser/wrapper/launch_prototype_file.py

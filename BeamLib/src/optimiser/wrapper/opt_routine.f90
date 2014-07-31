@@ -43,6 +43,8 @@ module opt_routine
  use opt_cost
  use opt_cost_utl
  use opt_driver
+ !use test, only: pack_xbopts
+
 
  implicit none
 
@@ -50,20 +52,70 @@ module opt_routine
 contains
 
 
-subroutine opt_main(NumElems, NumNodes, pCOST, W_COST)
+subroutine opt_main( NumElems, NumNodes, pCOST, W_COST,                        & ! Problem SetUp
+                   & IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds,    & ! Problem Setup Shared
+                   & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
+                   & IN_BeamStiffness, IN_BeamMass,                         &
+                   & IN_ExtForce, IN_ExtMomnt,                              &
+                   & IN_SectWidth, IN_SectHeight,                           &
+                   & IN_ThetaRoot, IN_ThetaTip,                             &
+                   & IN_TipMass, IN_TipMassY, IN_TipMassZ,                  &
+                   & IN_Omega,                                              &
+                   & FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
+                   & OutInBframe,OutInaframe,ElemProj,MaxIterations,        &
+                   & NumLoadSteps,Solution,DeltaCurved,MinDelta,   &
+                   & NewmarkDamp                                            )
 
+! ---------------------------------------------------------------------- Options
+        type(xbopts)                      :: Options ! not dummy
+        logical     ,intent(in), optional :: FollowerForce
+        logical     ,intent(in), optional :: FollowerForceRig
+        logical     ,intent(in), optional :: PrintInfo
+        logical     ,intent(in), optional :: OutInBframe
+        logical     ,intent(in), optional :: OutInaframe
+        integer     ,intent(in), optional :: ElemProj
+        integer     ,intent(in), optional :: MaxIterations
+        integer     ,intent(in), optional :: NumLoadSteps
+        !integer     ,intent(in), optional :: NumGauss !NumNodesElem used instead
+        integer     ,intent(in), optional :: Solution
+        real(8)     ,intent(in), optional :: DeltaCurved
+        real(8)     ,intent(in), optional :: MinDelta
+        real(8)     ,intent(in), optional :: NewmarkDamp
 
+! ------------------------------------------------------ Design Variables Shared
+! These are normally inported from the input module through input_setup.
+   real(8)                 :: IN_BeamLength1, IN_BeamLength2
+   real(8), intent(inout)  :: IN_BeamStiffness(6,6)
+   real(8), intent(inout)  :: IN_BeamMass(6,6)
+   real(8), intent(inout)  :: IN_ExtForce(3)
+   real(8), intent(inout)  :: IN_ExtMomnt(3)
+   real(8), intent(inout)  :: IN_SectWidth,IN_SectHeight
+   real(8), intent(inout)  :: IN_ThetaRoot
+   real(8), intent(inout)  :: IN_ThetaTip
+   real(8), intent(inout)  :: IN_TipMass
+   real(8), intent(inout)  :: IN_TipMassY
+   real(8), intent(inout)  :: IN_TipMassZ
+   real(8), intent(inout)  :: IN_Omega
+
+! ---------------------------------------------------------------- Problem Setup
+   integer, intent(inout) :: NumElems          ! Number of elements
+   integer, intent(inout) :: NumNodes          ! Number of nodes in the model.
+
+! --------------------------------------------------------- Problem Setup Shared
+! These variables appear as shared in the input module.
+    integer,          intent(inout)  :: IN_NumNodesElem   ! Number of nodes on each element.
+    character(len=4), intent(inout)  :: IN_ElemType       ! ='STRN','DISP'
+    character(len=4), intent(inout)  :: IN_TestCase       ! Define the test case (CANT,ARCH).
+    character(len=2), intent(inout)  :: IN_BConds         ! ='CC': Clamped-Clamped
 
 
 
 
  real(8):: t0,dt                               ! Initial time and time step.
  integer:: i,j                                 ! Counter.
- integer, intent(inout) :: NumElems               ! Number of elements
- integer, intent(inout) :: NumNodes               ! Number of nodes in the model.
  integer:: NumSteps                            ! Number of time steps.
  integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
- type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
+
  type(xbelem), allocatable:: Elem(:)            ! Element information.
  type(xbnode), allocatable:: Node(:)            ! Nodal information.
  integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
@@ -129,9 +181,86 @@ real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors.
 
 
  call tic
+
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! pack Options
+        if (present( FollowerForce )) then
+            Options%FollowerForce = FollowerForce
+        end if
+        if (present( FollowerForceRig )) then
+        Options%FollowerForceRig = FollowerForceRig
+        end if
+        if (present(  PrintInfo )) then
+        Options%PrintInfo = PrintInfo
+        end if
+        if (present( OutInBframe )) then
+        Options%OutInBframe = OutInBframe
+        end if
+        if (present( OutInaframe )) then
+        Options%OutInaframe = OutInaframe
+        end if
+        if (present( ElemProj )) then
+        Options%ElemProj = ElemProj
+        end if
+        if (present( MaxIterations )) then
+        Options%MaxIterations = MaxIterations
+        end if
+        if (present( NumLoadSteps )) then
+        Options%NumLoadSteps = NumLoadSteps
+        end if
+        !if (present( NumGauss )) then   ! NumNodesElem instead
+        !Options%NumGauss = NumGauss
+        !end if
+        if (present( Solution )) then
+        Options%Solution = Solution
+        print *, 'Options%Solution',Options%Solution
+        end if
+        if (present( DeltaCurved )) then
+        Options%DeltaCurved = DeltaCurved
+        end if
+        if (present( MinDelta )) then
+        Options%MinDelta = MinDelta
+        end if
+    if (present( NewmarkDamp )) then
+        Options%NewmarkDamp = NewmarkDamp
+    end if
+
+  ! Define number of Gauss points (2-noded displacement-based element needs reduced integration).
+  select case (IN_NumNodesElem)
+    case (2)
+      Options%NumGauss=1
+    case (3)
+      Options%NumGauss=2
+  end select
+
+! Set name for output file.
+  OutFile(1:14)='./res/'//trim(IN_TestCase)//'_SOL'
+  write (OutFile(15:17),'(I3)') Options%Solution
+
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! set shared design variables for fwd problem
- call input_setup (NumElems,OutFile,Options)
+ ! In the original code the shared design variables (see input mode) are set
+ ! via the input_setup routine. Here, the input_setup method has been replaced
+ ! by the input_wrap method: the shared design variables are updated in the
+ ! input module and used as required (without their value being reassigned) by
+ ! input_setup_wrap
+ !call input_setup (NumElems,OutFile,Options)
+
+ call update_shared_setting(IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds)
+
+ call update_shared_input( IN_BeamLength1, IN_BeamLength2,  &
+                       & IN_BeamStiffness, IN_BeamMass,          &
+                       & IN_ExtForce, IN_ExtMomnt,               &
+                       & IN_SectWidth, IN_SectHeight,            &
+                       & IN_ThetaRoot, IN_ThetaTip,              &
+                       & IN_TipMass, IN_TipMassY, IN_TipMassZ,   &
+                       & IN_Omega                                 )
+
+ !call input_setup_wrap( NumElems,  OutFile, Options )
+
+ print *, 'part 1 done'
+ print *, 'Options%Solution = ', Options%Solution
+
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Optimiser Input

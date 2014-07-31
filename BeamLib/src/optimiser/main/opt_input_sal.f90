@@ -59,7 +59,7 @@ module opt_input
    real(8) :: d_BeamMass(6,6)
    real(8) :: d_ExtForce(3)
    real(8) :: d_ExtMomnt(3)
-   real(8) :: d_SectWidth,SectHeight
+   real(8) :: d_SectWidth, d_SectHeight
    real(8) :: d_ThetaRoot
    real(8) :: d_ThetaTip
    real(8) :: d_TipMass
