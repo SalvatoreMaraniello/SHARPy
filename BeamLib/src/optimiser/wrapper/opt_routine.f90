@@ -52,7 +52,15 @@ module opt_routine
 contains
 
 
-subroutine opt_main( NumElems, NumNodes, pCOST, W_COST,                        & ! Problem SetUp
+
+!subroutine arg_test(NumElem, pCOST, W_COST)
+!   integer, intent(inout) :: NumElems          ! Number of elements
+
+
+
+
+
+subroutine opt_main( NumElems, NumNodes, W_COST,                           & ! Problem SetUp
                    & IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds,    & ! Problem Setup Shared
                    & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
                    & IN_BeamStiffness, IN_BeamMass,                         &
@@ -84,7 +92,7 @@ subroutine opt_main( NumElems, NumNodes, pCOST, W_COST,                        &
 
 ! ------------------------------------------------------ Design Variables Shared
 ! These are normally inported from the input module through input_setup.
-   real(8)                 :: IN_BeamLength1, IN_BeamLength2
+   real(8), intent(inout)  :: IN_BeamLength1, IN_BeamLength2
    real(8), intent(inout)  :: IN_BeamStiffness(6,6)
    real(8), intent(inout)  :: IN_BeamMass(6,6)
    real(8), intent(inout)  :: IN_ExtForce(3)
@@ -107,8 +115,6 @@ subroutine opt_main( NumElems, NumNodes, pCOST, W_COST,                        &
     character(len=4), intent(inout)  :: IN_ElemType       ! ='STRN','DISP'
     character(len=4), intent(inout)  :: IN_TestCase       ! Define the test case (CANT,ARCH).
     character(len=2), intent(inout)  :: IN_BConds         ! ='CC': Clamped-Clamped
-
-
 
 
  real(8):: t0,dt                               ! Initial time and time step.
@@ -174,11 +180,46 @@ real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors.
  ! Python Interface
  ! -----------------------------------------------------------------------------
  ! Create Pointers to arrays
- real(8), pointer, dimension(:), intent(out) :: pCOST
+ ! real(8), pointer, dimension(:), intent(out) :: pCOST
 
 
  !------------------------------------------------------------------------------
+ ! Print all Input:
+print *, FollowerForce
+print *, FollowerForceRig
+print *, PrintInfo
+print *, OutInBframe
+print *, OutInaframe
+print *, ElemProj
+print *, MaxIterations
+print *, NumLoadSteps
+print *, Solution
+print *, DeltaCurved
+print *, MinDelta
+print *, NewmarkDamp
 
+print *, IN_BeamLength1, IN_BeamLength2
+print *, IN_BeamStiffness
+print *, IN_BeamMass
+print *, IN_ExtForce
+print *, IN_ExtMomnt
+print *, IN_SectWidth,IN_SectHeight
+print *, IN_ThetaRoot
+print *, IN_ThetaTip
+print *, IN_TipMass
+print *, IN_TipMassY
+print *, IN_TipMassZ
+print *, IN_Omega
+
+print *, NumElems
+print *, NumNodes
+
+print *, IN_NumNodesElem
+print *, IN_ElemType
+print *, IN_TestCase
+print *, IN_BConds
+
+ !------------------------------------------------------------------------------
 
  call tic
 
@@ -213,7 +254,6 @@ real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors.
         !end if
         if (present( Solution )) then
         Options%Solution = Solution
-        print *, 'Options%Solution',Options%Solution
         end if
         if (present( DeltaCurved )) then
         Options%DeltaCurved = DeltaCurved
@@ -321,7 +361,7 @@ do NOPT=0,NOPTMAX
             ! -------------- Evaluate cost and Constraints at current design ---
             COST(NOPT) = cost_global( FLAG_COST, W_COST,  &
                                     & PosIni, PosDef,     &
-                                    & Elem                   )
+                                    & Elem                )
 
             CONSTR(:,NOPT) = cost_constraints( W_CONSTR, CONN_CONSTR, &
                                             & PosIni,PosDef,         &
@@ -412,9 +452,10 @@ end do
 
  call toc
 
- ! assign pointers to allow python interface
- pCOST => COST
- print *, pCOST
+ !!! assign pointers to allow python interface
+ !pCOST => COST
+ !print *, pCOST
+ print *, COST
 
  end subroutine opt_main
 

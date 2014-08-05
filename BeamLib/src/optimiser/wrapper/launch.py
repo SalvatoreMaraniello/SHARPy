@@ -1,4 +1,4 @@
-
+#
 # Salvatore Maraniello 31 July 2014
 # launcher of beam solver
 #
@@ -19,50 +19,8 @@ xb = ct.cdll.LoadLibrary('./bin/xbeamopt.so')
 # extract main routine
 fm=xb.__opt_routine_MOD_opt_main
 
-
-
-# Options and Problem Setup
-NumElems = 10
-NumNodes = 3
-
-NumNodesElem = 3
-ElemType='DISP'
-TestCase='NCB1'
-BConds='CF'
-
-# Design
-BeamLength1 = 5.0
-BeamLength2 = 0.0
-ThetaRoot   = 0.0
-ThetaTip    = 0.0
-ExtForce= np.array([ 0.0, 0.0, 600.e3 ],dtype=float,order='F')
-ExtMomnt= np.array([ 0.0, 0.0, 0.0    ],dtype=float,order='F')
-
-TipMass =0.0
-TipMassY=0.0
-TipMassZ=0.0
-SectWidth=0.0
-SectHeight=0.0
-Omega=0.0
-
-BeamStiffness=np.zeros((6,6),dtype=float,order='F')
-BeamStiffness[0,0]= 4.8e8   # EA [Nm]
-BeamStiffness[1,1]= 3.231e8 # GA
-BeamStiffness[2,2]= 3.231e8
-BeamStiffness[3,3]= 1.e6    # GJ
-BeamStiffness[4,4]= 9.346e6 # EI
-BeamStiffness[5,5]= 9.346e6
-
-BeamMass=np.zeros((6,6),dtype=float,order='F')
-BeamMass[0,0]=100.e0        # m [kg/m]
-BeamMass[1,1]=BeamMass[0,0]
-BeamMass[2,2]=BeamMass[0,0]
-BeamMass[3,3]=10.e0         # J [kgm]
-BeamMass[4,4]=10.e0
-BeamMass[5,5]=10.e0
-
-
 # Options - Default Values:
+# overwritten by input_file.py
 FollowerForce   = True
 FollowerForceRig= True   
 PrintInfo       = True    
@@ -71,23 +29,16 @@ OutInaframe     = False
 ElemProj     = 0       
 MaxIterations=99         
 NumLoadSteps=5         
-NumGauss=1                
+#NumGauss=1 # not an input                
 Solution=111              
 DeltaCurved=1e-5         
-MinDelta=1d-8            
+MinDelta=1e-8            
 NewmarkDamp=1.e-4      
 
 
-# NCB1 case:
-FollowerForce=False
-PrintInfo=False              
-MaxIterations=99    
-NumLoadSteps=10
-Solution=112
-MinDelta= 1.e-5
-
-
-
+# ------------------------------------------------------------------------- import all input
+# python './input_file.py'
+from input_file import *
 
 
 # ------------------------------------------------------------------------- prepare input:
@@ -96,55 +47,84 @@ NumElems     = ct.c_int( NumElems     )
 NumNodes     = ct.c_int( NumNodes     )
 NumNodesElem = ct.c_int( NumNodesElem )
 
-ElemType     = ct.c_char_p( ElemType )
-TestCase     = ct.c_char_p( TestCase )
-BConds       = ct.c_char_p( BConds   )
+ElemType     = ct.c_char_p( ElemType.ljust(4) ) # the ljust is not required
+TestCase     = ct.c_char_p( TestCase.ljust(4) )
+BConds       = ct.c_char_p( BConds.ljust(2)   )
 
-BeamLength1 = ct.c_float( BeamLength1 )
-BeamLength2 = ct.c_float( BeamLength2 )
-ThetaRoot   = ct.c_float( ThetaRoot   )
-ThetaTip    = ct.c_float( ThetaTip    )
-TipMass     = ct.c_float( TipMass     )
-TipMassY    = ct.c_float( TipMassY    )
-TipMassZ    = ct.c_float( TipMassZ    )
-SectWidth   = ct.c_float( SectWidth   )
-SectHeight  = ct.c_float( SectHeight  )
-Omega       = ct.c_float( Omega       )
+BeamLength1 = ct.c_double( BeamLength1 )
+BeamLength2 = ct.c_double( BeamLength2 )
+ThetaRoot   = ct.c_double( ThetaRoot   )
+ThetaTip    = ct.c_double( ThetaTip    )
+TipMass     = ct.c_double( TipMass     )
+TipMassY    = ct.c_double( TipMassY    )
+TipMassZ    = ct.c_double( TipMassZ    )
+SectWidth   = ct.c_double( SectWidth   )
+SectHeight  = ct.c_double( SectHeight  )
+Omega       = ct.c_double( Omega       )
 
 
 # ------------------------------------------------------------------------- Options
 
-<---------------------- CONTINUE FROM HERE!!!
-< Convert all types into ctype classes
+FollowerForce    = ct.c_bool( FollowerForce    )
+FollowerForceRig = ct.c_bool( FollowerForceRig )  
+PrintInfo        = ct.c_bool( PrintInfo        )
+OutInBframe      = ct.c_bool( OutInBframe      )
+OutInaframe      = ct.c_bool( OutInaframe      )   
 
-FollowerForce   = True
-FollowerForceRig= True   
-PrintInfo       = True    
-OutInBframe     = True   
-OutInaframe     = False   
-ElemProj     = 0       
-MaxIterations=99         
-NumLoadSteps=5         
-NumGauss=1                
-Solution=111              
-DeltaCurved=1e-5         
-MinDelta=1d-8            
-NewmarkDamp=1.e-4   
+ElemProj     = ct.c_int( ElemProj      )      
+MaxIterations= ct.c_int( MaxIterations )         
+NumLoadSteps = ct.c_int( NumLoadSteps  )   
+#NumGauss     = ct.c_int( NumGauss      )          
+Solution     = ct.c_int( Solution      )  
+            
+DeltaCurved  = ct.c_double( DeltaCurved )       
+MinDelta     = ct.c_double( MinDelta    )      
+NewmarkDamp  = ct.c_double( NewmarkDamp )
 
 
+
+# ------------------------------------------------------------------------- Options
+print 'Values in input:'
+print 'DeltaCurved %f' %(DeltaCurved.value)
+print 'MinDelta    %f' %(MinDelta.value)
+print 'NewmarkDamp %f' %(NewmarkDamp.value)
+
+
+print 'ElemType: ',  ElemType.value
+print 'TestCase: ',  TestCase.value
+print 'BConds: '  ,  BConds.value
+
+print 'Beamlength1: ', BeamLength1.value
+print 'Beamlength2: ', BeamLength2.value
 
 # ---------------------------------------------------------------------------------------
-###COST=np.empty((7),dtype=float,order='F')
 W_COST=np.empty((2),dtype=float,order='F')
 
 
-##### Launch Solver
-#fm( ct.byref(NumElems), ct.byref(NumNodes), W_COST.ctypes.data_as(ct.c_void_p) )
+
+fm ( ct.byref(NumElems), ct.byref(NumNodes), W_COST.ctypes.data_as(ct.c_void_p), 
+     ct.byref(NumNodesElem), ElemType, TestCase, BConds,
+     ct.byref(BeamLength1), ct.byref(BeamLength2),
+     BeamStiffness.ctypes.data_as(ct.c_void_p), BeamMass.ctypes.data_as(ct.c_void_p),
+     ExtForce.ctypes.data_as(ct.c_void_p), ExtMomnt.ctypes.data_as(ct.c_void_p),
+     ct.byref(SectWidth), ct.byref(SectHeight),
+     ct.byref(ThetaRoot), ct.byref(ThetaTip),
+     ct.byref(TipMass), ct.byref(TipMassY), ct.byref(TipMassZ),
+     ct.byref(Omega),
+     ct.byref(FollowerForce), ct.byref(FollowerForceRig), ct.byref(PrintInfo),   
+     ct.byref(OutInBframe), ct.byref(OutInaframe), ct.byref(ElemProj), ct.byref(MaxIterations),
+     ct.byref(NumLoadSteps), ct.byref(Solution), ct.byref(DeltaCurved), ct.byref(MinDelta),
+     ct.byref(NewmarkDamp) )
 
 
 # check output
 print 'NOPT_MAX %d' % (NumElems.value)
 print 'Cost Weights:', W_COST 
+print 'NumLoadssteps: ', NumLoadSteps.value
+print 'FollowerForce: ', FollowerForce.value 
+
+
+
 
 
 

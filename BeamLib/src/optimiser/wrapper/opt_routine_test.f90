@@ -18,7 +18,7 @@ program opt_routine_test
 ! ------------------------------------------------------------- Define Variables
 
     real(8) :: W_COST(2)    ! <--- example of known size array, 2 is NCOSTFUNS into opt_shared
-    real(8), pointer, dimension(:) :: pCOST
+    !real(8), pointer, dimension(:) :: pCOST
 
 ! Design Variables:
 ! These are normally inported from the input module through input_setup.
@@ -104,7 +104,7 @@ program opt_routine_test
 
 
 ! -------------------------------------------------------------------- Call Main
-    call opt_main( NumElems, NumNodes,  pCOST, W_COST,&
+    call opt_main( NumElems, NumNodes,  W_COST,&
                  & NumNodesElem , ElemType, TestCase, BConds,    & ! Problem Setup Shared
                  & BeamLength1, BeamLength2,         & ! design variables
                  & BeamStiffness, BeamMass,          &
@@ -113,13 +113,18 @@ program opt_routine_test
                  & ThetaRoot, ThetaTip,              &
                  & TipMass, TipMassY, TipMassZ,      &
                  & Omega,                            &
-                 & FollowerForce=.false.,PrintInfo=.false.,                & ! Options
-                 & MaxIterations=99,         &
-                 & NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
-                 !& FollowerForce,FollowerForceRig,PrintInfo,              & ! Options
-                 !& OutInBframe,OutInaframe,ElemProj,MaxIterations,        &
-                 !& NumLoadSteps,NumGauss,Solution,DeltaCurved,MinDelta,   &
-                 !& NewmarkDamp                                            )
+                 & .false.,.true.,PrintInfo=.false.,             & ! Options
+                 & OutInBframe=.true.,OutInaframe=.false.,ElemProj=0,MaxIterations=99,                   &
+                 & NumLoadSteps=10,Solution=112,DeltaCurved=1.d-5,MinDelta= 1.d-5,   &
+                 & NewmarkDamp=1.d-4                                            )
+
+                 !!! NCB1 options
+                 !& FollowerForce=.false.,PrintInfo=.false.,                & ! Options
+                 !& MaxIterations=99,         &
+                 !& NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
+
+
+
     ! NCB1 options
 
 
