@@ -119,7 +119,7 @@ module input
      case ('PTW1', 'PTW2') ! Check effect of pre-twist
       ! Inputs are as per NCB1 but:
       ! a. GA and EI of cross-section 2 are halved to make the bean asimetric
-        NumElems    = 25
+        NumElems    = 10
         NumNodesElem= 3
         ThetaRoot   = 0.d0
         ThetaTip    = Pi/6.d0 ! ps: Pi defined in xbeam_shared

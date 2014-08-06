@@ -7,9 +7,8 @@ import numpy as np
 
 # Options and Problem Setup
 NumElems = 10
-NumNodes = 3      # Total nodes in the model
-
 NumNodesElem = 3
+
 ElemType="DISP"
 TestCase='NCB1'
 BConds='CF'

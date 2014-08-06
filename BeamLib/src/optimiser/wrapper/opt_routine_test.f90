@@ -11,6 +11,8 @@
 program opt_routine_test
 
  use opt_routine
+ use opt_cost
+ use xbeam_shared , only: MaxElNod
 
  implicit none
 
@@ -47,15 +49,21 @@ program opt_routine_test
     character(len=4)  :: TestCase       ! Define the test case (CANT,ARCH).
     character(len=2)  :: BConds         ! ='CC': Clamped-Clamped
 
+ ! solution type:
+    integer :: Solution
 
-
-
+ ! Output:
+    real(8),      allocatable:: PosIni   (:,:)      ! Initial nodal Coordinates.
+    real(8),      allocatable:: PsiIni (:,:,:)      ! Initial element orientation vectors (CRV)
+    real(8),      allocatable:: PosDef   (:,:)      ! Current nodal position vector. (sm: local coordinates)
+    real(8),      allocatable:: PsiDef (:,:,:)      ! Current element orientation vectors.
+    real(8),      allocatable:: InternalForces(:,:) ! Internal force/moments at nodes.
 
  ! --------------------------------------------------------------- Define Input:
 
 ! Options and Problem Setup
     NumElems = 10
-    NumNodes = 3
+    Solution = 112
 
     NumNodesElem = 3
     ElemType='DISP'
@@ -94,35 +102,60 @@ program opt_routine_test
     BeamMass(6,6)=10.d0
 
 
-! Solver options.
-!  select case (Options%Solution)
-!  case (102,112,142,202,212,302,312,322,900,902,910,912,922,952)
-!    ElemType= 'DISP'
-!  case default
-!    STOP 'Error: Wrong solution code (51707)'
-!  end select
 
+ ! Determine output size:
+ if ( (NumNodesElem==2) .or. (NumNodesElem==3) ) then
+    NumNodes = (NumNodesElem -1)*NumElems + 1
+ else
+    stop 'NumNodesElem must be equal to 2 or 3'
+ end if
+ !print *, 'Total Number of nodes', NumNodes
 
 ! -------------------------------------------------------------------- Call Main
-    call opt_main( NumElems, NumNodes,  W_COST,&
-                 & NumNodesElem , ElemType, TestCase, BConds,    & ! Problem Setup Shared
-                 & BeamLength1, BeamLength2,         & ! design variables
-                 & BeamStiffness, BeamMass,          &
-                 & ExtForce, ExtMomnt,               &
-                 & SectWidth, SectHeight,            &
-                 & ThetaRoot, ThetaTip,              &
-                 & TipMass, TipMassY, TipMassZ,      &
-                 & Omega,                            &
-                 & .false.,.true.,PrintInfo=.false.,             & ! Options
-                 & OutInBframe=.true.,OutInaframe=.false.,ElemProj=0,MaxIterations=99,                   &
-                 & NumLoadSteps=10,Solution=112,DeltaCurved=1.d-5,MinDelta= 1.d-5,   &
-                 & NewmarkDamp=1.d-4                                            )
+! The select case is necessary to preallocate the outputs
+
+select case (Solution)
+
+    case (102, 112, 142)
+
+        ! Preallocate:
+        allocate(        PosIni(          NumNodes,3)); PosIni=0.0_8;
+        allocate(        PosDef(          NumNodes,3)); PosDef=0.0_8;
+        allocate(        PsiIni(Numelems, MaxElNod,3)); PsiIni=0.0_8;
+        allocate(        PsiDef(Numelems, MaxElNod,3)); PsiDef=0.0_8;
+        allocate(InternalForces(          NumNodes,6)); InternalForces=0.0_8;
+
+
+        call opt_main( NumElems, NumNodes,               &
+                     & NumNodesElem , ElemType, TestCase, BConds,    & ! Problem Setup Shared
+                     & BeamLength1, BeamLength2,         & ! design variables
+                     & BeamStiffness, BeamMass,          &
+                     & ExtForce, ExtMomnt,               &
+                     & SectWidth, SectHeight,            &
+                     & ThetaRoot, ThetaTip,              &
+                     & TipMass, TipMassY, TipMassZ,      &
+                     & Omega,                            &
+                     & .false.,.true.,.false.,           & ! Options
+                     & .true., .false., 0, 99,           &
+                     & 10,Solution, 1.d-5, 1.d-5,  1.d-4,&
+                     & PosIni, PsiIni,                   & ! Initial Pos/Rot
+                     & PosDef, PsiDef, InternalForces    ) ! Output Static
 
                  !!! NCB1 options
                  !& FollowerForce=.false.,PrintInfo=.false.,                & ! Options
                  !& MaxIterations=99,         &
                  !& NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
 
+
+    case default
+        stop '[opt_routine_test] Check the allocation process is defined for the Solution sought.'
+
+
+    end select
+
+
+    ! Correct
+    print *, 'Max. Tip Displ. ', cost_node_disp(PosIni,PosDef,NumNodes)
 
 
     ! NCB1 options

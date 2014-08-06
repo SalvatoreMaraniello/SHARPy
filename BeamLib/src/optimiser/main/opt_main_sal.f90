@@ -220,13 +220,13 @@ do NOPT=0,NOPTMAX
 
         case ('OPT','SNS')
             ! -------------- Evaluate cost and Constraints at current design ---
-            COST(NOPT) = cost_global( FLAG_COST, W_COST,  &
-                                    & PosIni, PosDef,     &
-                                    & Elem                   )
+            COST(NOPT) = cost_global( FLAG_COST, W_COST,               &
+                                    & PosIni, PosDef,                  &
+                                    & Elem(:)%Mass(1,1),Elem(:)%Length )
 
-            CONSTR(:,NOPT) = cost_constraints( W_CONSTR, CONN_CONSTR, &
-                                            & PosIni,PosDef,         &
-                                            & Elem                   )
+            CONSTR(:,NOPT) = cost_constraints( W_CONSTR, CONN_CONSTR,          &
+                                            & PosIni,PosDef,                   &
+                                            & Elem(:)%Mass(1,1),Elem(:)%Length )
             !PRINT *, 'COST',    COST
             !PRINT *, 'CONSTR:', CONSTR
 

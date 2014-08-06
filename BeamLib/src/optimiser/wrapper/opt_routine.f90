@@ -35,8 +35,8 @@ module opt_routine
  use input
  use lib_out
  use opt_input      ! Optimisation Modules
- use opt_fd
- use fwd_main
+ use opt_fd_prealloc
+ use fwd_main_prealloc
  use lib_perf
  use opt_shared
  use opt_perturb
@@ -60,19 +60,20 @@ contains
 
 
 
-subroutine opt_main( NumElems, NumNodes, W_COST,                           & ! Problem SetUp
+subroutine opt_main( NumElems, NumNodes,                            & ! Problem SetUp
                    & IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds,    & ! Problem Setup Shared
                    & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
-                   & IN_BeamStiffness, IN_BeamMass,                         &
-                   & IN_ExtForce, IN_ExtMomnt,                              &
-                   & IN_SectWidth, IN_SectHeight,                           &
-                   & IN_ThetaRoot, IN_ThetaTip,                             &
-                   & IN_TipMass, IN_TipMassY, IN_TipMassZ,                  &
-                   & IN_Omega,                                              &
+                   & IN_BeamStiffness, IN_BeamMass,                          &
+                   & IN_ExtForce, IN_ExtMomnt,                               &
+                   & IN_SectWidth, IN_SectHeight,                            &
+                   & IN_ThetaRoot, IN_ThetaTip,                              &
+                   & IN_TipMass, IN_TipMassY, IN_TipMassZ,                   &
+                   & IN_Omega,                                               &
                    & FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
-                   & OutInBframe,OutInaframe,ElemProj,MaxIterations,        &
-                   & NumLoadSteps,Solution,DeltaCurved,MinDelta,   &
-                   & NewmarkDamp                                            )
+                   & OutInBframe,OutInaframe,ElemProj,MaxIterations,         &
+                   & NumLoadSteps,Solution,DeltaCurved,MinDelta, NewmarkDamp,&
+                   & PosIni, PsiIni,                   & ! Initial Pos/Rot
+                   & PosDef, PsiDef, InternalForces    ) ! Output Static
 
 ! ---------------------------------------------------------------------- Options
         type(xbopts)                      :: Options ! not dummy
@@ -106,8 +107,13 @@ subroutine opt_main( NumElems, NumNodes, W_COST,                           & ! P
    real(8), intent(inout)  :: IN_Omega
 
 ! ---------------------------------------------------------------- Problem Setup
+! remark: NumNodes is recomputed inside input_elem (input module)
+! It is passed as an input to check that the preallocated variables in the python
+! wrapper have the same size as those allocated inside the fortran code.
    integer, intent(inout) :: NumElems          ! Number of elements
    integer, intent(inout) :: NumNodes          ! Number of nodes in the model.
+
+
 
 ! --------------------------------------------------------- Problem Setup Shared
 ! These variables appear as shared in the input module.
@@ -115,6 +121,15 @@ subroutine opt_main( NumElems, NumNodes, W_COST,                           & ! P
     character(len=4), intent(inout)  :: IN_ElemType       ! ='STRN','DISP'
     character(len=4), intent(inout)  :: IN_TestCase       ! Define the test case (CANT,ARCH).
     character(len=2), intent(inout)  :: IN_BConds         ! ='CC': Clamped-Clamped
+
+
+! ----------------------------------------------------------------------- Output
+! Static
+ real(8), intent(inout) :: InternalForces(NumNodes,6)  ! Internal force/moments at nodes.
+ real(8), intent(inout) :: PosIni (NumNodes,3)    ! Initial nodal Coordinates.
+ real(8), intent(inout) :: PsiIni (NumElems,MaxElNod,3)    ! Initial element orientation vectors (CRV)
+ real(8), intent(inout) :: PosDef (NumNodes,3)      ! Current nodal position vector. (sm: local coordinates)
+ real(8), intent(inout) :: PsiDef (NumElems,MaxElNod,3)    ! Current element orientation vectors.
 
 
  real(8):: t0,dt                               ! Initial time and time step.
@@ -131,14 +146,11 @@ subroutine opt_main( NumElems, NumNodes, W_COST,                           & ! P
  real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
  real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
  real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
- real(8),      allocatable:: InternalForces(:,:)  ! Internal force/moments at nodes.
+
  logical,      allocatable:: OutGrids(:)       ! Grid nodes where output is written.
  character(len=25)        :: OutFile           ! Output file.
 
- real(8),      allocatable:: PosIni   (:,:)    ! Initial nodal Coordinates.
- real(8),      allocatable:: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
- real(8),      allocatable:: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
- real(8),      allocatable:: PsiDef (:,:,:)    ! Current element orientation vectors.
+
  real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
  real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
 
@@ -162,7 +174,7 @@ subroutine opt_main( NumElems, NumNodes, W_COST,                           & ! P
 
  logical          :: FLAG_COST  (NCOSTFUNS) ! Flag array for cost funcitons
  logical          :: FLAG_CONSTR(NCOSTFUNS) ! Flag array for cost funcitons
-real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors... ! no need to define size here
+ real(8)          :: W_COST  (NCOSTFUNS)   ! arrays with weights/scaling factors... ! no need to define size here
  !!!!!!! real(8)          :: W_COST  (:)                                           ! this works just as fine
  real(8)          :: W_CONSTR(NCOSTFUNS)   ! ...for cost and constraint functions
  integer, allocatable :: CONN_CONSTR(:), CONN_XSH(:)   ! connectivity matrix for contrains and design variables array
@@ -265,6 +277,17 @@ print *, IN_BConds
         Options%NewmarkDamp = NewmarkDamp
     end if
 
+! Solver options.
+! this ckeck is inconsistent with the input setup - as both ElemType and
+! Options%Solution are input - but has been kept for consistency with the
+! original code
+   select case (Options%Solution)
+       case (102,112,142,202,212,302,312,322,900,902,910,912,922,952)
+           IN_ElemType= 'DISP'
+       case default
+           STOP 'Error: Wrong solution code (51707)'
+   end select
+
   ! Define number of Gauss points (2-noded displacement-based element needs reduced integration).
   select case (IN_NumNodesElem)
     case (2)
@@ -330,7 +353,7 @@ print *, IN_BConds
 !do while (NOPT<=NOPTMAX)
 do NOPT=0,NOPTMAX
 
-    call fwd_problem( NumElems,OutFile,Options,    &   ! from input_setup
+    call fwd_problem_prealloc( NumElems,OutFile,Options,    &   ! from input_setup
                  &                        Elem,    &   ! from opt_main_xxx
                  &                    NumNodes,    &   ! from input_elem
                  &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
@@ -361,11 +384,11 @@ do NOPT=0,NOPTMAX
             ! -------------- Evaluate cost and Constraints at current design ---
             COST(NOPT) = cost_global( FLAG_COST, W_COST,  &
                                     & PosIni, PosDef,     &
-                                    & Elem                )
+                                    & Elem(:)%Mass(1,1),Elem(:)%Length         )
 
             CONSTR(:,NOPT) = cost_constraints( W_CONSTR, CONN_CONSTR, &
                                             & PosIni,PosDef,         &
-                                            & Elem                   )
+                                            & Elem(:)%Mass(1,1),Elem(:)%Length )
             !PRINT *, 'COST',    COST
             !PRINT *, 'CONSTR:', CONSTR
 
@@ -374,7 +397,7 @@ do NOPT=0,NOPTMAX
             select case (gradmode)
                 case ('FDF')
                     print *, 'Gradients will be computed via Finite Differences'
-                    call fd_main( NumElems,OutFile,Options,                    &
+                    call fd_main_prealloc( NumElems,OutFile,Options,           &
                                 & Elem,                                        &
                                 & NumNodes,                                    &
                                 & BoundConds,PosIni,ForceStatic,PhiNodes,      &
@@ -456,6 +479,9 @@ end do
  !pCOST => COST
  !print *, pCOST
  print *, COST
+
+
+
 
  end subroutine opt_main
 

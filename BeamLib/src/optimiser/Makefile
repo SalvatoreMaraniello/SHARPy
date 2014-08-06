@@ -247,7 +247,10 @@ OBJOPT_FWDWRP=
 #    $(OPTOBJDIR)/FxWrapper_PyFx.o 
 
 OBJOPTEXE = $(OBJLIB) $(OBJXBEAM) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_main_$(TESTCASE).o
-OBJOPTWRAP = $(OBJLIB) $(OBJXBEAM) $(OBJOPT_FWDWRP) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) $(OPTOBJDIR)/opt_routine.o
+OBJOPTWRAP = $(OBJLIB) $(OBJXBEAM) $(OBJOPT_FWDWRP) $(OBJOPTLIB) $(OBJOPTSRC) $(OBJOPTMAIN) \
+    $(OPTOBJDIR)/fwd_main_prealloc.o \
+    $(OPTOBJDIR)/opt_fd_prealloc.o \
+    $(OPTOBJDIR)/opt_routine.o
 OBJOPTWRAPEXE= $(OBJOPTWRAP) $(OPTOBJDIR)/opt_routine_test.o
 
 ################################################################################
