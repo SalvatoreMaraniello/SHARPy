@@ -1,0 +1,26 @@
+
+Installation:
+
+Salvatore Maraniello
+7th Aug 2014
+
+------------------------------------------------
+
+
+Requirements: 
+Python 2.7
+OpenMDAO v0.10.0 (or back-compatibles)
+
+
+Install OpenMDAO:
+- download go-openmdao-0.10.0.py from http://openmdao.org/downloads/recent/
+- go to the folder where you want to install the libraries and run the script from terminal.
+
+Setup Optimiser:
+- in shared.py, set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
+- because during the installation openmdao makes a local copy of the packages installed on your machine, it is likely that all the paths to the egg files may need to be changed manually.
+
+
+
+
+

@@ -10,6 +10,9 @@
 !-> Subroutines.-
 !   - Cost Functions:
 !     - cost_node_disp: returns the absolute value of a nodal displacement
+!     - cost_total_mass: total beam mass
+!     - cost_total_mass_wrap: wrapper for cost_total_mass to allow python call
+!
 !
 !
 !
@@ -57,6 +60,28 @@ module opt_cost
     end function cost_node_disp
 
 
+!-------------------------------------------------------------------------------
+! function cost_node_disp_wrap
+!-----------------------------
+    ! Wrapper for cost_node_disp function. The wrapping consists of:
+    !   1. change from function to subroutine for easier interface
+    !   2. arrays in the interface have all known size
+    subroutine cost_node_disp_wrap(PosIni,PosDef,NumNodes,node_disp,Nnode)
+
+        real(8),    intent(out):: node_disp           ! absolute value of node displacement
+        real(8),    intent(in) :: PosIni (NumNodes,3) ! Initial nodal Coordinates.
+        real(8),    intent(in) :: PosDef (NumNodes,3) ! Current nodal position vector. (sm: local coordinates)
+        integer,    optional   :: Nnode               ! Number of the node at which to evaluate the displacements.
+        integer,    intent(in) :: NumNodes            ! Total number of nodes in the model
+
+        if ( present(Nnode)) then
+            node_disp = cost_node_disp(PosIni,PosDef,Nnode)
+        else
+            node_disp = cost_node_disp(PosIni,PosDef)
+        end if
+
+    end subroutine cost_node_disp_wrap
+
 
 !-------------------------------------------------------------------------------
 ! function cost_total_mass
@@ -70,12 +95,31 @@ module opt_cost
         integer                  :: ii
 
         cost_total_mass=0.0_8
-        do ii=1,size(MassVector)
-            !cost_total_mass = cost_total_mass + Elem(ii)%Mass(1,1)*Elem(ii)%Length
-            cost_total_mass = cost_total_mass + MassVector(ii)*LengthVector(ii)
-        end do
+        cost_total_mass = sum(MassVector*LengthVector)
+        !do ii=1,size(MassVector)
+        !    cost_total_mass = cost_total_mass + MassVector(ii)*LengthVector(ii)
+        !end do
 
     end function cost_total_mass
+
+
+!-------------------------------------------------------------------------------
+! function cost_total_mass_wrap
+!------------------------------
+    ! Wrapper for cost_total_mass function. The wrapping consists of:
+    !   1. change from function to subroutine for easier interface
+    !   2. arrays in the interface have all known size
+
+    subroutine cost_total_mass_wrap(MassVector,LengthVector,NumElems,TotalMass)
+        integer,      intent(in) :: NumElems               ! index/total number of Elements
+        real(8),      intent(in) :: MassVector(NumElems)   ! Mass of each element
+        real(8),      intent(in) :: LengthVector(NumElems) ! Length of each element
+        real(8),      intent(out):: TotalMass             ! structure mass
+
+        TotalMass = cost_total_mass(MassVector,LengthVector)
+
+    end subroutine cost_total_mass_wrap
+
 
 
 
@@ -115,7 +159,7 @@ module opt_cost
 
         do nn=1,size(FLAG_COST)
             if (FLAG_COST(nn) .eqv. .true.) then
-                cost_global = cost_global +                                    &
+                cost_global = cost_global +                                     &
                             & W_COST(nn)*eval_function( nn,                     &
                                                       & PosIni,PosDef,          &
                                                       & MassVector,LengthVector,&
@@ -247,6 +291,7 @@ module opt_cost_test
 
         real(8) :: PosIni (4,3)    ! Initial nodal Coordinates.
         real(8) :: PosDef (4,3)    ! Current nodal position vector. (sm: local coordinates)
+        real(8) :: node_disp
 
         PosDef = transpose( reshape( (/    5.5 ,  100. ,  1.7 ,  &
                                       &    4.0 ,  2.90 ,  5.0 ,  &
@@ -270,9 +315,18 @@ module opt_cost_test
         print nfmt, 'Node 3:', cost_node_disp(PosIni,PosDef,3)
         print nfmt, 'Node 4:', cost_node_disp(PosIni,PosDef)
 
-        ! other way to define the format is to place it here (after the print!)
-        ! print 100, 'Node 1:', cost_node_disp(PosIni,PosDef,1)
-        ! 100 FORMAT(A,F10.6)
+
+        print *, '----------------------------------------- cost_node_disp_wrap'
+
+        call cost_node_disp_wrap(PosIni,PosDef,size(PosDef(:,1)),node_disp,1)
+        print nfmt, 'Node 1:', node_disp
+        call cost_node_disp_wrap(PosIni,PosDef,size(PosDef(:,1)),node_disp,2)
+        print nfmt, 'Node 2:', node_disp
+        call cost_node_disp_wrap(PosIni,PosDef,size(PosDef(:,1)),node_disp,3)
+        print nfmt, 'Node 3:', node_disp
+        call cost_node_disp_wrap(PosIni,PosDef,size(PosDef(:,1)),node_disp)
+        print nfmt, 'Node 4:', node_disp
+
     end subroutine cost_node_disp_test
 
 
@@ -300,6 +354,11 @@ module opt_cost_test
         Mtotal = cost_total_mass(Elem(:)%Mass(1,1),Elem(:)%Length)
         print '(A,F16.8)', 'Total Mass:', Mtotal
         print '(A,F16.8)', 'Expected:', ( 1.0_8 + (1.0_8 + 2.0_8**3 + 3.0_8**3 + 4.0_8**3)/(5.0_8**3) )*M*L
+
+
+        print *, '------------------------------------------------ wrapper test'
+        call cost_total_mass_wrap(Elem(:)%Mass(1,1),Elem(:)%Length,size(Elem),Mtotal)
+        print '(A,F16.8)', 'Total Mass:', Mtotal
 
     end subroutine cost_mass_total_test
 

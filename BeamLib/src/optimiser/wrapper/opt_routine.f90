@@ -73,7 +73,9 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
                    & OutInBframe,OutInaframe,ElemProj,MaxIterations,         &
                    & NumLoadSteps,Solution,DeltaCurved,MinDelta, NewmarkDamp,&
                    & PosIni, PsiIni,                   & ! Initial Pos/Rot
-                   & PosDef, PsiDef, InternalForces    ) ! Output Static
+                   & PosDef, PsiDef, InternalForces,   & ! Output Static
+                   & DensityVector, LengthVector       ) ! Design output
+
 
 ! ---------------------------------------------------------------------- Options
         type(xbopts)                      :: Options ! not dummy
@@ -124,11 +126,15 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
 
 
 ! ----------------------------------------------------------------------- Output
+! General
+ real(8), intent(inout) :: DensityVector (NumElems)       ! Linear Density of each element of the beam. To be used for cost evaluation.
+ real(8), intent(inout) :: LengthVector (NumElems)        ! Length of each element of the beam. To be used for cost evaluation.
+
 ! Static
- real(8), intent(inout) :: InternalForces(NumNodes,6)  ! Internal force/moments at nodes.
- real(8), intent(inout) :: PosIni (NumNodes,3)    ! Initial nodal Coordinates.
+ real(8), intent(inout) :: InternalForces(NumNodes,6)      ! Internal force/moments at nodes.
+ real(8), intent(inout) :: PosIni (NumNodes,3)             ! Initial nodal Coordinates.
  real(8), intent(inout) :: PsiIni (NumElems,MaxElNod,3)    ! Initial element orientation vectors (CRV)
- real(8), intent(inout) :: PosDef (NumNodes,3)      ! Current nodal position vector. (sm: local coordinates)
+ real(8), intent(inout) :: PosDef (NumNodes,3)             ! Current nodal position vector. (sm: local coordinates)
  real(8), intent(inout) :: PsiDef (NumElems,MaxElNod,3)    ! Current element orientation vectors.
 
 
@@ -372,6 +378,12 @@ do NOPT=0,NOPTMAX
      call output_elems (11,Elem,PosDef,PsiDef)
      close (11)
 
+
+    ! Compute Design Output
+    DensityVector   = Elem(:)%Mass(1,1)
+    LengthVector    = Elem(:)%Length
+
+
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Loop control
      select case (solmode)
@@ -455,33 +467,34 @@ do NOPT=0,NOPTMAX
 
 end do
 
+call toc
 
- print *, 'Optimisation Terminated: '
- print '(A15,$)', 'cost: '
- print '(F10.6,$)', COST
- print *, ' '
+ !print *, 'Optimisation Terminated: '
+ !print '(A15,$)', 'cost: '
+ !print '(F10.6,$)', COST
+ !print *, ' '
 
- print '(A15,$)', 'constraints: '
- print '(F10.6,$)', CONSTR
- print *, ' '
+ !print '(A15,$)', 'constraints: '
+ !print '(F10.6,$)', CONSTR
+ !print *, ' '
 
- print '(A15,$)', 'cost grad.: '
- print '(F10.6,$)', DCDXSH
- print *, ' '
+ !print '(A15,$)', 'cost grad.: '
+ !print '(F10.6,$)', DCDXSH
+ !print *, ' '
 
- print '(A15,$)', 'constr. grad.: '
- print '(F10.6,$)', DCONDXSH
- print *, ' '
-
- call toc
+ !print '(A15,$)', 'constr. grad.: '
+ !print '(F10.6,$)', DCONDXSH
+ !print *, ' '
 
  !!! assign pointers to allow python interface
  !pCOST => COST
  !print *, pCOST
- print *, COST
+ !print *, COST
 
 
-
+ ! IMPORTANT: this gives error if the routine is called more then once from the
+ ! python wrapper
+ deallocate(XSH)
 
  end subroutine opt_main
 

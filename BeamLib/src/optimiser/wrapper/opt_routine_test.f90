@@ -59,6 +59,9 @@ program opt_routine_test
     real(8),      allocatable:: PsiDef (:,:,:)      ! Current element orientation vectors.
     real(8),      allocatable:: InternalForces(:,:) ! Internal force/moments at nodes.
 
+    real(8),      allocatable :: DensityVector (:)  ! Density of each element of the beam. To be used for cost evaluation.
+    real(8),      allocatable :: LengthVector  (:)  ! Length of each element of the beam. To be used for cost evaluation.
+
  ! --------------------------------------------------------------- Define Input:
 
 ! Options and Problem Setup
@@ -109,7 +112,10 @@ program opt_routine_test
  else
     stop 'NumNodesElem must be equal to 2 or 3'
  end if
- !print *, 'Total Number of nodes', NumNodes
+
+ ! Allocate Variables independent of the solution
+ allocate( DensityVector (NumElems) )
+ allocate(  LengthVector (NumElems) )
 
 ! -------------------------------------------------------------------- Call Main
 ! The select case is necessary to preallocate the outputs
@@ -139,7 +145,8 @@ select case (Solution)
                      & .true., .false., 0, 99,           &
                      & 10,Solution, 1.d-5, 1.d-5,  1.d-4,&
                      & PosIni, PsiIni,                   & ! Initial Pos/Rot
-                     & PosDef, PsiDef, InternalForces    ) ! Output Static
+                     & PosDef, PsiDef, InternalForces,   & ! Output Static
+                     & DensityVector, LengthVector       ) ! Design output
 
                  !!! NCB1 options
                  !& FollowerForce=.false.,PrintInfo=.false.,                & ! Options

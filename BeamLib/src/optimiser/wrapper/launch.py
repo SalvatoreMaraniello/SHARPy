@@ -22,28 +22,32 @@ a python file (input_file.py) and call the beam solver.
     ref.1: http://www.walkingrandomly.com/?p=85
     ref.2: http://stackoverflow.com/questions/5811949/call-functions-from-a-shared-fortran-library-in-python
     ref.3: http://docs.scipy.org/doc/numpy/reference/generated/numpy.ndarray.ctypes.html
-    ref.4 http://stackoverflow.com/questions/23641754/passing-string-to-fortran-dll-using-ctypes-and-python
+    ref.4: http://stackoverflow.com/questions/23641754/passing-string-to-fortran-dll-using-ctypes-and-python
 
  random quote: << Never try to out drink a Swede, unless you happen to be a 
                   Finn or at least a Russian. >>
 
 '''
 
-import ctypes as ct
-import numpy as np
+import os
 import sys
-sys.path.append('./wrapper/pysrc')
-import beamvar
+import numpy as np
+import ctypes as ct
 
+import shared # this contains paths to modules etc.
+import beamvar
+import cost
+
+# Change current directory
 
 
 # Load Dynamic Library
-xb = ct.cdll.LoadLibrary('./bin/xbeamopt.so')
+xb = ct.cdll.LoadLibrary(shared.wrapso_abspath)
 
 # extract main routine
-fm=xb.__opt_routine_MOD_opt_main
+fwd_run=xb.__opt_routine_MOD_opt_main
 
-# Options - Default Values:
+#--------------------------------------------------- # Options - Default Values:
 # overwritten by input_file.py
 FollowerForce   = True
 FollowerForceRig= True   
@@ -111,6 +115,12 @@ NewmarkDamp  = ct.c_double( NewmarkDamp )
 
 
 # -------------------------------------------------------------- Prepare Output
+
+# General
+DensityVector = np.zeros((NumElems.value),dtype=float,order='F')
+LengthVector  = np.zeros((NumElems.value),dtype=float,order='F')
+
+# Problem dependent
 [PosIni, PosDef, PsiIni, PsiDef, InternalForces] = beamvar.fwd_static(NumNodes.value,NumElems.value)
 
 
@@ -129,12 +139,11 @@ print 'BConds: '  ,  BConds.value
 print 'Beamlength1: ', BeamLength1.value
 print 'Beamlength2: ', BeamLength2.value
 '''
-# -----------------------------------------------------------------------------
+# ----------------------------------------------------------------- Call Solver
 #W_COST=np.empty((2),dtype=float,order='F')
 
 
-
-fm ( ct.byref(NumElems), ct.byref(NumNodes),
+fwd_run( ct.byref(NumElems), ct.byref(NumNodes),
      ct.byref(NumNodesElem), ElemType, TestCase, BConds,
      ct.byref(BeamLength1), ct.byref(BeamLength2),
      BeamStiffness.ctypes.data_as(ct.c_void_p), BeamMass.ctypes.data_as(ct.c_void_p),
@@ -147,17 +156,30 @@ fm ( ct.byref(NumElems), ct.byref(NumNodes),
      ct.byref(OutInBframe), ct.byref(OutInaframe), ct.byref(ElemProj), ct.byref(MaxIterations),
      ct.byref(NumLoadSteps), ct.byref(Solution), ct.byref(DeltaCurved), ct.byref(MinDelta), ct.byref(NewmarkDamp),
      PosIni.ctypes.data_as(ct.c_void_p), PsiIni.ctypes.data_as(ct.c_void_p),                  
-     PosDef.ctypes.data_as(ct.c_void_p), PsiDef.ctypes.data_as(ct.c_void_p), InternalForces.ctypes.data_as(ct.c_void_p)    )
+     PosDef.ctypes.data_as(ct.c_void_p), PsiDef.ctypes.data_as(ct.c_void_p), InternalForces.ctypes.data_as(ct.c_void_p),
+     DensityVector.ctypes.data_as(ct.c_void_p), LengthVector.ctypes.data_as(ct.c_void_p)    )
     
 
+# -----------------------------------------------------------------------
+TotalMass = ct.c_double( 0.0 ) 
+cost.f_total_mass( DensityVector.ctypes.data_as(ct.c_void_p), LengthVector.ctypes.data_as(ct.c_void_p), ct.byref(NumElems), ct.byref(TotalMass) )
+NodeDisp = ct.c_double( 0.0 )
 
+NNode = ct.c_int(NumNodes.value)
+cost.f_node_disp( PosIni.ctypes.data_as(ct.c_void_p), PosDef.ctypes.data_as(ct.c_void_p), ct.byref(NumNodes), ct.byref(NodeDisp), ct.byref(NNode) )
+
+# call without optional argument doesnt work
+#cost.f_node_disp( PosIni.ctypes.data_as(ct.c_void_p), PosDef.ctypes.data_as(ct.c_void_p), ct.byref(NumNodes), ct.byref(NodeDisp))
+
+print 'Cost Functions:'
+print 'Total Mass', TotalMass.value
+print 'Tip Displacement', NodeDisp.value
 
 # ---------------------------------------------------------------------- Checks
 
 # Arrays size:
 if NumNodes.value != NumNodes_copy:
     raise NameError('NumNodes has been changed during the fortran code exewcution!') 
-
 
 # print stuff
 print 'NumNodes %d' %(NumNodes.value)

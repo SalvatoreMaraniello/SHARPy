@@ -86,7 +86,7 @@ contains
         gradmode='FDF' ! gradient method: DIR: direct
                        !                  ADJ: adjointfinite differences
                        !                  FDF: Finite Differences
-        solmode ='OPT' ! solution mode:   FWD: forward
+        solmode ='FWD' ! solution mode:   FWD: forward
                        !                  OPT: optimisation
                        !                  SNS: sensitivity analysis
         fdmode  ='FWD' ! FD method:       FWD: forward differences
