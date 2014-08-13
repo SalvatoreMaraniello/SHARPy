@@ -91,3 +91,4 @@ cmpc/
 
 
 /BeamLib/src/optimiser/wrapper/openmdao_log.txt
+/BeamLib/src/optimiser/wrapper/pysrc/openmdao_log.txt

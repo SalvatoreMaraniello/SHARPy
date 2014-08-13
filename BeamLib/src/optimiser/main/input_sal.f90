@@ -525,6 +525,103 @@ subroutine input_elem (NumElems,NumNodes,Elem)
  end subroutine input_elem
 
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine INPUT_ELEM_SPAN
+!
+!-> Description:
+!
+!    Modified version of INPUT_ELEM introduced for optimisation problems.
+!    The routine define element properties but receives in input the stiffness
+!    and mass properties of each element of the beam
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine input_elem_span (NumElems, NumNodes, Elem, BeamSpanMass, BeamSpanStiffness)
+ use lib_lu
+ use lib_rot
+
+    ! Input added for the optimisaiton
+    real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
+    real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
+
+    ! I/O Variables.
+    integer,intent(in)  :: NumElems        ! Number of elements in the model.
+    integer,intent(out) :: NumNodes        ! Total Number of nodes in the model.
+    type(xbelem),intent(out) :: Elem(:)    ! Element information
+
+    ! Local variables.
+    integer:: i                            ! Counter.
+    integer,save :: fl=2,fw=2              ! Multiplier.
+    real(8):: BeamInvStiffness(6,6)        ! Inverse of the stiffness matrix.
+    real(8):: LocPos(3)                    ! Local position vector of the lumped mass.
+
+    ! Connectivies.
+    select case (NumNodesElem)
+      case (2)
+        do i=1,NumElems
+            Elem(i)%Conn=0
+            Elem(i)%Conn(1)=i
+            Elem(i)%Conn(2)=i+1
+            Elem(i)%NumNodes=2 ! sm: this field is redundant (computed into fem_glob2loc_extract
+        end do
+        NumNodes=NumElems+1
+      case (3)
+        do i=1,NumElems
+            Elem(i)%Conn=0
+            Elem(i)%Conn(1)=2*(i-1)+1
+            Elem(i)%Conn(2)=2*(i-1)+3
+            Elem(i)%Conn(3)=2*(i-1)+2
+            Elem(i)%NumNodes=3 ! sm: this field is redundant (computed into fem_glob2loc_extract
+        end do
+        NumNodes=2*NumElems+1
+    end select
+
+! Store element stiffness/mass (constant)
+  do i=1,NumElems
+    BeamInvStiffness=0.d0
+    !call lu_invers (BeamStiffness, BeamInvStiffness)
+    call lu_invers (BeamSpanStiffness(i,:,:), BeamInvStiffness)
+    Elem(i)%Stiff   = BeamSpanStiffness(i,:,:)
+    Elem(i)%Mass    = BeamSpanMass(i,:,:)
+    Elem(i)%InvStiff= BeamInvStiffness
+  end do
+
+! Define lumped masses at element nodes.
+  do i=1,NumElems
+    Elem(i)%RBMass = 0.d0
+  end do
+
+  select case (trim(TestCase))
+      case default
+            LocPos(1)=0.d0
+            LocPos(2)=TipMassY
+            LocPos(3)=TipMassZ
+  end select
+
+! Element orientation.
+! sm: this block defines the local Y axis.
+  do i=1,NumElems
+
+      Elem(i)%Vector= 0.d0
+      Elem(i)%Vector(2)= 1.d0
+      !Elem(i)%Vector(2)= dcos( BeamSpanTwist(i) )
+      !Elem(i)%Vector(3)= dsin( BeamSpanTwist(i) )
+
+  end do
+
+! Define element types.
+  select case (ElemType)
+  case ('DISP')
+    Elem(1:NumElems)%MemNo=0
+  case ('STRN') ! from input_rafa.f90
+    Elem(1:NumElems)%MemNo=1
+  end select
+
+  return
+ end subroutine input_elem_span
+
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine INPUT_NODE
 !
@@ -533,6 +630,8 @@ subroutine input_elem (NumElems,NumNodes,Elem)
 !    Define nodal properties.
 !
 !-> Remarks.-
+!   PhiNodes made optional to allow to pass it as input from optimiser python
+!   interface
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine input_node (NumNodes,Elem,BoundConds,Coords,Forces,PhiNodes)
@@ -543,7 +642,7 @@ subroutine input_elem (NumElems,NumNodes,Elem)
   integer,      intent(out):: BoundConds(:)       ! =0 on free nodes; =1 on clamped nodes; =-1 on free nodes.
   real(8),      intent(out):: Coords    (:,:)     ! Initial nodal Coordinates.
   real(8),      intent(out):: Forces    (:,:)     ! Applied nodal forces.
-  real(8),      intent(out):: PhiNodes  (:)       ! Initial twist at grid points.
+  real(8), optional,   intent(out):: PhiNodes  (:)       ! Initial twist at grid points.
 
 ! Local variables.
   integer      :: i           ! Counters.
@@ -570,14 +669,14 @@ subroutine input_elem (NumElems,NumNodes,Elem)
     end select
 
 ! Initial pretwist angle.
-select case (trim(TestCase))
-  case default
-    do i=1,NumNodes
-      PhiNodes(i)=ThetaRoot+(ThetaTip-ThetaRoot)*(dble(i-1)/dble(NumNodes-1))
-    end do
-  !case ('PTW2')
-  !  PhiNodes(i)=0 ! this leads to error after the execution is terminated...
-end select
+if (present(PhiNodes)) then
+    select case (trim(TestCase))
+      case default
+        do i=1,NumNodes
+          PhiNodes(i)=ThetaRoot+(ThetaTip-ThetaRoot)*(dble(i-1)/dble(NumNodes-1))
+        end do
+    end select
+end if
 
 ! Static point forces.
   !ffvec=0
@@ -887,7 +986,7 @@ subroutine update_shared_input( IN_BeamLength1, IN_BeamLength2,  &
                        & IN_SectWidth, IN_SectHeight,            &
                        & IN_ThetaRoot, IN_ThetaTip,              &
                        & IN_TipMass, IN_TipMassY, IN_TipMassZ,   &
-                       & IN_Omega                                 )
+                       & IN_Omega                                )
 
    real(8)  :: IN_BeamLength1, IN_BeamLength2
    real(8), intent(in)  :: IN_BeamStiffness(6,6)

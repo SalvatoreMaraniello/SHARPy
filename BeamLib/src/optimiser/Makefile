@@ -227,7 +227,10 @@ OBJWRAP=\
 # -------------------------------------------------------------------- Optimiser
 OBJOPTLIB=\
     $(OPTOBJDIR)/lib_perf.o \
-	$(OPTOBJDIR)/lib_array.o
+	$(OPTOBJDIR)/lib_array.o \
+	$(OPTOBJDIR)/lib_isosec.o \
+	$(OPTOBJDIR)/lib_shape.o
+	
 
 OBJOPTSRC=\
 	$(OPTOBJDIR)/opt_shared.o \

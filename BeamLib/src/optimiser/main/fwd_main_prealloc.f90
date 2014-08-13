@@ -34,7 +34,7 @@
 ! -> Bugs/Reminders:
 !  - The pre_solver for dynamic and couple dproblems need to be developed. These
 !     require a call to the static pre solver
-!  - all allocation statemnets substituted with conditional allocation (lib_array)
+!  - all allocation statements substituted with conditional allocation (lib_array)
 !
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -60,7 +60,8 @@ contains
  subroutine fwd_problem_prealloc(NumElems,OutFile,Options,  &   ! from input_setup
                  &                        Elem,    &   ! from opt_main_xxx
                  &                    NumNodes,    &   ! from input_elem
-                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                 & BeamSpanMass, BeamSpanStiffness,&   ! Input added for the optimisation
+                 & BoundConds,PosIni,ForceStatic,PhiNodes, &   ! from input_node
                  &                  OutGrids,         &   ! from pt_main_xxx
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
@@ -71,12 +72,18 @@ contains
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
                  & RefVel, RefVelDot, Quat)
 
+ ! Input added for the optimisaiton
+     real(8)   :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
+     real(8)   :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
+     real(8)   :: PhiNodes (NumNodes)             ! Initial twist at grid points.
+
  ! The following variables appear as allocatable in fwd_main
      real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
      real(8) :: PosIni   (:,:)    ! Initial nodal Coordinates.
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
      real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
      real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+
 
      real(8):: t0,dt                               ! Initial time and time step.
      integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
@@ -90,7 +97,7 @@ contains
      real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
      real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
      real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
-     real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
      character(len=25)        :: OutFile           ! Output file.
      real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
      real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
@@ -111,7 +118,8 @@ contains
      ! (stage required also for dynamic and coupled solutions)
      call fwd_static_input( NumElems, OutFile, Options,                &   ! from input_setup
                           &                       Elem,                &   ! from opt_main_xxx
-                          &                   NumNodes,                &   ! from input_elem
+                          &                   NumNodes,                &   ! from input_ele
+                          & BeamSpanMass, BeamSpanStiffness,           &   ! Input added for the optimisation
                           & BoundConds, PosIni, ForceStatic, PhiNodes, &   ! from input_node
                           & OutGrids                                   )   ! from pt_main_xxx
 
@@ -183,6 +191,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
      real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
      real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+     real(8) :: PhiNodes (:)      ! Initial twist at grid points.
+
 
  real(8):: t0,dt                               ! Initial time and time step.
 
@@ -198,7 +208,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
  real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
  real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
  real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
- real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
  character(len=25)        :: OutFile           ! Output file.
  real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
  real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
@@ -277,6 +287,7 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
      real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
      real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+     real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
  real(8):: t0,dt                               ! Initial time and time step.
 
@@ -292,7 +303,7 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
  real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
  real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
  real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
- real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
  character(len=25)        :: OutFile           ! Output file.
  real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
  real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
@@ -352,20 +363,26 @@ end subroutine fwd_presolver
 subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
                     &                      Elem,         &   ! from opt_main_xxx
                     &                  NumNodes,         &   ! from input_elem
+                    & BeamSpanMass, BeamSpanStiffness,  & ! Input added for the optimisation
                     & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
                     &                  OutGrids)             ! from pt_main_xxx
 
- ! The following variable appear as allocatable in fwd_main
- real(8)                  :: PosIni   (:,:)    ! Initial nodal Coordinates.
+    ! Input added for the optimisaiton
+     real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
+     real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
 
- integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
- type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
- type(xbelem), allocatable:: Elem(:)           ! Element information.
- integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
- real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
- logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
- character(len=25)        :: OutFile           ! Output file.
- real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+     ! The following variable appear as allocatable in fwd_main
+     real(8)                  :: PosIni   (:,:)    ! Initial nodal Coordinates.
+     real(8)                  :: PhiNodes (:)      ! Initial twist at grid points.
+
+     integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
+     type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
+     type(xbelem), allocatable:: Elem(:)           ! Element information.
+     integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
+     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+     logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
+     character(len=25)        :: OutFile           ! Output file.
+
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  !!! sm: moved in opt_main Read input data.
@@ -375,20 +392,21 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  if (allocated(Elem) .eqv. .false.) then
     allocate (Elem(NumElems)) ! sm: initial orientation stored here
  end if
- call input_elem (NumElems,NumNodes,Elem)
+ call input_elem_span (NumElems,NumNodes,Elem, BeamSpanMass, BeamSpanStiffness)
 
  ! conditional allocation
  !!call array2_cond_alloc(     PosIni, NumNodes, 3, .true.)
  call array2_cond_alloc(ForceStatic, NumNodes, 6, .true.)
- call array1_cond_alloc(   PhiNodes, NumNodes   , .true.)
+ !call array1_cond_alloc(   PhiNodes, NumNodes   , .true.)
  if ( allocated(BoundConds) .eqv. .false. ) then
     allocate(BoundConds (NumNodes));   BoundConds = 0
  end if
 
- call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic,PhiNodes)
+ call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic)
  ! sm: in input_xxx.f90
  !    input_node (NumNodes,Elem,BoundConds,Coords,     Forces,PhiNodes)
  !    input_node (      in,  in,       out,   out,        out,     out)
+
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Open main output file and select grid points where output will be written.
@@ -433,6 +451,7 @@ end subroutine fwd_static_input
  real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
  real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
  real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+ real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
  ! Interface
  integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
@@ -442,7 +461,7 @@ end subroutine fwd_static_input
  type(xbnode), allocatable:: Node(:)           ! Nodal information.
  integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
  character(len=25)        :: OutFile           ! Output file.
- real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -508,6 +527,7 @@ end subroutine fwd_static_presolver
  real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
  real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
  real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+ real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
  integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
  integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
@@ -518,7 +538,7 @@ end subroutine fwd_static_presolver
  real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
  logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
  character(len=25)        :: OutFile           ! Output file.
- real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
 
  ! Internal Variables
  real(8),      allocatable:: ForcedVel(:,:)  ! Forced velocities at the support.
@@ -576,6 +596,7 @@ end subroutine fwd_static_solver
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
      real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
      real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+     real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
      real(8):: t0,dt                               ! Initial time and time step.
      integer:: i,j                                 ! Counter.
@@ -591,7 +612,7 @@ end subroutine fwd_static_solver
      real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
      real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
      real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
-     real(8),      allocatable::  PhiNodes (:)      ! Initial twist at grid points.
+
      logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
      character(len=25)        :: OutFile           ! Output file.
      real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.

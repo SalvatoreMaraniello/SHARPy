@@ -21,6 +21,14 @@
 !     - out: is returned from the function
 ! b. Memory usage:
 !     - variables for the forward problem are allocated in the fwd_main module.
+! c. - Design Variables from the original code are updated in the input module
+!    using the update_shared_input routine.
+!    - Design Variables/Input added for the optimisation are passed as dummy
+!    arguments to the forward solver/presolver
+!       - BeamSpanStiffness: element by element stiffness matrix
+!       - BeamSpanMass: element by element mass matrix
+!       - PhiNodes: node by node twist array. This has the same meaning as
+!         PhiNodes.
 !
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -63,10 +71,9 @@ contains
 subroutine opt_main( NumElems, NumNodes,                            & ! Problem SetUp
                    & IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds,    & ! Problem Setup Shared
                    & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
-                   & IN_BeamStiffness, IN_BeamMass,                          &
+                   & BeamSpanStiffness, BeamSpanMass,                        & ! Properties along the span
+                   & PhiNodes,                                          & ! Twist angle along the span
                    & IN_ExtForce, IN_ExtMomnt,                               &
-                   & IN_SectWidth, IN_SectHeight,                            &
-                   & IN_ThetaRoot, IN_ThetaTip,                              &
                    & IN_TipMass, IN_TipMassY, IN_TipMassZ,                   &
                    & IN_Omega,                                               &
                    & FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
@@ -76,6 +83,16 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
                    & PosDef, PsiDef, InternalForces,   & ! Output Static
                    & DensityVector, LengthVector       ) ! Design output
 
+
+! ---------------------------------------------------------------- Removed Input
+! these variables have been removed from the input interface as they are managed
+! in the python wrapper. They are set to zero and passed to the fwd solver to
+! allow consistency with old code.
+   real(8)  :: IN_ThetaRoot=0.0_8
+   real(8)  :: IN_ThetaTip=0.0_8
+   real(8)  :: IN_BeamStiffness(6,6)=0.0_8
+   real(8)  :: IN_BeamMass(6,6)=0.0_8
+   real(8)  :: IN_SectWidth=0.0_8,IN_SectHeight=0.0_8
 
 ! ---------------------------------------------------------------------- Options
         type(xbopts)                      :: Options ! not dummy
@@ -96,13 +113,8 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
 ! ------------------------------------------------------ Design Variables Shared
 ! These are normally inported from the input module through input_setup.
    real(8), intent(inout)  :: IN_BeamLength1, IN_BeamLength2
-   real(8), intent(inout)  :: IN_BeamStiffness(6,6)
-   real(8), intent(inout)  :: IN_BeamMass(6,6)
    real(8), intent(inout)  :: IN_ExtForce(3)
    real(8), intent(inout)  :: IN_ExtMomnt(3)
-   real(8), intent(inout)  :: IN_SectWidth,IN_SectHeight
-   real(8), intent(inout)  :: IN_ThetaRoot
-   real(8), intent(inout)  :: IN_ThetaTip
    real(8), intent(inout)  :: IN_TipMass
    real(8), intent(inout)  :: IN_TipMassY
    real(8), intent(inout)  :: IN_TipMassZ
@@ -114,8 +126,9 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
 ! wrapper have the same size as those allocated inside the fortran code.
    integer, intent(inout) :: NumElems          ! Number of elements
    integer, intent(inout) :: NumNodes          ! Number of nodes in the model.
-
-
+   real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
+   real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
+   real(8)                :: PhiNodes(NumNodes)              ! Initial Twist angle (opt). This variable overwrites PhiNodes in the input setup
 
 ! --------------------------------------------------------- Problem Setup Shared
 ! These variables appear as shared in the input module.
@@ -151,7 +164,7 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
  real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
  real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
  real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
- real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
 
  logical,      allocatable:: OutGrids(:)       ! Grid nodes where output is written.
  character(len=25)        :: OutFile           ! Output file.
@@ -317,13 +330,13 @@ print *, IN_BConds
 
  call update_shared_setting(IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds)
 
- call update_shared_input( IN_BeamLength1, IN_BeamLength2,  &
+ call update_shared_input( IN_BeamLength1, IN_BeamLength2,       &
                        & IN_BeamStiffness, IN_BeamMass,          &
                        & IN_ExtForce, IN_ExtMomnt,               &
                        & IN_SectWidth, IN_SectHeight,            &
                        & IN_ThetaRoot, IN_ThetaTip,              &
                        & IN_TipMass, IN_TipMassY, IN_TipMassZ,   &
-                       & IN_Omega                                 )
+                       & IN_Omega                                )
 
  !call input_setup_wrap( NumElems,  OutFile, Options )
 
@@ -339,11 +352,6 @@ print *, IN_BConds
      ! note: cost_utl_build_connectivity is in the opt_cost_utl module.
      call cost_utl_build_connectivity(FLAG_CONSTR,CONN_CONSTR)
      call cost_utl_build_connectivity(FLAG_DESIGN_SHARED,CONN_XSH)
-     !!! for testing...
-     !print *, 'FLAG_COST:', FLAG_COST
-     !print *, 'FLAG_CONSTR:', FLAG_CONSTR
-     !print *, 'Constr. Connectivity: ', CONN_CONSTR
-     !print *, 'Constr. XSH: ', CONN_XSH
 
      if (solmode == 'SNS') then        ! this is only needed for the allocation
         NOPTMAX=0
@@ -355,14 +363,13 @@ print *, IN_BConds
  end if
 
 
-!NOPT=0 ! NOPT=0 is assumed inside opt_setup to allocate XSH
-!do while (NOPT<=NOPTMAX)
 do NOPT=0,NOPTMAX
 
     call fwd_problem_prealloc( NumElems,OutFile,Options,    &   ! from input_setup
-                 &                        Elem,    &   ! from opt_main_xxx
-                 &                    NumNodes,    &   ! from input_elem
-                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                 &                        Elem,     &  ! from opt_main_xxx
+                 &                    NumNodes,     &  ! from input_elem
+                 &  BeamSpanMass, BeamSpanStiffness,&  ! Input added for the optimisation
+                 &  BoundConds,PosIni,ForceStatic,PhiNodes, &   ! from input_node
                  &                    OutGrids,    &   ! from pt_main_xxx
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
@@ -378,17 +385,15 @@ do NOPT=0,NOPTMAX
      call output_elems (11,Elem,PosDef,PsiDef)
      close (11)
 
-
     ! Compute Design Output
     DensityVector   = Elem(:)%Mass(1,1)
     LengthVector    = Elem(:)%Length
-
 
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Loop control
      select case (solmode)
 
-        case default ! ('FWD')
+        case default !('FWD')
             print *, 'Forward Problem Completed!'
             exit
 
@@ -401,8 +406,6 @@ do NOPT=0,NOPTMAX
             CONSTR(:,NOPT) = cost_constraints( W_CONSTR, CONN_CONSTR, &
                                             & PosIni,PosDef,         &
                                             & Elem(:)%Mass(1,1),Elem(:)%Length )
-            !PRINT *, 'COST',    COST
-            !PRINT *, 'CONSTR:', CONSTR
 
             ! ----------------------------------------- Sensitivity analysis ---
             print *, 'Sensitivity Analysis started. NOPT=', NOPT
@@ -412,6 +415,7 @@ do NOPT=0,NOPTMAX
                     call fd_main_prealloc( NumElems,OutFile,Options,           &
                                 & Elem,                                        &
                                 & NumNodes,                                    &
+                                & BeamSpanMass, BeamSpanStiffness, &   ! Input added for the optimisation
                                 & BoundConds,PosIni,ForceStatic,PhiNodes,      &
                                 & OutGrids,                                    &
                                 & PsiIni,                                      &
@@ -431,12 +435,9 @@ do NOPT=0,NOPTMAX
 
             end select
 
-
             ! ---------------------------------------------------- Save Etc. ---
             !
             ! -> To be Developed
-
-
 
             ! ------------------------------- Terminate sensitivity Analysis ---
             if (solmode == 'SNS') then
@@ -450,13 +451,11 @@ do NOPT=0,NOPTMAX
 
      end select
 
-
     ! ------------------------------------------------ Set next Design Point ---
     if (NOPT < NOPTMAX) then
 
         call simple_driver(XSH,COST,CONSTR,DCDXSH,DCONDXSH,NOPT,CONN_XSH,CONN_CONSTR)
         PRINT *, 'UPDATE DESIGN for optimisation loop No.', NOPT
-
 
         ! this line shows that the update works correctly and the input change
         ! at each optimisation step
@@ -468,29 +467,6 @@ do NOPT=0,NOPTMAX
 end do
 
 call toc
-
- !print *, 'Optimisation Terminated: '
- !print '(A15,$)', 'cost: '
- !print '(F10.6,$)', COST
- !print *, ' '
-
- !print '(A15,$)', 'constraints: '
- !print '(F10.6,$)', CONSTR
- !print *, ' '
-
- !print '(A15,$)', 'cost grad.: '
- !print '(F10.6,$)', DCDXSH
- !print *, ' '
-
- !print '(A15,$)', 'constr. grad.: '
- !print '(F10.6,$)', DCONDXSH
- !print *, ' '
-
- !!! assign pointers to allow python interface
- !pCOST => COST
- !print *, pCOST
- !print *, COST
-
 
  ! IMPORTANT: this gives error if the routine is called more then once from the
  ! python wrapper

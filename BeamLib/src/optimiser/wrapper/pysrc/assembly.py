@@ -1,5 +1,5 @@
 '''
-# Salvatore Maraniello 8 Aug 2014
+Salvatore Maraniello 8 Aug 2014
 
 OpenMDAO assembly for Beam solver
 
@@ -26,8 +26,7 @@ class MonoliticModel(Assembly):
         
         # Create Optimiser instance:
         self.add('driver', SLSQPdriver())
-        #self.add('driver', CONMINdriver())
-        #self.add('driver', NEWSUMTdriver())
+
         
         # Gradient Calculation:
         #self.driver.differentiator = FiniteDifference()  

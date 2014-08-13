@@ -71,13 +71,9 @@ class XBeamSolver(Component):
     '''Design'''
     BeamLength1 = Float( 0.0, iotype='in', desc='')
     BeamLength2 = Float( 0.0, iotype='in', desc='')
-    ThetaRoot   = Float( 0.0, iotype='in', desc='')
-    ThetaTip    = Float( 0.0, iotype='in', desc='')
     TipMass     = Float( 0.0, iotype='in', desc='')
     TipMassY    = Float( 0.0, iotype='in', desc='')
     TipMassZ    = Float( 0.0, iotype='in', desc='')
-    SectWidth   = Float( 0.0, iotype='in', desc='')
-    SectHeight  = Float( 0.0, iotype='in', desc='')
     Omega       = Float( 0.0, iotype='in', desc='') 
  
 
@@ -101,9 +97,8 @@ class XBeamSolver(Component):
         # Applied external forces at the Tip
         self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
         self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')    
-        self.BeamStiffness = np.zeros((6,6), dtype=float, order='F')
-        self.BeamMass      = np.zeros((6,6), dtype=float, order='F')
-   
+        self.BeamSpanStiffness = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )
+        self.BeamSpanMass      = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )  
     
 
     def pre_solve(self):
@@ -111,6 +106,13 @@ class XBeamSolver(Component):
         # ------------------------------------------------------- Determine Arrays Size
         self.NumNodes = beamvar.total_nodes(self.NumElems,self.NumNodesElem)
         self._NumNodes_copy = self.NumNodes  
+                       
+        self.PhiNodes = np.zeros( (self.NumNodes), dtype=float, order='F' )     
+        ThetaRoot=0.0
+        ThetaTip=np.pi/6.0
+        for ii in np.arange(self.NumNodes):
+            self.PhiNodes[ii]=ThetaRoot+(ThetaTip-ThetaRoot)*(float(ii)/(self.NumNodes-1))
+        print self.PhiNodes
         
         # set value for node displacement monitoring
         if self.NNode==-1:
@@ -131,10 +133,10 @@ class XBeamSolver(Component):
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
                      ct.byref(self.ct_NumNodesElem), self.ct_ElemType, self.ct_TestCase, self.ct_BConds,
                      ct.byref(self.ct_BeamLength1), ct.byref(self.ct_BeamLength2),
-                     self.BeamStiffness.ctypes.data_as(ct.c_void_p), self.BeamMass.ctypes.data_as(ct.c_void_p),
+                     self.BeamSpanStiffness.ctypes.data_as(ct.c_void_p),        # Properties along the span
+                     self.BeamSpanMass.ctypes.data_as(ct.c_void_p),                       
+                     self.PhiNodes.ctypes.data_as(ct.c_void_p),                 # PreTwist angle along the span
                      self.ExtForce.ctypes.data_as(ct.c_void_p), self.ExtMomnt.ctypes.data_as(ct.c_void_p),
-                     ct.byref(self.ct_SectWidth), ct.byref(self.ct_SectHeight),
-                     ct.byref(self.ct_ThetaRoot), ct.byref(self.ct_ThetaTip),
                      ct.byref(self.ct_TipMass), ct.byref(self.ct_TipMassY), ct.byref(self.ct_TipMassZ),
                      ct.byref(self.ct_Omega),
                      ct.byref(self.ct_FollowerForce), ct.byref(self.ct_FollowerForceRig), ct.byref(self.ct_PrintInfo),   
@@ -147,11 +149,9 @@ class XBeamSolver(Component):
         # output checks
         self.check()
         
-        
         # compute cost
         cost.f_total_mass( self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumElems), ct.byref(self.ct_TotalMass) )
         cost.f_node_disp( self.PosIni.ctypes.data_as(ct.c_void_p), self.PosDef.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumNodes), ct.byref(self.ct_NodeDisp), ct.byref(self.ct_NNode) )
-        
         
         # update values
         self.update_variables()
@@ -172,13 +172,9 @@ class XBeamSolver(Component):
         
         self.ct_BeamLength1 = ct.c_double( self.BeamLength1 )
         self.ct_BeamLength2 = ct.c_double( self.BeamLength2 )
-        self.ct_ThetaRoot   = ct.c_double( self.ThetaRoot   )
-        self.ct_ThetaTip    = ct.c_double( self.ThetaTip    )
         self.ct_TipMass     = ct.c_double( self.TipMass     )
         self.ct_TipMassY    = ct.c_double( self.TipMassY    )
         self.ct_TipMassZ    = ct.c_double( self.TipMassZ    )
-        self.ct_SectWidth   = ct.c_double( self.SectWidth   )
-        self.ct_SectHeight  = ct.c_double( self.SectHeight  )
         self.ct_Omega       = ct.c_double( self.Omega       )
         
         # ------------------------------------------------------------- Prepare Options
@@ -226,13 +222,9 @@ class XBeamSolver(Component):
         # update shared design
         self.BeamLength1 = self.ct_BeamLength1.value 
         self.BeamLength2 = self.ct_BeamLength2.value
-        self.ThetaRoot = self.ct_ThetaRoot.value  
-        self.ThetaTip  = self.ct_ThetaTip.value
         self.TipMass = self.ct_TipMass.value
         self.TipMassY = self.ct_TipMassY.value
         self.TipMassZ = self.ct_TipMassZ.value
-        self.SectWidth = self.ct_SectWidth.value
-        self.SectHeight = self.ct_SectHeight.value
         self.Omega = self.ct_Omega.value
         
         #---------------------------------------------------------- Update Cost
@@ -285,19 +277,27 @@ if __name__=='__main__':
 
     # reminder:
     # pay attention here not to reallocate (order='F' to be kept)
-    xbsolver.BeamMass[0,0] = 100.e0        # m [kg/m]
-    xbsolver.BeamMass[1,1] = xbsolver.BeamMass[0,0]
-    xbsolver.BeamMass[2,2] = xbsolver.BeamMass[0,0]
-    xbsolver.BeamMass[3,3] = 10.e0         # J [kgm]
-    xbsolver.BeamMass[4,4] = 10.e0
-    xbsolver.BeamMass[5,5] = 10.e0     
+    BeamMass=np.zeros((6,6))
+    BeamStiffness=np.zeros((6,6))
+    BeamMass[0,0] = 100.e0        # m [kg/m]
+    BeamMass[1,1] = BeamMass[0,0]
+    BeamMass[2,2] = BeamMass[0,0]
+    BeamMass[3,3] = 10.e0         # J [kgm]
+    BeamMass[4,4] = 10.e0
+    BeamMass[5,5] = 10.e0     
+    
+    BeamStiffness=np.zeros((6,6))
+    BeamStiffness[0,0] = 4.8e8   # EA [Nm]
+    BeamStiffness[1,1] = 0.5*3.231e8 # GA
+    BeamStiffness[2,2] = 3.231e8
+    BeamStiffness[3,3] = 1.e6    # GJ
+    BeamStiffness[4,4] = 0.5*9.346e6 # EI
+    BeamStiffness[5,5] = 9.346e6
 
-    xbsolver.BeamStiffness[0,0] = 4.8e8   # EA [Nm]
-    xbsolver.BeamStiffness[1,1] = 3.231e8 # GA
-    xbsolver.BeamStiffness[2,2] = 3.231e8
-    xbsolver.BeamStiffness[3,3] = 1.e6    # GJ
-    xbsolver.BeamStiffness[4,4] = 9.346e6 # EI
-    xbsolver.BeamStiffness[5,5] = 9.346e6
+    for ii in range(xbsolver.NumElems):
+        xbsolver.BeamSpanStiffness[ii,:,:] = BeamStiffness
+        xbsolver.BeamSpanMass[ii,:,:]      = BeamMass
+    #xbsolver.BeamSpanStiffness[9,:,:] = 1./10.*BeamStiffness
 
     xbsolver.ExtForce[2]=600.e3
 

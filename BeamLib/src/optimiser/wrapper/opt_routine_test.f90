@@ -18,8 +18,6 @@ program opt_routine_test
 
 
 ! ------------------------------------------------------------- Define Variables
-
-    real(8) :: W_COST(2)    ! <--- example of known size array, 2 is NCOSTFUNS into opt_shared
     !real(8), pointer, dimension(:) :: pCOST
 
 ! Design Variables:
@@ -42,6 +40,10 @@ program opt_routine_test
 ! Problem Setup:
     integer :: NumElems     ! Number of elements
     integer :: NumNodes     ! Number of nodes in the model.
+    real(8), allocatable :: BeamSpanStiffness(:,:,:) ! Local Stiffness Matrix (opt)
+    real(8), allocatable :: BeamSpanMass(:,:,:)      ! Local Mass Matrix (opt)
+    real(8), allocatable :: PhiNodes(:)         ! Local Twist angle (opt)
+
 
  ! Problem Setup Shared:
     integer           :: NumNodesElem   ! Number of nodes on each element.
@@ -62,6 +64,11 @@ program opt_routine_test
     real(8),      allocatable :: DensityVector (:)  ! Density of each element of the beam. To be used for cost evaluation.
     real(8),      allocatable :: LengthVector  (:)  ! Length of each element of the beam. To be used for cost evaluation.
 
+
+
+ ! utilities
+   integer :: ii ! counter
+
  ! --------------------------------------------------------------- Define Input:
 
 ! Options and Problem Setup
@@ -70,14 +77,14 @@ program opt_routine_test
 
     NumNodesElem = 3
     ElemType='DISP'
-    TestCase='NCB1'
+    TestCase='PTW1'
     BConds='CF'
 
  ! Design
     BeamLength1 = 5.0d0
     BeamLength2 = 0.0d0
     ThetaRoot   = 0.d0
-    ThetaTip    = 0.d0
+    ThetaTip    = pi/6.d0
     ExtForce=(/ 0.d0, 0.d0, 600.d3 /)
     ExtMomnt=(/ 0.d0, 0.d0,   0.d0 /)
 
@@ -90,10 +97,10 @@ program opt_routine_test
 
     BeamStiffness=0.0_8
     BeamStiffness(1,1)= 4.8d8   ! EA [Nm]
-    BeamStiffness(2,2)= 3.231d8 ! GA
+    BeamStiffness(2,2)= 3.231d8 *0.5 ! GA
     BeamStiffness(3,3)= 3.231d8
     BeamStiffness(4,4)= 1.d6    ! GJ
-    BeamStiffness(5,5)= 9.346d6 ! EI
+    BeamStiffness(5,5)= 9.346d6 *0.5! EI
     BeamStiffness(6,6)= 9.346d6
 
     BeamMass=0.0_8
@@ -105,6 +112,16 @@ program opt_routine_test
     BeamMass(6,6)=10.d0
 
 
+ ! Build Beam structure
+ allocate( BeamSpanStiffness(NumElems,6,6) )
+ allocate( BeamSpanMass(NumElems,6,6) )
+
+
+ do ii = 1,NumElems
+    BeamSpanStiffness(ii,:,:)=BeamStiffness
+    BeamSpanMass(ii,:,:)     =BeamMass
+ end do
+ !BeamSpanStiffness(10,:,:)=0.1_8 * BeamStiffness
 
  ! Determine output size:
  if ( (NumNodesElem==2) .or. (NumNodesElem==3) ) then
@@ -112,6 +129,15 @@ program opt_routine_test
  else
     stop 'NumNodesElem must be equal to 2 or 3'
  end if
+
+
+ allocate( PhiNodes(NumNodes) )
+ PhiNodes = 0.0_8
+ do ii =1,NumNodes
+    PhiNodes(ii) = ThetaRoot+(ThetaTip-ThetaRoot)*(dble(ii-1)/dble(NumNodes-1))
+ end do
+
+
 
  ! Allocate Variables independent of the solution
  allocate( DensityVector (NumElems) )
@@ -135,10 +161,9 @@ select case (Solution)
         call opt_main( NumElems, NumNodes,               &
                      & NumNodesElem , ElemType, TestCase, BConds,    & ! Problem Setup Shared
                      & BeamLength1, BeamLength2,         & ! design variables
-                     & BeamStiffness, BeamMass,          &
+                     & BeamSpanStiffness, BeamSpanMass,  & ! Span Properties
+                     & PhiNodes,                    &
                      & ExtForce, ExtMomnt,               &
-                     & SectWidth, SectHeight,            &
-                     & ThetaRoot, ThetaTip,              &
                      & TipMass, TipMassY, TipMassZ,      &
                      & Omega,                            &
                      & .false.,.true.,.false.,           & ! Options
@@ -163,9 +188,6 @@ select case (Solution)
 
     ! Correct
     print *, 'Max. Tip Displ. ', cost_node_disp(PosIni,PosDef,NumNodes)
-
-
-    ! NCB1 options
 
 
 end program opt_routine_test

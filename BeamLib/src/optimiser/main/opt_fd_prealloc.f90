@@ -49,6 +49,7 @@ module opt_fd_prealloc
     subroutine fd_main_prealloc( NumElems,OutFile,Options,           &
                       & Elem,                                        &
                       & NumNodes,                                    &
+                      & BeamSpanMass, BeamSpanStiffness,             &   ! Input added for the optimisation. NOT USED IN THIS MODULE
                       & BoundConds,PosIni,ForceStatic,PhiNodes,      &
                       & OutGrids,                                    &
                       & PsiIni,                                      &
@@ -58,12 +59,17 @@ module opt_fd_prealloc
                       & ForceDynAmp,ForceTime,                       &
                       & ForcedVel,ForcedVelDot,                      &
                       & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, &
-                      & RefVel, RefVelDot, Quat,                      &
+                      & RefVel, RefVelDot, Quat,                     &
                       & NOPT, fdmode, COST, CONSTR,  &  ! cost and constraint at current design point!
                       & FLAG_COST, W_COST, W_CONSTR, &  ! flags and weights
                       & CONN_CONSTR, CONN_XSH,       &  ! connectivity matrices
                       & DCDXSH, DCONDXSH,            &  ! gradients   ! storage for gradients
                       & Nnode                        )  ! optional argument for cost_node_disp
+
+ ! Input added for the optimisaiton - NOT USED IN THIS MODULE
+     real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
+     real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
+     real(8)                :: BeamSpanTwist(NumNodes)         ! Local Twist angle (opt)
 
    ! The following variables are allocatable in opt_fd
      real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
@@ -71,6 +77,7 @@ module opt_fd_prealloc
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
      real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
      real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
+     real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
      real(8):: t0,dt                               ! Initial time and time step.
      integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
@@ -85,7 +92,7 @@ module opt_fd_prealloc
      real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
      real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
      real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
-     real(8),      allocatable:: PhiNodes (:)      ! Initial twist at grid points.
+
      character(len=25)        :: OutFile           ! Output file.
 
      real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
@@ -156,7 +163,8 @@ module opt_fd_prealloc
             call fwd_problem_prealloc(NumElems,OutFile,Options,    &    ! from input_setup
                  &                        Elem,           &   ! from opt_main_xxx
                  &                    NumNodes,           &   ! from input_elem
-                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                 & BeamSpanMass, BeamSpanStiffness,&   ! Input added for the optimisation
+                 & BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
                  &                    OutGrids,    &   ! from pt_main_xxx
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
