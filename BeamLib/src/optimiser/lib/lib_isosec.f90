@@ -49,10 +49,10 @@ contains
                 G  = E/( 2.0_8 * (1.0_8+mu) )
                 rho = 2700.0_8
 
-            case default
-                E  = 70.d9
-                mu = 0.33_8
-                G  = E/( 2.0_8 * (1.0_8+mu) )
+            case default ! as per BEND test case
+                E  = 1.0d7
+                G  = 1.0d5
+                rho= 1.0_8
 
         end select
 
@@ -482,7 +482,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------ Test isohollowcirc'
 
-        material='allum'
+        material='bend'!'allum'
 
         r=0.2_8
         t= r;
@@ -517,7 +517,7 @@ module lib_isosec_test
         N=size(A(:,1))
 
         do ii=1,N
-             print '(F14.1)', A(ii,ii)
+             print '(F16.4)', A(ii,ii)
         end do
 
     end subroutine print_diagonal

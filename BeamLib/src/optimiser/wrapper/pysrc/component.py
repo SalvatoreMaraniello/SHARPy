@@ -26,6 +26,7 @@ from openmdao.main.api import Component, ComponentWithDerivatives
 from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
+import design.beamelem, design.beamnodes
 import beamvar
 import cost
         
@@ -69,13 +70,43 @@ class XBeamSolver(Component):
 
 
     '''Design'''
+    # general
     BeamLength1 = Float( 0.0, iotype='in', desc='')
     BeamLength2 = Float( 0.0, iotype='in', desc='')
     TipMass     = Float( 0.0, iotype='in', desc='')
     TipMassY    = Float( 0.0, iotype='in', desc='')
     TipMassZ    = Float( 0.0, iotype='in', desc='')
     Omega       = Float( 0.0, iotype='in', desc='') 
+
+    # beam span reconstruction
+    beam_shape = Enum('constant',('constant','spline'),iotype='in')
  
+    # isotropic material cross-sectional models(see design.isosec)
+    cross_section_type = Enum(('isorect','isoellip','isocirc',
+                    'isohollowrect','isohollowellip','isohollowcirc'),
+                    iotype='in')   
+    
+    # parameters for constant beam span reconstruction 
+    cs_l2   = Float(iotype='in',desc='size along the x2 axis - (see design.isosec)')
+    cs_l3   = Float(iotype='in',desc='size along the x3 axis - (see design.isosec)')
+    cs_t2   = Float(iotype='in',desc='thickness along the x2 axis - (see design.isosec)')
+    cs_t3   = Float(iotype='in',desc='thickness along the x2 axis - (see design.isosec)')
+    cs_r    = Float(iotype='in',desc='radius for circular cross-sections - (see design.isosec)')
+    cs_t    = Float(iotype='in',desc='thickness for circular cross-sections - (see design.isosec)')
+    cs_pretwist = Float(0.0,iotype='in',desc='beam pretwist')
+    
+    # parameters for spline reconstruction
+    ControlElems = Array(iotype='in',dtype=np.int,desc="Control sections for beam shape deformation")
+    SplineOrder = Int(3,iotype='in',desc='spline order (as per scipy.interpolate.interpolate.spline)')
+    CS_l2   = Array(iotype='in',dtype=np.float,desc='size along the x2 axis at control sections - (see design.isosec)')
+    CS_l3   = Array(iotype='in',dtype=np.float,desc='size along the x3 axis at control sections  - (see design.isosec)')
+    CS_t2   = Array(iotype='in',dtype=np.float,desc='thickness along the x2 axis at control sections  - (see design.isosec)')
+    CS_t3   = Array(iotype='in',dtype=np.float,desc='thickness along the x2 axis at control sections  - (see design.isosec)')
+    CS_r    = Array(iotype='in',dtype=np.float,desc='radius for circular cross-sections at control sections  - (see design.isosec)')
+    CS_t    = Array(iotype='in',dtype=np.float,desc='thickness for circular cross-sections at control sections  - (see design.isosec)')
+    
+    ControlNodes = Array(iotype='in',dtype=np.int,desc="Control nodes for beam shape deformation") 
+    CS_pretwist = Array(iotype='in',dtype=np.float,desc='beam pre-twist at nodes')
 
     ''' Cost '''
     TotalMass =  Float( 0.0, iotype='out', desc='Total structural mass')
@@ -103,17 +134,29 @@ class XBeamSolver(Component):
 
     def pre_solve(self):
         
-        # ------------------------------------------------------- Determine Arrays Size
+        # ------------------------------------------------ Determine Arrays Size
         self.NumNodes = beamvar.total_nodes(self.NumElems,self.NumNodesElem)
         self._NumNodes_copy = self.NumNodes  
                        
-        self.PhiNodes = np.zeros( (self.NumNodes), dtype=float, order='F' )     
-        ThetaRoot=0.0
-        ThetaTip=np.pi/6.0
-        for ii in np.arange(self.NumNodes):
-            self.PhiNodes[ii]=ThetaRoot+(ThetaTip-ThetaRoot)*(float(ii)/(self.NumNodes-1))
-        print self.PhiNodes
+
+        #-------------------------------------------------------- Construct Beam   
+        if self.beam_shape=='constant':
+            # set elements
+            argslist = self.set_cross_section_arguments()
+            self.BeamSpanMass, self.BeamSpanStiffness = design.beamelem.constant(self.NumElems,self.cross_section_type,argslist)
+            # set nodes
+            self.PhiNodes = design.beamnodes.constant(self.NumNodes, self.cs_pretwist)
+        elif self.beam_shape == 'spline':
+            # set elements
+            ArgsList = []
+            for cc in len(self.ControlElems):
+                argslist = self.set_cross_section_arguments(ElementNumber=cc)       
+                ArgsList.append(list(argslist))
+            self.BeamSpanMass, self.BeamSpanStiffness = design.beamelem.spline(self.NumElems,self.cross_section_type,ArgsList,self.ControlElems,self.SplineOrder)
+            # set nodes
+            self.PhiNodes = design.beamnodes.spline(self.NumNodes, self.CS_pretwist, self.ControlNodes, self.SplineOrder)      
         
+        #------------------------------------- Define Cost/Constrains parameters
         # set value for node displacement monitoring
         if self.NNode==-1:
             print 'setting NNode'
@@ -238,13 +281,49 @@ class XBeamSolver(Component):
         
     
 
-    def check(self):
-            
+    def check(self):    
         # Arrays size:
         if self.NumNodes != self._NumNodes_copy:
             raise NameError('NumNodes has been changed during the Fortran code execution!') 
 
 
+    def set_cross_section_arguments(self,**kwargs):
+        ''' 
+        Defines the list of input for the cross-section definition 
+        
+        ElementNumber: optional argument in case of spline shape beam. The
+        parameters points to the elements of the self.CS_* arrays.
+        
+        '''
+        
+        cc = kwargs.get('ElementNumber', None)
+        
+        if cc is None:
+            # get number of numerical input:
+            if self.cross_section_type == 'isocirc':
+                argslist=[self.cs_r]
+            elif self.cross_section_type == 'isohollowcirc':
+                argslist=[self.cs_r, self.cs_t]       
+            elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':
+                argslist=[self.cs_l2, self.cs_l3] 
+            elif self.cross_section_type == 'isohollowrect' or self.cross_section_type == 'isohollowellip':
+                argslist=[self.cs_l2, self.cs_l3, self.cs_t2,self.cs_t3] 
+            else:
+                raise NameError('Cross Section Type "%s" not found!' %self.cross_section_type )           
+        else:
+            # get number of numerical input:
+            if self.cross_section_type == 'isocirc':
+                argslist=[self.CS_r[cc] ]
+            elif self.cross_section_type == 'isohollowcirc':
+                argslist=[self.CS_r[cc], self.CS_t[cc] ]       
+            elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':
+                argslist=[self.CS_l2[cc], self.CS_l3[cc]] 
+            elif self.cross_section_type == 'isohollowrect' or self.cross_section_type == 'isohollowellip':
+                argslist=[self.CS_l2[cc], self.CS_l3[cc], self.CS_t2[cc],self.CS_t3[cc]] 
+            else:
+                raise NameError('Cross Section Type "%s" not found!' %self.cross_section_type )              
+        
+        return argslist
 
 
 #------------------------------------------------------------------------------ 
@@ -275,29 +354,7 @@ if __name__=='__main__':
     # cost
     xbsolver.NNode = -1 # tip displacement
 
-    # reminder:
-    # pay attention here not to reallocate (order='F' to be kept)
-    BeamMass=np.zeros((6,6))
-    BeamStiffness=np.zeros((6,6))
-    BeamMass[0,0] = 100.e0        # m [kg/m]
-    BeamMass[1,1] = BeamMass[0,0]
-    BeamMass[2,2] = BeamMass[0,0]
-    BeamMass[3,3] = 10.e0         # J [kgm]
-    BeamMass[4,4] = 10.e0
-    BeamMass[5,5] = 10.e0     
-    
-    BeamStiffness=np.zeros((6,6))
-    BeamStiffness[0,0] = 4.8e8   # EA [Nm]
-    BeamStiffness[1,1] = 0.5*3.231e8 # GA
-    BeamStiffness[2,2] = 3.231e8
-    BeamStiffness[3,3] = 1.e6    # GJ
-    BeamStiffness[4,4] = 0.5*9.346e6 # EI
-    BeamStiffness[5,5] = 9.346e6
 
-    for ii in range(xbsolver.NumElems):
-        xbsolver.BeamSpanStiffness[ii,:,:] = BeamStiffness
-        xbsolver.BeamSpanMass[ii,:,:]      = BeamMass
-    #xbsolver.BeamSpanStiffness[9,:,:] = 1./10.*BeamStiffness
 
     xbsolver.ExtForce[2]=600.e3
 

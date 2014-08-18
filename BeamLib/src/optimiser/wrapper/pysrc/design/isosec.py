@@ -2,7 +2,7 @@
 
 Salvatore Maraniello. 12/Aug/2014
 
-Module to compute stiffness and mass matrices of isentropic beam cross sections.
+Module to compute stiffness and mass matrices of isotropic beam cross sections.
 
 The module wraps the functions contained into lib_isosec.f90 to allow design
 definition outside the Fortran environment.
@@ -12,15 +12,17 @@ contained in the methods below).
 
 The list of subroutine implemented is:
 
- - getprop: returns properties of material (only alluminium implemented)
+ - getprop: returns properties of material
+      - alluminium
+      - default  (E  = 1.0d7, G  = 1.0d5, rho= 1.0_8)
  - rect: returns mass and stiffness matrices of a beam element with full
    rectangular cross-section.
  - hollowrect:returns mass and stiffness matrices of a beam element with
    hollow rectangular cross-section.
- - ellip: full isentropic elliptical cross-section
- - hollowellip: isentropic hollow elliptical cross-section
- - circ: full isentropic circular cross-section
- - hollowcirc: isentropic hollow circular cross-section
+ - ellip: full isotropic elliptical cross-section
+ - hollowellip: isotropic hollow elliptical cross-section
+ - circ: full isotropic circular cross-section
+ - hollowcirc: isotropic hollow circular cross-section
 
 # where the wrapped functions are:
 getprop     = xb.__lib_isosec_MOD_getprop
@@ -34,6 +36,12 @@ rect        = xb.__lib_isosec_MOD_isorect
 
 ->Reference:
  - http://en.wikipedia.org/wiki/List_of_area_moments_of_inertia
+ 
+             !!! Important: For future development   !!! 
+             !!! ensure the numerical input that     !!!
+             !!! can serve for design are always the !!!
+             !!! first ones to be passed - see also  !!!
+             !!! defbeam.py                          !!!
 
 '''
 
