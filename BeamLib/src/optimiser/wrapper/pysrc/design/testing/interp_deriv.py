@@ -48,7 +48,6 @@ def get_derivative(xc,yc,y,NC):
     return dy  
 
 
-
 #----------------------------------------------------------------------- execute
 NC, ord = 4, 3
 xref = np.linspace(0.,1.,100)           # equally spaced

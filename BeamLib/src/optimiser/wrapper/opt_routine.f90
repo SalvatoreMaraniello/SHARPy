@@ -380,10 +380,13 @@ do NOPT=0,NOPTMAX
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
                  & RefVel, RefVelDot, Quat)
 
+     ! sm 21 aug 2014
+     ! all saving moved into python
+     !
      ! Store results in text file.
-     open (unit=11,file=OutFile(1:17)//'_def.txt',status='replace')
-     call output_elems (11,Elem,PosDef,PsiDef)
-     close (11)
+     !open (unit=11,file=OutFile(1:17)//'_def.txt',status='replace')
+     !call output_elems (11,Elem,PosDef,PsiDef)
+     !close (11)
 
     ! Compute Design Output
     DensityVector   = Elem(:)%Mass(1,1)

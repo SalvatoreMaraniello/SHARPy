@@ -254,5 +254,10 @@ if __name__ == '__main__':
     print 'Stiffness Diagonal', np.diag(K)
 
 
+    print 'Matching NCB1 test case:'
+    M,K = rect(l2,l3,'lala')
+    print 'Mass Diagonal', np.diag(M)
+    print 'Stiffness Diagonal', np.diag(K)    
+
 
 

@@ -29,7 +29,7 @@ sys.path.append(optimiser_abspath+'/wrapper/pysrc')
 
 ''' 
 OpenMDAO libraries... 
-                                                   THIS MAY REQUIRE MANUAL CHANGE
+                                              THIS MAY REQUIRE MANUAL CHANGES
 '''
 sys.path.append(openmdao_abspath+'/local/lib/python2.7/site-packages/setuptools-0.9.5-py2.7.egg') 
 sys.path.append(openmdao_abspath+'/local/lib/python2.7/site-packages/Jinja2-2.4-py2.7.egg') 

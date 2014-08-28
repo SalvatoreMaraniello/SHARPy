@@ -19,6 +19,7 @@ Remark:
 
 '''
 
+import numpy as np
 import scipy.interpolate as scint
 import matplotlib.pylab as mp
 

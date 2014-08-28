@@ -16,7 +16,7 @@ OpenMDAO component for Beam solver
 
 '''
 
-import sys
+import sys, os
 import numpy as np
 import ctypes as ct
 
@@ -29,6 +29,8 @@ import shared
 import design.beamelem, design.beamnodes
 import beamvar
 import cost
+import lib.save
+
         
 # Load Dynamic Library
 wrapso = ct.cdll.LoadLibrary(shared.wrapso_abspath)
@@ -61,7 +63,6 @@ class XBeamSolver(Component):
    
     '''Shared Input'''
     NumElems     = Int(10, iotype='in', desc='Total number of elements')
-    
     NumNodesElem = Enum(3, (2,3), iotype='in', desc='Number of nodes per element; (2) linear, (3) quadratic.')
     ElemType     = Enum('DISP',('DISP','STRN'), iotype='in')
     BConds       = Enum('CF'  ,('CF','FF')    , iotype='in', desc='Boundary conditions, (CF) clamped-free, (FF) free-free.') 
@@ -79,13 +80,14 @@ class XBeamSolver(Component):
     Omega       = Float( 0.0, iotype='in', desc='') 
 
     # beam span reconstruction
-    beam_shape = Enum('constant',('constant','spline'),iotype='in')
+    beam_shape = Enum('constant',('constant','spline','constant_hardcoded'),iotype='in')
  
     # isotropic material cross-sectional models(see design.isosec)
+    material = Enum( 'alumA',('alumA','test'), iotype='in', desc='Material for isotropic cross ection (see design.isosec)') 
     cross_section_type = Enum(('isorect','isoellip','isocirc',
-                    'isohollowrect','isohollowellip','isohollowcirc'),
-                    iotype='in')   
-    
+                               'isohollowrect','isohollowellip','isohollowcirc'),
+                               iotype='in')
+
     # parameters for constant beam span reconstruction 
     cs_l2   = Float(iotype='in',desc='size along the x2 axis - (see design.isosec)')
     cs_l3   = Float(iotype='in',desc='size along the x3 axis - (see design.isosec)')
@@ -108,11 +110,14 @@ class XBeamSolver(Component):
     ControlNodes = Array(iotype='in',dtype=np.int,desc="Control nodes for beam shape deformation") 
     CS_pretwist = Array(iotype='in',dtype=np.float,desc='beam pre-twist at nodes')
 
-    ''' Cost '''
+    # Cost/Constrains
     TotalMass =  Float( 0.0, iotype='out', desc='Total structural mass')
-    NodeDisp  =  Float( 0.0, iotype='out', desc='Absolute value of NNode displacement')
+    NodeDisp  =  Float(  iotype='out', desc='Absolute value of NNode displacement')
+    ZDisp     =  Float(  iotype='out', desc='z displacement of NNode')
+    YDisp     =  Float(  iotype='out', desc='y displacement of NNode')
+    XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
     NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')
- 
+    
     
     def __init__(self):
         
@@ -124,13 +129,23 @@ class XBeamSolver(Component):
         ###fwd_run=xbso.__opt_routine_MOD_opt_main 
         self.fwd_run = getattr(wrapso, "__opt_routine_MOD_opt_main")       
         
-        ''' set ctypes '''
         # Applied external forces at the Tip
         self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
-        self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')    
+        self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')  
+          
         self.BeamSpanStiffness = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )
         self.BeamSpanMass      = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )  
+        
+        # for constant_hardcoded method only
+        self.Mroot = np.zeros((6,6),dtype=float,order='F')
+        self.Kroot = np.zeros((6,6),dtype=float,order='F')
     
+        # save directory
+        self._savedir = '.'
+    
+        # set counter
+        self._counter = 0
+        
 
     def pre_solve(self):
         
@@ -155,6 +170,10 @@ class XBeamSolver(Component):
             self.BeamSpanMass, self.BeamSpanStiffness = design.beamelem.spline(self.NumElems,self.cross_section_type,ArgsList,self.ControlElems,self.SplineOrder)
             # set nodes
             self.PhiNodes = design.beamnodes.spline(self.NumNodes, self.CS_pretwist, self.ControlNodes, self.SplineOrder)      
+        elif self.beam_shape == 'constant_hardcoded':
+            self.BeamSpanMass, self.BeamSpanStiffness = design.beamelem.constant_hardcoded(self.NumElems,self.Mroot,self.Kroot)
+            self.PhiNodes = design.beamnodes.constant(self.NumNodes, self.cs_pretwist)
+
         
         #------------------------------------- Define Cost/Constrains parameters
         # set value for node displacement monitoring
@@ -163,14 +182,36 @@ class XBeamSolver(Component):
             self.NNode = self.NumNodes      
 
 
+        #-------------------------------------------------------- Prepare Output
+        # General
+        self.DensityVector = np.zeros((self.NumElems),dtype=float,order='F')
+        self.LengthVector  = np.zeros((self.NumElems),dtype=float,order='F')
+        
+        # Problem dependent
+        [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems)
+
+        # prepare saving directory:
+        self._savedir=os.path.abspath(self._savedir)
+        if os.path.isdir(self._savedir) is False:
+            os.makedirs(self._savedir)
+        
+
 
     def execute(self):
         
         # set size etc.
         self.pre_solve()
-        
+
         # set ctypes for Fortran interface
         self.set_ctypes()
+        
+        #--------------------------------------------------------------- Testing
+        #print 'PhiNodes', self.PhiNodes
+        #print 'BeamMass', self.BeamSpanMass
+        #print 'BeamStiff'
+        #for ii in range(self.NumElems):
+        #    print np.diag(self.BeamSpanStiffness[ii,:,:])
+        #------------------------------------------------------------------------------ 
         
         # call xbeam solver
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
@@ -192,15 +233,28 @@ class XBeamSolver(Component):
         # output checks
         self.check()
         
-        # compute cost
+        # compute cost from Fortran functions
         cost.f_total_mass( self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumElems), ct.byref(self.ct_TotalMass) )
         cost.f_node_disp( self.PosIni.ctypes.data_as(ct.c_void_p), self.PosDef.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumNodes), ct.byref(self.ct_NodeDisp), ct.byref(self.ct_NNode) )
         
         # update values
         self.update_variables()
         
-              
+        # compute cost from Python functions
+        self.ZDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='z',NNode=self.NNode-1) # python indices starts from 0
+        self.YDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='y',NNode=self.NNode-1)
+        self.XDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='x',NNode=self.NNode-1)
         
+        # save
+        counter_string =  '%.3d' % (self._counter)
+        savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
+        lib.save.h5comp( self, savename)
+        
+        # counter: for multiple executions
+        self._counter = self._counter+1
+        
+        
+                     
     def set_ctypes(self):
         
         # --------------------------------------------------------------- Prepare input
@@ -237,17 +291,6 @@ class XBeamSolver(Component):
         self.ct_MinDelta      = ct.c_double( self.MinDelta    )      
         self.ct_NewmarkDamp   = ct.c_double( self.NewmarkDamp )
         
-        
-        #-------------------------------------------------------- Prepare Output
-        
-        # General
-        self.DensityVector = np.zeros((self.NumElems),dtype=float,order='F')
-        self.LengthVector  = np.zeros((self.NumElems),dtype=float,order='F')
-        
-        # Problem dependent
-        [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems)
-        
-        
         #---------------------------------------------------------- Prepare Cost
         self.ct_TotalMass = ct.c_double( self.TotalMass ) 
         self.ct_NodeDisp  = ct.c_double( self.NodeDisp )
@@ -274,12 +317,7 @@ class XBeamSolver(Component):
         self.TotalMass = self.ct_TotalMass.value
         self.NodeDisp = self.ct_NodeDisp.value
         self.NNode = self.ct_NNode.value
-        
-        
-    def set_arrays_order(self):
-        print 'lala'
-        
-    
+                   
 
     def check(self):    
         # Arrays size:
@@ -301,25 +339,25 @@ class XBeamSolver(Component):
         if cc is None:
             # get number of numerical input:
             if self.cross_section_type == 'isocirc':
-                argslist=[self.cs_r]
+                argslist=[self.cs_r, self.material]
             elif self.cross_section_type == 'isohollowcirc':
-                argslist=[self.cs_r, self.cs_t]       
+                argslist=[self.cs_r, self.cs_t, self.material]       
             elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':
-                argslist=[self.cs_l2, self.cs_l3] 
+                argslist=[self.cs_l2, self.cs_l3, self.material] 
             elif self.cross_section_type == 'isohollowrect' or self.cross_section_type == 'isohollowellip':
-                argslist=[self.cs_l2, self.cs_l3, self.cs_t2,self.cs_t3] 
+                argslist=[self.cs_l2, self.cs_l3, self.cs_t2,self.cs_t3, self.material] 
             else:
                 raise NameError('Cross Section Type "%s" not found!' %self.cross_section_type )           
         else:
             # get number of numerical input:
             if self.cross_section_type == 'isocirc':
-                argslist=[self.CS_r[cc] ]
+                argslist=[self.CS_r[cc], self.material ]
             elif self.cross_section_type == 'isohollowcirc':
-                argslist=[self.CS_r[cc], self.CS_t[cc] ]       
+                argslist=[self.CS_r[cc], self.CS_t[cc], self.material ]       
             elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':
-                argslist=[self.CS_l2[cc], self.CS_l3[cc]] 
+                argslist=[self.CS_l2[cc], self.CS_l3[cc], self.material ] 
             elif self.cross_section_type == 'isohollowrect' or self.cross_section_type == 'isohollowellip':
-                argslist=[self.CS_l2[cc], self.CS_l3[cc], self.CS_t2[cc],self.CS_t3[cc]] 
+                argslist=[self.CS_l2[cc], self.CS_l3[cc], self.CS_t2[cc],self.CS_t3[cc], self.material] 
             else:
                 raise NameError('Cross Section Type "%s" not found!' %self.cross_section_type )              
         
@@ -328,8 +366,14 @@ class XBeamSolver(Component):
 
 #------------------------------------------------------------------------------ 
         
+
+
+''' ------------------------------------------------------------------------ ''' 
     
 if __name__=='__main__':
+    
+    from lib.plot import sta_unif
+    import lib.save, lib.read
     
     xbsolver=XBeamSolver()
     
@@ -341,28 +385,62 @@ if __name__=='__main__':
     xbsolver.NumNodesElem = 3
     
     # Design
-    xbsolver.BeamLength1 = 5.0
-    
+    xbsolver.beam_shape = 'constant'
+    xbsolver.material ='alumA'
+    xbsolver.cross_section_type ='isorect'    
+    xbsolver.BeamLength1 = 5.0   
+    xbsolver.cs_l2 = 0.1
+    xbsolver.cs_l3 = 0.1
+
+    # Loading
+    xbsolver.ExtForce[2]=600.e3  / 1e3
+
     # Options - NCB1 case:
-    xbsolver.FollowerForce=False
+    xbsolver.FollowerForce=True
     xbsolver.PrintInfo=False              
     xbsolver.MaxIterations=99    
-    xbsolver.NumLoadSteps=10
+    xbsolver.NumLoadSteps=20
     xbsolver.Solution=112
     xbsolver.MinDelta= 1.e-5
 
-    # cost
+
+    
+    xbsolver.FollowerForceRig= True
+    xbsolver.OutInBframe = True
+    xbsolver.OutInaframe = False
+
+    
+    lib.save.h5comp(xbsolver, './component_before.h5')
+
+    ## cost
     xbsolver.NNode = -1 # tip displacement
-
-
-
-    xbsolver.ExtForce[2]=600.e3
 
     xbsolver.execute() 
     
+    print 'External force', xbsolver.ExtForce
     print 'Cost Functions:'
     print 'Total Mass', xbsolver.TotalMass, xbsolver.ct_TotalMass.value
-    print 'Node Displacement', xbsolver.NodeDisp, xbsolver.ct_NodeDisp.value 
+    print 'Node Abs Displacement', xbsolver.NodeDisp, xbsolver.ct_NodeDisp.value 
+    print 'Node z displacement', xbsolver.ZDisp
+    
+    
+    # Make a nice plot
+    # sta_unif(xbsolver.PosIni,xbsolver.PosDef,equal=True)
+    sta_unif(xbsolver.PosIni,xbsolver.PosDef)
+    
+    
+    # save:
+    lib.save.h5comp(xbsolver, './component_after.h5')
+    
+    
+    # read test
+    XBread=lib.read.h5comp('./component_after.h5')
+    
+    for tt in XBread.items():
+        print tt
+    
+    
+    
     
     
 

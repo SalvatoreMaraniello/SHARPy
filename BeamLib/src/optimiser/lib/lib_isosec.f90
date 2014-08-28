@@ -43,13 +43,13 @@ contains
 
         select case(trim(material))
 
-            case ('allum')
+            case ('alumA') ! typical aluminium alloy
                 E  = 70.d9
                 mu = 0.33_8
                 G  = E/( 2.0_8 * (1.0_8+mu) )
                 rho = 2700.0_8
 
-            case default ! as per BEND test case
+            case default ! as per BEND test case - allum in
                 E  = 1.0d7
                 G  = 1.0d5
                 rho= 1.0_8
@@ -311,7 +311,7 @@ module lib_isosec_test
         real(8)             :: E, G, rho
         character(len=5)    :: material
 
-        material = 'allum'
+        material = 'alumA'
 
         call getprop(material, E, G, rho)
 
@@ -332,7 +332,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------------- Test isrect'
 
-        material='allum'
+        material='alumA'
         l2=0.2_8; l3=0.5_8;
 
         call isorect(l2, l3, material, M, K)
@@ -358,7 +358,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------ Test isohollowrect'
 
-        material='allum'
+        material='alumA'
 
         l2=0.2_8;      l3=0.5_8;
         t2=0.5_8 * l2; t3=0.5_8 * l3
@@ -394,7 +394,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------------- Test isellip'
 
-        material='allum'
+        material='alumA'
         l2=0.1_8; l3=0.25_8;
 
         call isoellip(l2, l3, material, M, K)
@@ -420,7 +420,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------ Test isohollowellip'
 
-        material='allum'
+        material='alumA'
 
         l2=0.1_8;      l3=0.25_8;
         t2= l2; t3= l3
@@ -456,7 +456,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------------- Test isocirc'
 
-        material='allum'
+        material='alumA'
         r=0.2;
 
         call isocirc(r, material, M, K)
@@ -482,7 +482,7 @@ module lib_isosec_test
 
         print *, '------------------------------------------ Test isohollowcirc'
 
-        material='bend'!'allum'
+        material='bend'!'alumA'
 
         r=0.2_8
         t= r;

@@ -1,0 +1,265 @@
+'''
+Created on 20 Aug 2014
+
+@author: sm6110
+
+Tools for reading.
+-h5sol (superseded): reads displacements and rotations from a solution h5 file.
+-h5comp: reads all variables of a *h5 solution and creates a component from them
+- h5series: given a list of attributes, reads all the fields and puts them into an
+array.
+
+
+'''
+
+import h5py
+from warnings import warn
+
+import sys
+sys.path.append('..')
+sys.path.append('../..')
+from xbcomponent import XBeamSolver
+
+
+
+def h5sol(filename):
+    ''' 
+    Reads nodes displacements and rotations in h5 format. 
+    
+    Pos,Psi: position and rotation arrays in initial (Ini) or deformed (Def)
+    configuration
+    
+    Remark: for format and differences against Fortran code, see lib.save.h5
+    '''    
+    
+    hdfile = h5py.File(filename,'r') 
+    
+    PosIni=hdfile['PosIni'].value
+    PsiIni=hdfile['PsiIni'].value
+    PosDef=hdfile['PosDef'].value
+    PsiDef=hdfile['PsiDef'].value
+    
+    hdfile.close()    
+    
+    return PosIni,PsiIni,PosDef,PsiDef
+
+
+def h5comp(filename):
+    ''' 
+    Reads All variables of an instance of class XBeamSolver from a hdf5 file.
+    
+    For a details of the variable see: xbcomponent.XBeamSolver class.
+    
+    Last update: 21 Aug 2014
+    
+    Input:
+    - filename: name of file
+    
+    Remarks:
+    - If filename contains the solution of a simulation, the arrays read will have
+    a Fortran ordering. This is not strictly required though, as for restart, 
+    only the inputs are required - the rest is reallocated during the XBeamSolver
+    execution
+    - fields expected to be found will lead the execution to an error (inputs)
+    - fields that are created during the execution, if not found, will only lead
+    produce a warning message
+    '''    
+    
+    
+    # allocate instance
+    XBinst = XBeamSolver()
+    
+    # open file
+    hdfile = h5py.File(filename,'r')
+    
+    
+    #-------------------------------------------------------- input with default
+    # options:
+    setattr(XBinst,'FollowerForce',hdfile['FollowerForce'].value)
+    setattr(XBinst,'FollowerForceRig',hdfile['FollowerForceRig'].value)
+    setattr(XBinst,'PrintInfo',hdfile['PrintInfo'].value)
+    setattr(XBinst,'OutInBframe',hdfile['OutInBframe'].value)
+    setattr(XBinst,'OutInaframe',hdfile['OutInaframe'].value)
+    setattr(XBinst,'ElemProj',hdfile['ElemProj'].value)
+    setattr(XBinst,'Solution',hdfile['Solution'].value)
+    setattr(XBinst,'MaxIterations',hdfile['MaxIterations'].value)
+    setattr(XBinst,'NumLoadSteps',hdfile['NumLoadSteps'].value)
+    setattr(XBinst,'DeltaCurved',hdfile['DeltaCurved'].value)
+    setattr(XBinst,'MinDelta',hdfile['MinDelta'].value)
+    setattr(XBinst,'NewmarkDamp',hdfile['NewmarkDamp'].value)
+
+    # input shared
+    setattr(XBinst,'NumElems',hdfile['NumElems'].value)
+    setattr(XBinst,'NumNodesElem',hdfile['NumNodesElem'].value)
+    setattr(XBinst,'ElemType',hdfile['ElemType'].value)
+    setattr(XBinst,'BConds',hdfile['BConds'].value)
+    setattr(XBinst,'TestCase',hdfile['TestCase'].value)    
+    
+    # design
+    setattr(XBinst,'BeamLength1',hdfile['BeamLength1'].value)
+    setattr(XBinst,'BeamLength2',hdfile['BeamLength2'].value)
+    setattr(XBinst,'TipMass',hdfile['TipMass'].value)
+    setattr(XBinst,'TipMassY',hdfile['TipMassY'].value)    
+    setattr(XBinst,'TipMassZ',hdfile['TipMassZ'].value)
+    setattr(XBinst,'Omega',hdfile['Omega'].value)
+
+
+    setattr(XBinst,'beam_shape',hdfile['beam_shape'].value)
+    setattr(XBinst,'cross_section_type',hdfile['cross_section_type'].value)
+    setattr(XBinst,'material',hdfile['material'].value)
+    
+    # ---------------------------------------------------- input without default
+    # these values will appear as 'not found' if not allocated
+    
+    # parameters for constant beam span reconstruction 
+    XBinst = conditional_reading(hdfile,XBinst,'cs_l2')
+    XBinst = conditional_reading(hdfile,XBinst,'cs_l3')
+    XBinst = conditional_reading(hdfile,XBinst,'cs_t2')
+    XBinst = conditional_reading(hdfile,XBinst,'cs_t3')
+    XBinst = conditional_reading(hdfile,XBinst,'cs_r')
+    XBinst = conditional_reading(hdfile,XBinst,'cs_t')
+    XBinst = conditional_reading(hdfile,XBinst,'cs_pretwist')
+    
+    # parameters for spline reconstruction
+    XBinst = conditional_reading(hdfile,XBinst,'ControlElems')        
+    XBinst = conditional_reading(hdfile,XBinst,'SplineOrder')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_l2')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_l3')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_t2')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_t3')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_r')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_t')
+    
+    
+    # ------------------------------------------------------------ preprocessing
+    # these values will appear as 'not found' if not allocated
+
+    XBinst = conditional_reading(hdfile,XBinst,'NumNodes')
+
+    # spline control Elements/Nodes
+    XBinst = conditional_reading(hdfile,XBinst,'ControlNodes')
+    XBinst = conditional_reading(hdfile,XBinst,'CS_pretwist')
+    
+    # cost/constrains
+    XBinst = conditional_reading(hdfile,XBinst,'TotalMass')
+    XBinst = conditional_reading(hdfile,XBinst,'NodeDisp')
+    XBinst = conditional_reading(hdfile,XBinst,'ZDisp')
+    XBinst = conditional_reading(hdfile,XBinst,'YDisp')
+    XBinst = conditional_reading(hdfile,XBinst,'XDisp')
+    XBinst = conditional_reading(hdfile,XBinst,'NNode')
+    
+    # __init__
+    XBinst = conditional_reading(hdfile,XBinst,'ExtForce')
+    XBinst = conditional_reading(hdfile,XBinst,'ExtMomnt')
+    XBinst = conditional_reading(hdfile,XBinst,'Mroot')
+    XBinst = conditional_reading(hdfile,XBinst,'Kroot')
+    ###XBinst = conditional_reading(hdfile,XBinst,'BeamSpanStiffness')
+    ###XBinst = conditional_reading(hdfile,XBinst,'BeamSpanMass')
+    ###XBinst = conditional_reading(hdfile,XBinst,'PhiNodes')
+    
+    # output
+    XBinst = conditional_reading(hdfile,XBinst,'DensityVector')
+    XBinst = conditional_reading(hdfile,XBinst,'LengthVector')
+    XBinst = conditional_reading(hdfile,XBinst,'PosIni')
+    XBinst = conditional_reading(hdfile,XBinst,'PosDef')
+    XBinst = conditional_reading(hdfile,XBinst,'PsiIni')
+    XBinst = conditional_reading(hdfile,XBinst,'PsiDef')
+    XBinst = conditional_reading(hdfile,XBinst,'InternalForces')    
+    
+
+    '''
+    setattr(XBinst,'',hdfile[''].value)
+    XBinst = conditional_reading(hdfile,XBinst,'')
+    '''
+    
+    # close and return
+    hdfile.close()
+    
+    return XBinst
+    
+    
+def h5series(rootname,attrlist):
+    ''' 
+    Given a list of attributes, creates a list of lists for all the solutions
+    run for a DOE or optimisation. the output is in a
+     list format to allow also 
+    non numerical variables to change.
+    '''
+    
+    outlist=[]
+    
+    cc=0
+    go_on=True
+    
+    while go_on is True:
+        cc_str =  '%.3d' % (cc)
+        filename = rootname + cc_str + '.h5'
+        
+        try:
+            print 'Reading: %s' %(filename)
+            hdfile = h5py.File(filename,'r') 
+            inlist=[]
+            for attr in attrlist:
+                try:
+                    inlist.append(hdfile[attr].value)
+                except:
+                    warn('%s attribute not found!!!' %(attr)) 
+                    inlist.append('not found!!!')      
+            outlist.append(inlist)
+            hdfile.close()
+            cc=cc+1
+        except:
+            print '%s not found. %s files read in total!' %(filename,cc_str)
+            go_on=False
+    
+    return outlist
+     
+  
+def conditional_reading(hdfile,obj,attrname): 
+    ''' 
+    Given a hdf5 file 'hdfile' and the object obj, the routine:
+        a. if the attribute attrname is found and has a value, assignes it to the
+           attribute obj.attrname.  
+        b. does nothing otherwise    
+    '''
+    
+    try:
+        val = hdfile[attrname].value
+        if val!='not found' and val!='no value':
+            setattr(obj,attrname,val)
+    except:
+        warn('Attribute "%s" not found!!!' %attrname)
+            
+    return obj      
+     
+
+
+if __name__=='__main__':
+    
+    import numpy as np
+
+    '''
+    #---------------------------------------------------------------- h4sol test
+    filename ='save_test.h5'
+    PosIni,PsiIni,PosDef,PsiDef=h5sol(filename) 
+    print PosIni,PsiIni,PosIni,PosDef
+    
+    #--------------------------------------------------------------- h5comp test
+    filename = 'fwd_model.h5' 
+    XBinst = h5comp(filename)
+    # print all the attributes
+    #print XBinst.get_attributes()
+    for tt in XBinst.items():
+        print tt
+    print XBinst.PsiIni
+    '''
+    
+    #------------------------------------------------------------- h5series test
+    rootname = '/home/sm6110/git/SHARPy_studies/OPT/20140820_validation_static_opt/res_opt45/isorec_thick_45deg_6kN_sol102_'
+    attrlist = ['cs_l2', 'cs_l3','TotalMass','XDisp','YDisp','ZDist','NodeDisp']
+    outlist = h5series(rootname,attrlist)
+    outvals = np.array(outlist)
+    print outvals
+    
+ 
+    

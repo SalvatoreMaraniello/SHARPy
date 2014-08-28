@@ -13,6 +13,7 @@ program opt_routine_test
  use opt_routine
  use opt_cost
  use xbeam_shared , only: MaxElNod
+ use lib_isosec
 
  implicit none
 
@@ -77,14 +78,14 @@ program opt_routine_test
 
     NumNodesElem = 3
     ElemType='DISP'
-    TestCase='PTW1'
+    TestCase='ncsf'
     BConds='CF'
 
  ! Design
     BeamLength1 = 5.0d0
     BeamLength2 = 0.0d0
     ThetaRoot   = 0.d0
-    ThetaTip    = pi/6.d0
+    ThetaTip    = 0.0_8 ! pi/6.d0
     ExtForce=(/ 0.d0, 0.d0, 600.d3 /)
     ExtMomnt=(/ 0.d0, 0.d0,   0.d0 /)
 
@@ -95,14 +96,16 @@ program opt_routine_test
     SectHeight=0.0
     Omega=0.0
 
+    call isorect(0.1_8, 0.1_8, 'alumA', BeamMass, BeamStiffness)
+    print *, 'K matrix: ',BeamStiffness
     BeamStiffness=0.0_8
     BeamStiffness(1,1)= 4.8d8   ! EA [Nm]
-    BeamStiffness(2,2)= 3.231d8 *0.5 ! GA
+    BeamStiffness(2,2)= 3.231d8 !*0.5 ! GA
     BeamStiffness(3,3)= 3.231d8
     BeamStiffness(4,4)= 1.d6    ! GJ
-    BeamStiffness(5,5)= 9.346d6 *0.5! EI
+    BeamStiffness(5,5)= 9.346d6 !*0.5! EI
     BeamStiffness(6,6)= 9.346d6
-
+    !
     BeamMass=0.0_8
     BeamMass(1,1)=100.d0        ! m [kg/m]
     BeamMass(2,2)=BeamMass(1,1)
@@ -166,17 +169,21 @@ select case (Solution)
                      & ExtForce, ExtMomnt,               &
                      & TipMass, TipMassY, TipMassZ,      &
                      & Omega,                            &
-                     & .false.,.true.,.false.,           & ! Options
+                     & .true.,.true.,.false.,           & ! Options
                      & .true., .false., 0, 99,           &
                      & 10,Solution, 1.d-5, 1.d-5,  1.d-4,&
                      & PosIni, PsiIni,                   & ! Initial Pos/Rot
                      & PosDef, PsiDef, InternalForces,   & ! Output Static
                      & DensityVector, LengthVector       ) ! Design output
 
-                 !!! NCB1 options
-                 !& FollowerForce=.false.,PrintInfo=.false.,                & ! Options
-                 !& MaxIterations=99,         &
-                 !& NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
+                    ! FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
+                    ! OutInBframe,OutInaframe,ElemProj,MaxIterations,         &
+                    ! NumLoadSteps,Solution,DeltaCurved,MinDelta, NewmarkDamp,&
+
+                    !!! NCB1 options
+                    !& FollowerForce=.false.,PrintInfo=.false.,                & ! Options
+                    !& MaxIterations=99,         &
+                    !& NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
 
 
     case default
@@ -189,6 +196,10 @@ select case (Solution)
     ! Correct
     print *, 'Max. Tip Displ. ', cost_node_disp(PosIni,PosDef,NumNodes)
 
+    ! Looking for intertnal stresses:
+    !print *, 'Internal forces:'
+    !print '(F12.6)', Internalforces
+    print *, 'load', ExtForce
 
 end program opt_routine_test
 

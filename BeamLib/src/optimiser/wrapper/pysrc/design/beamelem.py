@@ -56,6 +56,7 @@ def spline(NumElems,cross_section_type,ArgsControlList,ControlElems,SplineOrder)
     and the global reconstruction is done according to a spline of order 
     SplineOrder.
     
+    Input:
     NumElems: number of elements in the beam
     cross_section_type: see extract_cross_section_method
     ArgsControlList = [argslist]: each item of ArgList is a tuple with the input
@@ -63,6 +64,12 @@ def spline(NumElems,cross_section_type,ArgsControlList,ControlElems,SplineOrder)
     ControlElems: integer list with the number of the elements to be used as
     control points
     SplineOrder: order of spline as per scint.interpolate.spline
+    
+    Output:
+    Mbeam, Kbeam: 3d arrays of shape (ii,6,6), containing the mass and stiffness
+    matrices of the ii-th element
+    ArgsBeamList: list containing the arguments to build the ii-th cross-section
+    using the cross-section_type method.
     
     Remark:
     all cross-sectional variables are reconstructed using the spline scheme 
@@ -137,8 +144,29 @@ def spline(NumElems,cross_section_type,ArgsControlList,ControlElems,SplineOrder)
         
     return Mbeam, Kbeam, ArgsBeamList
  
-    
 
+def constant_hardcoded(NumElems,Mroot,Kroot):
+    ''' 
+    Define beam with constant properties given root Mass and stiffness matrices
+    The method can be used to reproduce existing results.
+    
+    Input:
+        NumElems: number of elements in the beam
+        Mroot, Kroot: mass and stiffness matrices of one element      
+    '''
+    
+    # define output
+    Kbeam = np.zeros((NumElems,6,6),dtype=float,order='F')
+    Mbeam = np.zeros((NumElems,6,6),dtype=float,order='F')
+    
+    # allocate variables
+    for ii in range( NumElems ): 
+        Kbeam[ii,:,:]=Kroot
+        Mbeam[ii,:,:]=Mroot
+    
+    return Mbeam, Kbeam    
+        
+   
 def spline_derivative(NumElems,ControlElems,SplineOrder):
     '''
     Return the derivative of the spline curves, evaluated on each element, in
@@ -162,9 +190,6 @@ def spline_derivative(NumElems,ControlElems,SplineOrder):
     return Base
     
     
-    
-  
-#----------------------------------------------------------------------------- -
 def extract_cross_section_method(cross_section_type):
     ''' returns the method to compute mass and stiffness properties of the beam
         cross section '''
@@ -281,4 +306,16 @@ if __name__=='__main__':
     
     
 
+    #-------------------------------------------------------- Constant Hardcoded
+    Mroot = np.random.random((6,6))
+    Kroot = np.random.random((6,6))
+    NumElems = 3
+    Mbeam, Kbeam = constant_hardcoded(NumElems,Mroot,Kroot)
+    for ii in range(len(Mbeam[:,0,0])):
+        print Mbeam[ii,:,:]-Mroot
+        print Kbeam[ii,:,:]-Kroot
     
+        
+
+    
+

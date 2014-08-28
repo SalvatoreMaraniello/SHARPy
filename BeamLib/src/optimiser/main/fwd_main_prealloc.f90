@@ -408,10 +408,13 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
  !    input_node (      in,  in,       out,   out,        out,     out)
 
 
+ ! sm 21 aug 2014
+ ! all saving moved in python environment
+ !
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! Open main output file and select grid points where output will be written.
  ! Unit 12 is opened here but subprocesses can access it - not preferred solution
- open (unit=12,file=OutFile(1:17)//'.mrb',status='replace')
+ !open (unit=12,file=OutFile(1:17)//'.mrb',status='replace')
 
  if ( allocated(OutGrids) .eqv. .false. ) then
      allocate(OutGrids(NumNodes))
@@ -419,13 +422,13 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
 
  OutGrids          = .false.
  OutGrids(NumNodes)= .true.
- call out_title (12,'GLOBAL CONSTANTS IN THE MODEL:')
- write (12,'(14X,A,I12)')    'Number of Beam DOFs:    ', 6
- call out_title (12,'OUTPUT OPTIONS:')
- write (12,'(14X,A,I12)')    'Number of Output Nodes: ', 1
- write (12,'(14X,A,I12)')    'Print Displacements:    ', 1
- write (12,'(14X,A,I12)')    'Print Velocities:       ', 1
- close(12)
+ !call out_title (12,'GLOBAL CONSTANTS IN THE MODEL:')
+ !write (12,'(14X,A,I12)')    'Number of Beam DOFs:    ', 6
+ !call out_title (12,'OUTPUT OPTIONS:')
+ !write (12,'(14X,A,I12)')    'Number of Output Nodes: ', 1
+ !write (12,'(14X,A,I12)')    'Print Displacements:    ', 1
+ !write (12,'(14X,A,I12)')    'Print Velocities:       ', 1
+ !close(12)
 
 end subroutine fwd_static_input
 
@@ -493,10 +496,13 @@ end subroutine fwd_static_input
  !allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
  !allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
 
+ ! sm 21 aug 2014
+ ! all saving moved in python environment
+ !
  ! Store undeformed geometry in external text file.
- open (unit=11,file=OutFile(1:17)//'_und.txt',status='replace')
-     call output_elems (11,Elem,PosIni,PsiIni)
- close (11)
+ !open (unit=11,file=OutFile(1:17)//'_und.txt',status='replace')
+ !    call output_elems (11,Elem,PosIni,PsiIni)
+ !close (11)
 
 end subroutine fwd_static_presolver
 
@@ -655,11 +661,14 @@ end subroutine fwd_static_solver
         call input_forcedvel (NumNodes,Time,ForcedVel,ForcedVelDot)
         !    input_forcedvel (      in,  in,      out,         out)
 
-        open (unit=11,file=OutFile(1:17)//'_force.txt',status='replace')
-          do i=1,NumSteps
-            write (11,'(1X,1P14E13.5)') Time(i), ForceTime(i), ForcedVel(i,:), ForcedVelDot(i,:)
-          end do
-        close (11)
+        ! sm 21 aug 2014
+        ! all saving moved to python environment
+        !
+        !open (unit=11,file=OutFile(1:17)//'_force.txt',status='replace')
+        !  do i=1,NumSteps
+        !    write (11,'(1X,1P14E13.5)') Time(i), ForceTime(i), ForcedVel(i,:), ForcedVelDot(i,:)
+        !  end do
+        !close (11)
 
         allocate (PosDotDef(NumNodes,3));           PosDotDef= 0.d0
         allocate (PsiDotDef(NumElems,MaxElNod,3));  PsiDotDef= 0.d0
