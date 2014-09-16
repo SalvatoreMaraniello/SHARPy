@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from warnings import warn
 
+import scipy.interpolate
 
 #---------------------------------------------------------------- Common setting
 mpl.axes.set_default_color_cycle(['k', 'b', 'r', 'g', 'y', 'c'])
@@ -152,12 +153,16 @@ def make_grid_from_array(x,y,z):
     # set up a dictionary:
     raw_data = {}
     Xset,Yset=set(),set()
-    
+
+    # Prepare Interpolation
+    rbf = scipy.interpolate.Rbf(x, y, z, function='linear')
+
+
     for cc in range(N):
         raw_data[( x[cc] , y[cc] )] = z[cc] 
         Yset.add(y[cc])
         Xset.add(x[cc])
-
+    
     Xset =sorted(list(Xset))
     Yset=sorted(list(Yset))
     
@@ -167,7 +172,12 @@ def make_grid_from_array(x,y,z):
     for xx in Xset:
         row = []
         for yy in Yset:
-            row.append(raw_data[(xx,yy)]) # produces transposed plots
+            try:
+                row.append(raw_data[(xx,yy)]) # produces transposed plots
+            except:
+                warn('Data for (%f,%f) required interpolation!' %(xx,yy) )
+                zz = rbf(xx, yy)
+                row.append(zz)                
         Zmat.append(row)
     Zmat = np.array(Zmat)
     Zmat = Zmat.transpose() # fix added cause all the plots were the transpose of what expected
@@ -225,8 +235,8 @@ def contour(x,y,z,**kwargs):
 ''' ------------------------------------------------------------------------ '''
 if __name__=='__main__':
     
-    import lib.read
     
+    import lib.read
     
     # -------------------------------------------------------- linlin2Dplot test
     # Load data
@@ -260,3 +270,5 @@ if __name__=='__main__':
     contour(x,y,[0.5,0,0.5,1],levels=np.array([0.4,0.6]),contourf=True,colorbar_flag=True,cmap=mpl.cm.Oranges)  
     plt.show()
     
+  
+  

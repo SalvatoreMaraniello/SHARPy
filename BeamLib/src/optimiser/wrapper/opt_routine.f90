@@ -216,39 +216,39 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
 
  !------------------------------------------------------------------------------
  ! Print all Input:
-print *, FollowerForce
-print *, FollowerForceRig
-print *, PrintInfo
-print *, OutInBframe
-print *, OutInaframe
-print *, ElemProj
-print *, MaxIterations
-print *, NumLoadSteps
-print *, Solution
-print *, DeltaCurved
-print *, MinDelta
-print *, NewmarkDamp
+!print *, FollowerForce
+!print *, FollowerForceRig
+!print *, PrintInfo
+!print *, OutInBframe
+!print *, OutInaframe
+!print *, ElemProj
+!print *, MaxIterations
+!print *, NumLoadSteps
+!print *, Solution
+!print *, DeltaCurved
+!print *, MinDelta
+!print *, NewmarkDamp
 
-print *, IN_BeamLength1, IN_BeamLength2
-print *, IN_BeamStiffness
-print *, IN_BeamMass
-print *, IN_ExtForce
-print *, IN_ExtMomnt
-print *, IN_SectWidth,IN_SectHeight
-print *, IN_ThetaRoot
-print *, IN_ThetaTip
-print *, IN_TipMass
-print *, IN_TipMassY
-print *, IN_TipMassZ
-print *, IN_Omega
+!print *, IN_BeamLength1, IN_BeamLength2
+!print *, IN_BeamStiffness
+!print *, IN_BeamMass
+!print *, IN_ExtForce
+!print *, IN_ExtMomnt
+!print *, IN_SectWidth,IN_SectHeight
+!print *, IN_ThetaRoot
+!print *, IN_ThetaTip
+!print *, IN_TipMass
+!print *, IN_TipMassY
+!print *, IN_TipMassZ
+!print *, IN_Omega
 
-print *, NumElems
-print *, NumNodes
+!print *, NumElems
+!print *, NumNodes
 
-print *, IN_NumNodesElem
-print *, IN_ElemType
-print *, IN_TestCase
-print *, IN_BConds
+!print *, IN_NumNodesElem
+!print *, IN_ElemType
+!print *, IN_TestCase
+!print *, IN_BConds
 
  !------------------------------------------------------------------------------
 

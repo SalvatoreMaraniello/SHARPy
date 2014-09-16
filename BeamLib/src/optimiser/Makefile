@@ -198,7 +198,8 @@ OBJLIB=\
      $(OBJDIR)/lib_bgeom.o   \
      $(OBJDIR)/lib_cbeam3.o  \
      $(OBJDIR)/lib_xbeam.o	 \
-     $(OBJDIR)/lib_perturb.o
+     $(OBJDIR)/lib_perturb.o \
+     $(OBJDIR)/lib_solv.o
 OBJXBEAM=\
 	 $(OBJDIR)/xbeam_shared.o	\
      $(OBJDIR)/xbeam_undef.o	\

@@ -78,6 +78,19 @@ def rect(l2, l3, material):
     return M, K
 
 
+#------------------------------------------------------------------------------- 
+def rect_fact_torsion(l2,l3,material,factor=1e3):
+    ''' 
+    Rectangular cross-section with factor applied to torsional stiffness.
+    The default factor value is 1e3 to make to avoid large torsional rotations
+    '''
+    
+    M, K = rect(l2,l3,material)
+    K[3,3]=factor*K[3,3]
+    
+    return M, K
+
+
 # ------------------------------------------------------------------------------
 def hollowrect(l2, l3, t2, t3, material):
 
@@ -197,8 +210,12 @@ if __name__ == '__main__':
     M,K=rect(l2, l3, material)
     print 'Mass Diagonal', np.diag(M)
     print 'Stiffness Diagonal', np.diag(K)
-
-
+    
+    print 'Test rect_fact_torsion...'
+    M,K=rect_fact_torsion(l2, l3, material)
+    print 'Mass Diagonal', np.diag(M)
+    print 'Stiffness Diagonal', np.diag(K)
+    
     print 'Test hollowrect...'
     l2=0.2; l3=0.5;
     t2=0.1; t3=0.25;

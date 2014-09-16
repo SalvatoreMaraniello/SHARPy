@@ -15,6 +15,14 @@ OpenMDAO v0.10.0 (or back-compatibles)
 Install OpenMDAO:
 - download go-openmdao-0.10.0.py from http://openmdao.org/downloads/recent/
 - go to the folder where you want to install the libraries and run the script from terminal.
+- optional:
+	- to install the pyOpt/ipopt plugin, activate Openmdao environment and type:
+		- plugin install --github pyopt_driver/ipoptdriver
+		- for further details, refer to:
+			- http://openmdao.org/docs/tutorials/optimization/optimizers.html
+			- http://openmdao.org/docs/getting-started/using_plugins.html
+		
+	
 
 Setup Optimiser:
 - in shared.py, set openmdao_abspath to point at the directory where the openmdao libraries where installed. 

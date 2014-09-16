@@ -50,7 +50,7 @@ class XBeamSolver(Component):
     OutInaframe     = Bool(False, iotype='in', desc='print velocities in a-frame (if not, Inertial frame). default: False') 
       
     ElemProj        = Enum( 0, (0,1,2), iotype='in', desc='Element info computed in (0) global frame, (1) fixed element frame, (2) moving element frame.')  
-    _Solution_List = (102,112,202,212,302,312,900,910,902,912,922,952) # see header for possible values
+    _Solution_List = (102,112,142,202,212,302,312,900,910,902,912,922,952) # see header for possible values
     Solution        = Enum(112, _Solution_List, iotype='in', desc='Solution Process')  
        
     MaxIterations   = Int( 99, iotype='in', desc='Maximum number of iterations')          
@@ -58,8 +58,7 @@ class XBeamSolver(Component):
                 
     DeltaCurved     = Float( 1e-5, iotype='in', desc='Minimum angle for two unit vectors to be parallel')        
     MinDelta        = Float( 1e-8, iotype='in', desc='Convergence parameter for Newton-Raphson iterations')               
-    NewmarkDamp     = Float( 1e-4, iotype='in', desc='Numerical damping in the Newmark integration scheme')       
-   
+    NewmarkDamp     = Float( 1e-4, iotype='in', desc='Numerical damping in the Newmark integration scheme')
    
     '''Shared Input'''
     NumElems     = Int(10, iotype='in', desc='Total number of elements')
@@ -85,8 +84,10 @@ class XBeamSolver(Component):
     # isotropic material cross-sectional models(see design.isosec)
     material = Enum( 'alumA',('alumA','test'), iotype='in', desc='Material for isotropic cross ection (see design.isosec)') 
     cross_section_type = Enum(('isorect','isoellip','isocirc',
-                               'isohollowrect','isohollowellip','isohollowcirc'),
+                               'isohollowrect','isohollowellip','isohollowcirc',
+                               'isorect_fact_torsion'),
                                iotype='in')
+    cs_factor = Float(1e3, iotype='in',desc='Factor to be applied in isorec_fact_torsion. For spline method, this is constant along the span.')
 
     # parameters for constant beam span reconstruction 
     cs_l2   = Float(iotype='in',desc='size along the x2 axis - (see design.isosec)')
@@ -143,8 +144,9 @@ class XBeamSolver(Component):
         # save directory
         self._savedir = '.'
     
-        # set counter
+        # multiple runs
         self._counter = 0
+        self._use_previous_solution = False
         
 
     def pre_solve(self):
@@ -188,14 +190,23 @@ class XBeamSolver(Component):
         self.LengthVector  = np.zeros((self.NumElems),dtype=float,order='F')
         
         # Problem dependent
-        [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems)
+        
+        ### sm 12 sep 2014:
+        # Use old solution for initial guess in the optimisation. This if 
+        # statement only prevents self.{Psi/Pos}Def not to be overwritten as
+        # the self.{Pos/Psi}Ini are allocated here but always overwritten inside 
+        # the Fortran code.
+        if self._counter < 1 or self._use_previous_solution is False:
+            # self.PosDef, self.PsiDef are set to zero
+            # all others are empty arrays
+            [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems) 
+             
 
         # prepare saving directory:
         self._savedir=os.path.abspath(self._savedir)
         if os.path.isdir(self._savedir) is False:
             os.makedirs(self._savedir)
         
-
 
     def execute(self):
         
@@ -212,6 +223,17 @@ class XBeamSolver(Component):
         #for ii in range(self.NumElems):
         #    print np.diag(self.BeamSpanStiffness[ii,:,:])
         #------------------------------------------------------------------------------ 
+        
+        ###print 'Starting Solution:'
+        ###print 'Initial Tip Displacements:'
+        ###if self._counter>1:
+        ###    self.PosIni=self.PosDef.copy(order='F')
+        ###print self.PosIni[-1,:]
+        
+        # save before run (in case of crash)
+        counter_string =  '%.3d' % (self._counter)
+        savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
+        lib.save.h5comp( self, savename)
         
         # call xbeam solver
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
@@ -245,16 +267,16 @@ class XBeamSolver(Component):
         self.YDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='y',NNode=self.NNode-1)
         self.XDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='x',NNode=self.NNode-1)
         
-        # save
-        counter_string =  '%.3d' % (self._counter)
-        savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
+        # sm: savename etc moved before solver started
+        ### save
+        #counter_string =  '%.3d' % (self._counter)
+        #savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
         lib.save.h5comp( self, savename)
         
         # counter: for multiple executions
         self._counter = self._counter+1
         
-        
-                     
+                          
     def set_ctypes(self):
         
         # --------------------------------------------------------------- Prepare input
@@ -332,6 +354,10 @@ class XBeamSolver(Component):
         ElementNumber: optional argument in case of spline shape beam. The
         parameters points to the elements of the self.CS_* arrays.
         
+        Remark: for modified cross-sections (e.g. isosec.rect_fact_torsion), the
+        stiffness factor is kept constant along the span also for spline 
+        reconstruction
+        
         '''
         
         cc = kwargs.get('ElementNumber', None)
@@ -342,8 +368,10 @@ class XBeamSolver(Component):
                 argslist=[self.cs_r, self.material]
             elif self.cross_section_type == 'isohollowcirc':
                 argslist=[self.cs_r, self.cs_t, self.material]       
-            elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':
+            elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':              
                 argslist=[self.cs_l2, self.cs_l3, self.material] 
+            elif  self.cross_section_type == 'isorect_fact_torsion':
+                argslist=[self.cs_l2, self.cs_l3, self.material, self.cs_factor ]                   
             elif self.cross_section_type == 'isohollowrect' or self.cross_section_type == 'isohollowellip':
                 argslist=[self.cs_l2, self.cs_l3, self.cs_t2,self.cs_t3, self.material] 
             else:
@@ -356,6 +384,8 @@ class XBeamSolver(Component):
                 argslist=[self.CS_r[cc], self.CS_t[cc], self.material ]       
             elif self.cross_section_type == 'isorect' or self.cross_section_type == 'isoellip':
                 argslist=[self.CS_l2[cc], self.CS_l3[cc], self.material ] 
+            elif  self.cross_section_type == 'isorect_fact_torsion':
+                argslist=[self.CS_l2[cc], self.CS_l3[cc], self.material, self.cs_factor ] 
             elif self.cross_section_type == 'isohollowrect' or self.cross_section_type == 'isohollowellip':
                 argslist=[self.CS_l2[cc], self.CS_l3[cc], self.CS_t2[cc],self.CS_t3[cc], self.material] 
             else:
@@ -387,20 +417,20 @@ if __name__=='__main__':
     # Design
     xbsolver.beam_shape = 'constant'
     xbsolver.material ='alumA'
-    xbsolver.cross_section_type ='isorect'    
+    xbsolver.cross_section_type ='isorect'  
     xbsolver.BeamLength1 = 5.0   
-    xbsolver.cs_l2 = 0.1
-    xbsolver.cs_l3 = 0.1
+    xbsolver.cs_l2 = 0.15
+    xbsolver.cs_l3 = 0.15
 
     # Loading
-    xbsolver.ExtForce[2]=600.e3  / 1e3
+    xbsolver.ExtForce[2]=6e5
 
     # Options - NCB1 case:
-    xbsolver.FollowerForce=True
+    xbsolver.FollowerForce=False
     xbsolver.PrintInfo=False              
     xbsolver.MaxIterations=99    
     xbsolver.NumLoadSteps=20
-    xbsolver.Solution=112
+    xbsolver.Solution=142
     xbsolver.MinDelta= 1.e-5
 
 
@@ -416,26 +446,31 @@ if __name__=='__main__':
     xbsolver.NNode = -1 # tip displacement
 
     xbsolver.execute() 
-    
     print 'External force', xbsolver.ExtForce
     print 'Cost Functions:'
     print 'Total Mass', xbsolver.TotalMass, xbsolver.ct_TotalMass.value
     print 'Node Abs Displacement', xbsolver.NodeDisp, xbsolver.ct_NodeDisp.value 
     print 'Node z displacement', xbsolver.ZDisp
     
+    # II run test
+    xbsolver._use_previous_solution=True
+    xbsolver.NumLoadSteps=1
+    xbsolver.execute() 
+    print 'External force', xbsolver.ExtForce
+    print 'Cost Functions:'
+    print 'Total Mass', xbsolver.TotalMass, xbsolver.ct_TotalMass.value
+    print 'Node Abs Displacement', xbsolver.NodeDisp, xbsolver.ct_NodeDisp.value 
+    print 'Node z displacement', xbsolver.ZDisp    
     
     # Make a nice plot
     # sta_unif(xbsolver.PosIni,xbsolver.PosDef,equal=True)
     sta_unif(xbsolver.PosIni,xbsolver.PosDef)
     
-    
     # save:
     lib.save.h5comp(xbsolver, './component_after.h5')
     
-    
     # read test
     XBread=lib.read.h5comp('./component_after.h5')
-    
     for tt in XBread.items():
         print tt
     

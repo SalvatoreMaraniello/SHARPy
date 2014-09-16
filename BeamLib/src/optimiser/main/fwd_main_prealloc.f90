@@ -487,11 +487,17 @@ end subroutine fwd_static_input
  !NumDof Number of independent degrees of freedom.
 
 
- !call array2_cond_alloc( PosDef,             NumNodes, 3, .true.)
- !call array3_cond_alloc( PsiDef,   NumElems ,MaxElNod, 3, .true.)
- PosDef= PosIni
- PsiDef= PsiIni
- !call array2_cond_alloc( InternalForces,     NumNodes, 6, .true.)
+ ! Avoid overwriting {Pos/Psi}Def to allow previous solution from optimisation
+ ! to be passed in input:
+ !if ( max( maxval(abs(PosDef)),maxval(abs(PsiDef)) ) < 1.e-16 ) then
+ if ( max( maxval(abs(PosDef)),maxval(abs(PsiDef)) ) < epsilon(PosDef(1,1)) ) then
+    print *, 'Initial Guess Overwritten with Initial Positions/Rotations!!!'
+    print *, '(Max. Elem. < epsilon = ', epsilon(PosDef(1,1))
+    PosDef= PosIni
+    PsiDef= PsiIni
+ end if
+
+ ! old code
  !allocate (PosDef(NumNodes,3));          PosDef= PosIni
  !allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
  !allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0

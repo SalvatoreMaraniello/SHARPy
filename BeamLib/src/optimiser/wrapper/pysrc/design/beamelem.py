@@ -97,6 +97,8 @@ def spline(NumElems,cross_section_type,ArgsControlList,ControlElems,SplineOrder)
         Nargs=1        
     elif cross_section_type == 'isorect' or cross_section_type == 'isoellip' or cross_section_type == 'isohollowcirc':
         Nargs=2 #(l2, l3, material) - (r,t,material)
+    elif cross_section_type == 'isorect_fact_torsion':
+        Nargs=3
     elif cross_section_type == 'isohollowrect' or cross_section_type == 'isohollowellip':
         Nargs=4
     else:
@@ -196,6 +198,8 @@ def extract_cross_section_method(cross_section_type):
     
     if   cross_section_type == 'isorect':
         csfun = design.isosec.rect #(l2, l3, material)
+    elif cross_section_type == 'isorect_fact_torsion':
+        csfun = design.isosec.rect_fact_torsion
     elif cross_section_type == 'isoellip':
         csfun = design.isosec.ellip #(l2, l3, material)
     elif cross_section_type == 'isocirc':

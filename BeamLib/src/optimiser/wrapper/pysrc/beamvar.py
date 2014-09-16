@@ -48,11 +48,14 @@ def fwd_static(NumNodes,NumElems):
         InternalForces: internal forces      
     '''
 
-    PosIni        =np.empty((         NumNodes,3),dtype=float,order='F')    
-    PosDef        =np.empty((         NumNodes,3),dtype=float,order='F')    
-    PsiIni        =np.empty((NumElems,MaxElNod,3),dtype=float,order='F')    
-    PsiDef        =np.empty((NumElems,MaxElNod,3),dtype=float,order='F')  
-    InternalForces=np.empty((         NumNodes,6),dtype=float,order='F')   
-
+    InternalForces=np.empty((         NumNodes,6),dtype=float,order='F') 
+    PosIni        =np.empty((         NumNodes,3),dtype=float,order='F')         
+    PsiIni        =np.empty((NumElems,MaxElNod,3),dtype=float,order='F') 
+    
+    # These are allocated to zero to allow the fortran code to initialise them
+    # to PosIni/PsiIni st the first load step of the first run
+    PosDef        =np.zeros((         NumNodes,3),dtype=float,order='F')      
+    PsiDef        =np.zeros((NumElems,MaxElNod,3),dtype=float,order='F')  
+  
     return PosIni, PosDef, PsiIni, PsiDef, InternalForces
 

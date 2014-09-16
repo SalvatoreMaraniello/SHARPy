@@ -5,7 +5,12 @@ Salvatore Maraniello
 
 Module containing setting paths for dependencies.
 
-Modify the entry openmdao_abspath according to your installation!
+Modify the entry openmdao_abspath according to your installation! In particular:
+
+
+Remark:
+- ipopt and pyopt are optional.
+
 
 '''
 
@@ -97,15 +102,11 @@ sys.path.append(openmdao_abspath+'/local/lib/python2.7/site-packages')
 sys.path.append(openmdao_abspath+'/lib/python2.7/site-packages') 
 sys.path.append(openmdao_abspath+'/local/lib/python2.7/site-packages/setuptools-0.9.5-py2.7.egg') 
 
-
-
-
-
-
-
-
-
-
-
-
+# optional components:
+try:
+    # pyOpt plugin
+    sys.path.append(openmdao_abspath+'/lib/python2.7/site-packages/pyopt_driver-0.18-py2.7.egg')
+    sys.path.append(openmdao_abspath+'/lib/python2.7/site-packages/ipoptdriver-0.17-py2.7.egg')
+except:
+    None
 

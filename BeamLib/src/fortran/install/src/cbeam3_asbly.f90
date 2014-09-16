@@ -127,6 +127,8 @@ module cbeam3_asbly
 
   ! Compute the influence coefficients multiplying the vector of external forces.
   ! (rotate if follower forces and filter out slave nodes).
+  ! sm: the contribution due to follower forces is added to the stiffness matrix
+  ! in cbeam3_dqext
     call cbeam3_fext  (NumNE,rElem,Flags(1:NumNE),Felem,Options%FollowerForce,Options%FollowerForceRig,Unit)
     call cbeam3_dqext (NumNE,rElem,ForceElem,Flags(1:NumNE),Kelem,Options%FollowerForce)
 

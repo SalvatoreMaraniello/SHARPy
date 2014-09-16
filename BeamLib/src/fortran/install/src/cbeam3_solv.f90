@@ -53,6 +53,7 @@ module cbeam3_solv
 &                                  PosDefor,PsiDefor,Options)
   use lib_fem
   use lib_sparse
+  use lib_solv
 #ifdef NOLAPACK
   use lib_lu
 #else
@@ -76,7 +77,7 @@ module cbeam3_solv
   integer:: fs                             ! Current storage size of force matrix.
   integer:: iLoadStep                      ! Counter in the load steps.
   integer:: Iter                           ! Counter on iterations.
-  integer:: k                              ! Auxiliary integer.
+  integer:: i,j,k                          ! Auxiliary integer.
   integer:: ks                             ! Current storage size of stiffness matrix.
 
   integer,allocatable::      ListIN (:)    ! List of independent nodes.
@@ -85,6 +86,70 @@ module cbeam3_solv
   type(sparse),allocatable:: Kglobal(:)    ! Global stiffness matrix in sparse storage.
   type(sparse),allocatable:: Fglobal(:)    ! Influence coefficients matrix for applied forces.
 
+  ! Parameters to Check Convergence
+  logical :: converged = .false.
+  logical :: passed_delta = .false.! true if the subiteration (newton) converged according to delta check
+  logical :: passed_res      = .false.! true if the subiteration (newton) converged according to residual check
+  logical :: passed_resfrc   = .false.! true if the subiteration (newton) converged according to residual check (forces only)
+  logical :: passed_resmmt   = .false.! true if the subiteration (newton) converged according to residual check (Moments only)
+  logical :: passed_err      = .false.! true if the subiteration (newton) converged according to error check
+  logical :: passed_errpos   = .false.! true if the subiteration (newton) converged according to error check (position only)
+  logical :: passed_errpsi   = .false.! true if the subiteration (newton) converged according to error check (rotations only)
+
+  ! variables for residual check
+  real(8) :: Fsc, Msc                   ! scaling factor for forces and moments
+  real(8) :: QglFrc(NumDof/2), QglMmt(NumDof/2) ! residual related to forces and moments
+  real(8) :: Res, Res0                  ! current and  initial residual
+  real(8) :: ResFrc, ResFrc0, ResFrcRel ! absolute, initial and relative residual
+  real(8) :: ResMmt, ResMmt0, ResMmtRel ! absolute, initial and relative residual
+  real(8) :: TaRes, TaResFrc, TaResMmt  ! absolute tolerance for Res, ResMmt, ResFrc
+
+ ! variables for error based check
+  real(8)   :: Possc, Psisc   ! scaling factor for position and rotations
+  real(8)   :: DeltaPos(NumDof/2)   ! delta displacements at current and previous iteration
+  real(8)   :: DeltaPsi(NumDof/2)   ! delta rotations at current and previous iteration
+  real(8)   :: ErrX, ErrPos, ErrPsi ! Error extimation for all DoF, displacements and rotations
+  real(8)   :: DX_now, DX_old       ! Norm of DeltaX at current and old iteration
+  real(8)   :: DPos_now, DPos_old   ! Norm of translational dofs of DeltaX at current and old iteration
+  real(8)   :: DPsi_now, DPsi_old   ! Norm of rotational dofs of DeltaX at current and old iteration
+  real(8)   :: TaX, TaPos, TaPsi    ! Absolute tolerance for DeltaX, DeltaPos and DeltaPsi
+
+ ! Determine scaling factors for convergence test (absolute tolerances)
+  Psisc = 1.0_8
+  Possc = maxval(abs(Coords))
+  Fsc = maxval(abs( AppForces(:,1:3) ));
+  Msc = maxval(abs( AppForces(:,4:6) ));
+
+  ! Correct Msc accounting for forces contribution. It is assumed that the
+  ! beam is constrained at Node 1 and that here the coordinates are (0,0,0)
+  do i =1,3
+      !print *, 'i=', 1, ' Msc=', Msc
+      do j = 1,3
+          if (i /= j) then
+              !print *, 'product for i,j=(', i,',',j,') equal to: ', AppForces(:,i)*Coords(:,j)
+              MSc = max(Msc,maxval(abs( AppForces(:,i)*Coords(:,j) )))
+              !print *, 'i=', 1, 'j=',j, ' Msc=', Msc
+          end if
+      end do
+  end do
+  !print *, ' Msc final=', Msc
+
+  ! avoid zero scaling factors
+  if (Fsc .eq. 0.0_8) then
+      Fsc=1.0_8
+  end if
+  if (Msc .eq. 0.0_8) then
+      Msc=1.0_8
+  end if
+
+! Determine Absolute tolerances
+TaRes    = max(Fsc,Msc) *Options%MinDelta ! this could be made more severe picking the minimum.
+TaResFrc =     Fsc      *Options%MinDelta
+TaResMmt =         Msc  *Options%MinDelta
+
+TaX   = max(Possc,Psisc)*Options%MinDelta
+TaPos =     Possc       *Options%MinDelta
+TaPsi =           Psisc *Options%MinDelta
 
 ! Initialize geometric constants and system state.
   allocate (ListIN (size(Node)))
@@ -98,16 +163,41 @@ module cbeam3_solv
   allocate (DeltaX (NumDof));    DeltaX = 0.d0
   allocate (Fglobal(DimMat*NumDof)); call sparse_zero (fs,Fglobal)
 
+
 ! Apply loads in substeps.
   do iLoadStep=1,Options%NumLoadSteps
     Iter  = 0
     Delta = Options%MinDelta+1.d0
 
 ! Iteration until convergence.
-    do while (Delta.gt.Options%MinDelta)
+  converged=.false.
+    do while (converged .eqv. .false.)!(Delta.gt.Options%MinDelta)
+
       Iter= Iter+1
       if (Iter.gt.Options%MaxIterations) STOP 'Static equations did not converge (17235)'
-      if (Options%PrintInfo) write (*,'(5X,A,I4,A,I4,$)') 'Load Step',iLoadStep,' Subiteration',Iter
+
+      if ((Options%PrintInfo) .AND. (Iter.eq.1)) then
+          write (*,'(17X,A12,A12,A11,A12,A12,A12,A12,A12,A12,A13,A11)')      &
+              & 'DeltaF ','DeltaX ',                                         &
+              & 'Res','ResRel', 'ResFrc','ResRelFrc','ResMmt','ResRelMmt',   &
+              & 'ErX','ErPos ','ErPsi'
+
+          write (*,'(A16,$)') 'Tolerance'
+          write (*,'(2X,1PE10.3,2X,1PE10.3,2X,$)') Options%MinDelta,Options%MinDelta
+          write (*,'(2X,1PE10.3,2X,1PE10.3,2X,$)') TaRes,   Options%MinDelta
+          write (*,'(2X,1PE10.3,2X,1PE10.3,2X,$)') TaResFrc,Options%MinDelta
+          write (*,'(2X,1PE10.3,2X,1PE10.3,2X,$)') TaResMmt,Options%MinDelta
+          write (*,'(2X,1PE10.3,2X,1PE10.3,2X,1PE10.3,2X)') TaX,TaPos,TaPsi
+
+          write (*,'(A8,A8,A13,A11,A12,A12,A12,A12,A12,A12,A12,A13,A11)')      &
+              & 'LoadStep','Subiter',                                          &
+              & 'DeltaF ','DeltaX ',                                           &
+              & 'Res','ResRel', 'ResFrc','ResRelFrc','ResMmt','ResRelMmt', &
+              & 'ErX','ErPos ','ErPsi'
+
+      end if
+      if (Options%PrintInfo) write(*,'(I8,I8,$)')  iLoadStep, Iter
+
 
 ! Assembly matrices and functional.
       Qglobal=0.d0
@@ -131,10 +221,104 @@ module cbeam3_solv
 #endif
       call cbeam3_solv_update_static (Elem,Node,Psi0,DeltaX,PosDefor,PsiDefor)
 
-! Convergence parameter.
-      Delta=maxval(abs(DeltaX))+maxval(abs(Qglobal))
-      if (Options%PrintInfo) write (*,'(2X,A,1PE10.3,A,1PE10.3)') &
-&                           'DeltaF=',maxval(abs(Qglobal)), ' DeltaX=',maxval(abs(DeltaX))
+! Convergence parameter delta (original):
+      call delta_check(Qglobal,DeltaX,Delta,passed_delta,Options%MinDelta,print_info=.true.)
+
+ ! Check convergence using the residual:
+      call separate_dofs(Qglobal,(/1,2,3/),(/4,5,6/),QglFrc,QglMmt)
+
+      call residual_check(Iter,Qglobal,Res,Res0,passed_res,Options%MinDelta,&
+                         &TaRes,print_info=.true.  )
+
+
+      if ( (iLoadStep .eq. 1) .and. (Iter.eq.2) ) then
+          ! update forcesd and moments residual at 2nd iteration to avoid zero
+          ! due to trivial solution
+          if (maxval(abs( AppForces(:,1:3))).eq. 0.0_8) then
+              ! jump first iteration
+              call residual_check(1,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
+                                 &TaResFrc,print_info=.true.)
+          else
+              call residual_check(Iter  ,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
+                                 &TaResFrc,print_info=.true.)
+          end if
+
+          if (maxval(abs( AppForces(:,4:6))).eq.0.0_8) then
+              call residual_check(1,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
+                                 &TaResMmt,print_info=.true.)
+          else
+              call residual_check(Iter,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
+                                 &TaResMmt,print_info=.true.)
+          end if
+
+      else
+          call residual_check(Iter  ,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
+                             &TaResFrc,print_info=.true.)
+          call residual_check(Iter,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
+                             &TaResMmt,print_info=.true.)
+      end if
+
+
+ ! SuperLinear Convergence Test
+      call separate_dofs(DeltaX,(/1,2,3/),(/4,5,6/),DeltaPos,DeltaPsi)
+
+      call error_check(Iter,DeltaX  ,DX_old  ,DX_now  ,ErrX  ,passed_err   ,TaX  ,print_info=.true.)
+      call error_check(Iter,DeltaPos,DPos_old,DPos_now,ErrPos,passed_errpos,TaPos,print_info=.true.)
+      call error_check(Iter,DeltaPsi,DPsi_old,DPsi_now,ErrPsi,passed_errpsi,TaPsi,print_info=.true.)
+
+      DX_old   = DX_now
+      DPos_old = DPos_now
+      DPsi_old = DPsi_now
+
+      if (Options%PrintInfo) write (*,'(1X)')
+
+ ! Global Convergence
+    if (passed_res .eqv. .true.) then
+        converged=.true.
+        if (Options%PrintInfo) write (*,'(A)') 'Global residual converged!'
+    end if
+
+    if  (passed_err .eqv. .true. ) then
+        converged=.true.
+        if (Options%PrintInfo) write (*,'(A)') 'Global error converged!'
+    end if
+
+
+    if ( (passed_resfrc .eqv. .true.) .and. (passed_resmmt .eqv. .true.) ) then
+        converged=.true.
+        if (Options%PrintInfo) write (*,'(A)') 'Forces and Moments residual converged!'
+    end if
+
+    if ( (passed_errpos .eqv. .true.) .and. (passed_errpsi .eqv. .true.) ) then
+        converged=.true.
+        if (Options%PrintInfo) write (*,'(A)') 'Displacements and Rotations error converged!'
+    end if
+
+
+
+ ! Print Progress
+      ! ------------------------------------------------------------- old format
+      !if (Options%PrintInfo) write (*,'(5X,A,I4,A,I4,$)') 'Load Step',iLoadStep,' Subiteration',Iter
+      !if (Options%PrintInfo) write (*,'(2X,A,1PE10.3,A,1PE10.3,$)') &
+      ! &                           'DeltaF=',maxval(abs(Qglobal)), ' DeltaX=',maxval(abs(DeltaX))
+      !if (Options%PrintInfo) write (*,'(2X,A,1PE10.3,A,1PE10.3,$)') &
+      !&                           'Res=',Res, ' ResRel=',ResRel
+
+      ! ------------------------------------------------------------- new format
+      !if ((Options%PrintInfo) .AND. (Iter.eq.1)) write (*,'(A,A,A,A,A,A,A,A,A)') &
+      !'Load Step ',' Subiteration ','DeltaF ','DeltaX ','Res ','ResRel ','ErX ','ErPos ','ErPsi'
+      !if (Options%PrintInfo) write(*,'(I4,I4,$)')  iLoadStep, Iter
+      !if (Options%PrintInfo) write (*,'(2X,1PE10.3,2X,1PE10.3,$)') maxval(abs(Qglobal)), maxval(abs(DeltaX))
+      !if (Options%PrintInfo) write (*,'(2X,1PE10.3,2X,1PE10.3,$)') ,Res, Res/Res0
+      !if (Iter .ge. 2) then
+      ! !!!if (Options%PrintInfo) write (*,'(2X,A,1PE10.3,A,1PE10.3,A,1PE10.3)') &
+      ! !!!!&                     'ErX=',ErrX, ' ErPos=',ErrPos, 'ErPsi=', ErrPsi
+      ! if (Options%PrintInfo) write (*,'(2X,1PE10.3,2X,1PE10.3,2X,1PE10.3)') ErrX, ErrPos, ErrPsi
+      !else
+      ! if (Options%PrintInfo) write (*,'(2X)')
+      !end if
+
+
     end do
   end do
 
@@ -222,14 +406,21 @@ module cbeam3_solv
 &                           ks,Kglobal,fs,Fglobal,Qglobal,Options)               ! output (except for Options)
 
 ! Forces on the unconstrained nodes.
+! sm: AppForces has shape (Nodes,6), where the columns contain forces and moments.
+! fem_m2v reorders them into a vector (i.e. for node ii, (ii-1)+1 will be the x
+! force and (ii-1)+6 the z moment. Nodes for which the solution has not to be
+! found will not be counted.
   Qglobal= sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))
 
 ! Solve equation and update the global vectors.
+! sm: Kglobal * deltaX = Qglobal
 #ifdef NOLAPACK
   call lu_sparse(ks,Kglobal,Qglobal,DeltaX)
 #else
   call lapack_sparse (ks,Kglobal,Qglobal,DeltaX)
 #endif
+! sm: PosDefor and PsiDefor are the only one being updated (the Psi0 is kept
+! unchanged and are passed to the function for
   call cbeam3_solv_update_static (Elem,Node,Psi0,DeltaX,PosDefor,PsiDefor)
 
   deallocate (Kglobal,Qglobal,DeltaX)

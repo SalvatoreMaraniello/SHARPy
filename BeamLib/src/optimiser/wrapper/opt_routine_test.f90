@@ -73,7 +73,7 @@ program opt_routine_test
  ! --------------------------------------------------------------- Define Input:
 
 ! Options and Problem Setup
-    NumElems = 10
+    NumElems = 1
     Solution = 112
 
     NumNodesElem = 3
@@ -169,7 +169,7 @@ select case (Solution)
                      & ExtForce, ExtMomnt,               &
                      & TipMass, TipMassY, TipMassZ,      &
                      & Omega,                            &
-                     & .true.,.true.,.false.,           & ! Options
+                     & .false.,.true.,.false.,           & ! Options
                      & .true., .false., 0, 99,           &
                      & 10,Solution, 1.d-5, 1.d-5,  1.d-4,&
                      & PosIni, PsiIni,                   & ! Initial Pos/Rot
