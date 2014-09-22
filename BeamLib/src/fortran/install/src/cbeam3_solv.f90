@@ -222,13 +222,13 @@ TaPsi =           Psisc *Options%MinDelta
       call cbeam3_solv_update_static (Elem,Node,Psi0,DeltaX,PosDefor,PsiDefor)
 
 ! Convergence parameter delta (original):
-      call delta_check(Qglobal,DeltaX,Delta,passed_delta,Options%MinDelta,print_info=.true.)
+      call delta_check(Qglobal,DeltaX,Delta,passed_delta,Options%MinDelta,print_info=Options%PrintInfo)
 
  ! Check convergence using the residual:
       call separate_dofs(Qglobal,(/1,2,3/),(/4,5,6/),QglFrc,QglMmt)
 
       call residual_check(Iter,Qglobal,Res,Res0,passed_res,Options%MinDelta,&
-                         &TaRes,print_info=.true.  )
+                         &TaRes,print_info=Options%PrintInfo  )
 
 
       if ( (iLoadStep .eq. 1) .and. (Iter.eq.2) ) then
@@ -237,34 +237,34 @@ TaPsi =           Psisc *Options%MinDelta
           if (maxval(abs( AppForces(:,1:3))).eq. 0.0_8) then
               ! jump first iteration
               call residual_check(1,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
-                                 &TaResFrc,print_info=.true.)
+                                 &TaResFrc,print_info=Options%PrintInfo)
           else
               call residual_check(Iter  ,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
-                                 &TaResFrc,print_info=.true.)
+                                 &TaResFrc,print_info=Options%PrintInfo)
           end if
 
           if (maxval(abs( AppForces(:,4:6))).eq.0.0_8) then
               call residual_check(1,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
-                                 &TaResMmt,print_info=.true.)
+                                 &TaResMmt,print_info=Options%PrintInfo)
           else
               call residual_check(Iter,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
-                                 &TaResMmt,print_info=.true.)
+                                 &TaResMmt,print_info=Options%PrintInfo)
           end if
 
       else
           call residual_check(Iter  ,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
-                             &TaResFrc,print_info=.true.)
+                             &TaResFrc,print_info=Options%PrintInfo)
           call residual_check(Iter,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
-                             &TaResMmt,print_info=.true.)
+                             &TaResMmt,print_info=Options%PrintInfo)
       end if
 
 
  ! SuperLinear Convergence Test
       call separate_dofs(DeltaX,(/1,2,3/),(/4,5,6/),DeltaPos,DeltaPsi)
 
-      call error_check(Iter,DeltaX  ,DX_old  ,DX_now  ,ErrX  ,passed_err   ,TaX  ,print_info=.true.)
-      call error_check(Iter,DeltaPos,DPos_old,DPos_now,ErrPos,passed_errpos,TaPos,print_info=.true.)
-      call error_check(Iter,DeltaPsi,DPsi_old,DPsi_now,ErrPsi,passed_errpsi,TaPsi,print_info=.true.)
+      call error_check(Iter,DeltaX  ,DX_old  ,DX_now  ,ErrX  ,passed_err   ,TaX  ,print_info=Options%PrintInfo)
+      call error_check(Iter,DeltaPos,DPos_old,DPos_now,ErrPos,passed_errpos,TaPos,print_info=Options%PrintInfo)
+      call error_check(Iter,DeltaPsi,DPsi_old,DPsi_now,ErrPsi,passed_errpsi,TaPsi,print_info=Options%PrintInfo)
 
       DX_old   = DX_now
       DPos_old = DPos_now

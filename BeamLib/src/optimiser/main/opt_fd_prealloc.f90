@@ -55,8 +55,8 @@ module opt_fd_prealloc
                       & PsiIni,                                      &
                       & Node, NumDof,                                &
                       & PosDef, PsiDef, InternalForces,              &
-                      & NumSteps, t0, dt,                            &
-                      & ForceDynAmp,ForceTime,                       &
+                      &             Time,                            &
+                      & ForceTime,ForceDynAmp,                       &
                       & ForcedVel,ForcedVelDot,                      &
                       & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, &
                       & RefVel, RefVelDot, Quat,                     &
@@ -79,7 +79,24 @@ module opt_fd_prealloc
      real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
      real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
-     real(8):: t0,dt                               ! Initial time and time step.
+ ! Dynamic Input/Output
+    real(8), intent(inout) :: Time(:)           ! Discrete time vector in the dynamic simulation.
+    real(8), intent(inout) :: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
+    real(8), intent(inout) :: ForceTime   (:)   ! Time history of the dynamic nodal forces.
+    real(8), intent(inout) :: ForcedVel   (:,:) ! Forced velocities at the support.
+    real(8), intent(inout) :: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
+
+    real(8), intent(inout) :: PosDotDef (:,:)   ! Current nodal position vector.
+    real(8), intent(inout) :: PsiDotDef (:,:,:) ! Current element orientation vectors.
+    real(8), intent(inout) :: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
+    real(8), intent(inout) :: VelocTime(:,:)    ! History of velocities.
+    real(8), intent(inout) :: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
+
+  ! Rigid-body variables
+     real(8), intent(inout) :: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
+     real(8), intent(inout) :: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
+     real(8), intent(inout) :: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
+
      integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
      integer:: NumSteps                            ! Number of time steps.
      integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
@@ -88,28 +105,15 @@ module opt_fd_prealloc
      type(xbnode), allocatable:: Node(:)            ! Nodal information.
      integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
 
-     real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
-     real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
-     real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
-     real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
+
 
      character(len=25)        :: OutFile           ! Output file.
 
-     real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
-     real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
 
-     real(8),      allocatable:: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
-     real(8),      allocatable:: ForcesTime(:,:)   ! History of the force/moment vector at the beam root element.
-     real(8),      allocatable:: VelocTime(:,:)    ! History of velocities.
 
      real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
      logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
 
-     ! Rigid-body variables
-     real(8),      allocatable:: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
-     real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
-     real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
-     real(8),      allocatable:: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
 
         character(len=3), intent(in) :: fdmode          ! finite differences method
         integer                      :: NOPT            ! number of iteration for the optimisation - required to understand which column of XSH to modify
@@ -160,19 +164,19 @@ module opt_fd_prealloc
             call opt_unpack_DESIGN_SHARED(NOPT)
 
             ! execute forward
-            call fwd_problem_prealloc(NumElems,OutFile,Options,    &    ! from input_setup
-                 &                        Elem,           &   ! from opt_main_xxx
-                 &                    NumNodes,           &   ! from input_elem
-                 & BeamSpanMass, BeamSpanStiffness,&   ! Input added for the optimisation
-                 & BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+            call fwd_problem_prealloc( NumElems,OutFile,Options,    &   ! from input_setup
+                 &                        Elem,     &  ! from opt_main_xxx
+                 &                    NumNodes,     &  ! from input_elem
+                 &  BeamSpanMass, BeamSpanStiffness,&  ! Input added for the optimisation
+                 &  BoundConds,PosIni,ForceStatic,PhiNodes, &   ! from input_node
                  &                    OutGrids,    &   ! from pt_main_xxx
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-                 &            NumSteps, t0, dt,    &   ! input_dyn_setup
-                 &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                 &                        Time,    &   ! input_dyn_setup
+                 &      ForceTime, ForceDynAmp,    &   ! input_dynforce
                  &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
-                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)
 
             ! -------------------------------- allocate cost and constraints ---

@@ -13,6 +13,7 @@ contained in the methods below).
 The list of subroutine implemented is:
 
  - getprop: returns properties of material
+      - Titanium (Pai)
       - alluminium
       - default  (E  = 1.0d7, G  = 1.0d5, rho= 1.0_8)
  - rect: returns mass and stiffness matrices of a beam element with full
@@ -57,6 +58,20 @@ import beamvar
 # Load Dynamic Library
 xb = ct.cdll.LoadLibrary(shared.wrapso_abspath)
 
+
+
+def getprop(material):
+    
+    ct_E = ct.c_double( 0.0 )
+    ct_G = ct.c_double( 0.0 )
+    ct_rho = ct.c_double( 0.0 )
+    ct_material = ct.c_char_p( material.ljust(5)  )
+
+    FFun = xb.__lib_isosec_MOD_getprop( ct_material, 
+                                        ct.byref(ct_E), ct.byref(ct_G),
+                                        ct.byref(ct_rho) )
+
+    return ct_E.value, ct_G.value, ct_rho.value
 
 # ------------------------------------------------------------------------------
 def rect(l2, l3, material):
@@ -202,7 +217,7 @@ def hollowcirc(r, t, material):
 
 if __name__ == '__main__':
     
-    material='allum'
+    material='alumA'
  
   
     print 'Test rect...'
@@ -210,7 +225,11 @@ if __name__ == '__main__':
     M,K=rect(l2, l3, material)
     print 'Mass Diagonal', np.diag(M)
     print 'Stiffness Diagonal', np.diag(K)
-    
+    print 'changing material...'
+    M,K=rect(l2,l3,'titnA')
+    print 'Mass Diagonal', np.diag(M)
+    print 'Stiffness Diagonal', np.diag(K)
+        
     print 'Test rect_fact_torsion...'
     M,K=rect_fact_torsion(l2, l3, material)
     print 'Mass Diagonal', np.diag(M)
@@ -276,5 +295,10 @@ if __name__ == '__main__':
     print 'Mass Diagonal', np.diag(M)
     print 'Stiffness Diagonal', np.diag(K)    
 
+
+    print 'Testing getprop interface'
+    print getprop('titnA')
+    
+    
 
 

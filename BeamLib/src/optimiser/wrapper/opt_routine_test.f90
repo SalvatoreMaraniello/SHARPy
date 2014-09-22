@@ -14,6 +14,8 @@ program opt_routine_test
  use opt_cost
  use xbeam_shared , only: MaxElNod
  use lib_isosec
+ use input, only: input_dynforce, input_forcedvel
+
 
  implicit none
 
@@ -66,6 +68,29 @@ program opt_routine_test
     real(8),      allocatable :: LengthVector  (:)  ! Length of each element of the beam. To be used for cost evaluation.
 
 
+ ! Dynamic Input set-up
+ real(8) :: t0, tfin, dt ! Not to be passed to main routine
+ integer :: NumSteps     ! Not necessary to pass to main routine
+ real(8), allocatable :: Time(:) ! Passe in input. Array with all time-steps
+
+ ! Structural Dynamic Input/Output
+    real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
+    real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
+    real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
+    real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
+
+    real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
+    real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
+    real(8),      allocatable:: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
+    real(8),      allocatable:: VelocTime(:,:)    ! History of velocities.
+    real(8),      allocatable:: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
+
+ ! Rigid-body variables
+    real(8),      allocatable:: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
+    real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
+    real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
+
+
 
  ! utilities
    integer :: ii ! counter
@@ -73,12 +98,12 @@ program opt_routine_test
  ! --------------------------------------------------------------- Define Input:
 
 ! Options and Problem Setup
-    NumElems = 1
-    Solution = 112
+    NumElems = 10
+    Solution = 312
 
     NumNodesElem = 3
     ElemType='DISP'
-    TestCase='ncsf'
+    TestCase='lala'
     BConds='CF'
 
  ! Design
@@ -97,7 +122,7 @@ program opt_routine_test
     Omega=0.0
 
     call isorect(0.1_8, 0.1_8, 'alumA', BeamMass, BeamStiffness)
-    print *, 'K matrix: ',BeamStiffness
+
     BeamStiffness=0.0_8
     BeamStiffness(1,1)= 4.8d8   ! EA [Nm]
     BeamStiffness(2,2)= 3.231d8 !*0.5 ! GA
@@ -140,18 +165,61 @@ program opt_routine_test
     PhiNodes(ii) = ThetaRoot+(ThetaTip-ThetaRoot)*(dble(ii-1)/dble(NumNodes-1))
  end do
 
-
-
  ! Allocate Variables independent of the solution
  allocate( DensityVector (NumElems) )
  allocate(  LengthVector (NumElems) )
+
+
+
+ ! --------------------------------------------------------------- Dynamic Input
+
+ t0  =  0.0d0
+ tfin= 10.0d0
+ dt  = 1.0d-1
+ NumSteps= ceiling((tfin-t0)/dt)
+
+ Omega=20.d0    ! rad/s
+ allocate (Time(NumSteps+1))
+ do ii=1,NumSteps+1
+     Time(ii)=t0+dt*dble(ii-1)
+ end do
+
+ ! Force or velocity input.
+ allocate (ForceTime   (NumSteps+1));   ForceTime   = 0.d0
+ allocate (ForceDynAmp (NumNodes,6));   ForceDynAmp = 0.d0
+ if (Solution == 142) then
+    allocate (ForcedVel   (1,6)); ForcedVel   = 0.d0
+ else
+    allocate (ForcedVel   (NumSteps+1,6)); ForcedVel   = 0.d0
+ end if
+ allocate (ForcedVelDot(NumSteps+1,6)); ForcedVelDot= 0.d0
+
+ call input_dynforce  (NumNodes,Time,0.0_8*ForceDynAmp,ForceDynAmp,ForceTime)
+ call input_forcedvel (NumNodes,Time,ForcedVel,ForcedVelDot)
+
+ allocate (PosDotDef(NumNodes,3));           PosDotDef= 0.d0
+ allocate (PsiDotDef(NumElems,MaxElNod,3));  PsiDotDef= 0.d0
+ allocate (PosPsiTime(NumSteps+1,6));        PosPsiTime=0.d0
+ allocate (VelocTime(NumSteps+1,NumNodes));  VelocTime= 0.d0
+ allocate (DynOut((NumSteps+1)*NumNodes,3)); DynOut=0.d0
+
+
+
+! --------------------------------------------------- Rigid Body + Dynamic Input
+if ((Solution.ge.900).and.(Solution.le.952)) then
+
+    ! Initialize
+    allocate (RefVel   (NumSteps+1,6));  RefVel   =ForcedVel;       ! RefVel(1,5)=0.5d0
+    allocate (RefVelDot(NumSteps+1,6));  RefVelDot=ForcedVelDot
+    allocate (Quat     (4));             Quat     =(/1.d0,0.d0,0.d0,0.d0/)
+
+end if
 
 ! -------------------------------------------------------------------- Call Main
 ! The select case is necessary to preallocate the outputs
 
 select case (Solution)
-
-    case (102, 112, 142)
+    case default !(102, 112, 142)
 
         ! Preallocate:
         allocate(        PosIni(          NumNodes,3)); PosIni=0.0_8;
@@ -165,16 +233,21 @@ select case (Solution)
                      & NumNodesElem , ElemType, TestCase, BConds,    & ! Problem Setup Shared
                      & BeamLength1, BeamLength2,         & ! design variables
                      & BeamSpanStiffness, BeamSpanMass,  & ! Span Properties
-                     & PhiNodes,                    &
+                     & PhiNodes,                         &
                      & ExtForce, ExtMomnt,               &
                      & TipMass, TipMassY, TipMassZ,      &
                      & Omega,                            &
-                     & .false.,.true.,.false.,           & ! Options
+                     & .false.,.true.,.true.,            & ! Options
                      & .true., .false., 0, 99,           &
                      & 10,Solution, 1.d-5, 1.d-5,  1.d-4,&
                      & PosIni, PsiIni,                   & ! Initial Pos/Rot
                      & PosDef, PsiDef, InternalForces,   & ! Output Static
-                     & DensityVector, LengthVector       ) ! Design output
+                     & DensityVector, LengthVector,      & ! Design output up to v1.0
+                     & NumSteps, Time,                   & ! input_dynsetup
+                     & ForceTime, ForceDynAmp,           & ! input_dynforce
+                     & ForcedVel, ForcedVelDot,          & ! input_forcedvel
+                     & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
+                     & RefVel, RefVelDot, Quat)
 
                     ! FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
                     ! OutInBframe,OutInaframe,ElemProj,MaxIterations,         &
@@ -186,12 +259,11 @@ select case (Solution)
                     !& NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
 
 
-    case default
-        stop '[opt_routine_test] Check the allocation process is defined for the Solution sought.'
+    !case default
+    !    stop '[opt_routine_test] Check the allocation process is defined for the Solution sought.'
 
 
     end select
-
 
     ! Correct
     print *, 'Max. Tip Displ. ', cost_node_disp(PosIni,PosDef,NumNodes)
@@ -199,7 +271,7 @@ select case (Solution)
     ! Looking for intertnal stresses:
     !print *, 'Internal forces:'
     !print '(F12.6)', Internalforces
-    print *, 'load', ExtForce
+    !print *, 'load', ExtForce
 
 end program opt_routine_test
 

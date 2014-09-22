@@ -68,21 +68,25 @@ contains
 
 
 
-subroutine opt_main( NumElems, NumNodes,                            & ! Problem SetUp
+subroutine opt_main( NumElems, NumNodes,                                       & ! Problem SetUp
                    & IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds,    & ! Problem Setup Shared
                    & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
-                   & BeamSpanStiffness, BeamSpanMass,                        & ! Properties along the span
-                   & PhiNodes,                                          & ! Twist angle along the span
-                   & IN_ExtForce, IN_ExtMomnt,                               &
-                   & IN_TipMass, IN_TipMassY, IN_TipMassZ,                   &
-                   & IN_Omega,                                               &
+                   & BeamSpanStiffness, BeamSpanMass,                          & ! Properties along the span
+                   & PhiNodes,                                                 & ! Twist angle along the span
+                   & IN_ExtForce, IN_ExtMomnt,                                 &
+                   & IN_TipMass, IN_TipMassY, IN_TipMassZ,                     &
+                   & IN_Omega,                                                 &
                    & FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
-                   & OutInBframe,OutInaframe,ElemProj,MaxIterations,         &
-                   & NumLoadSteps,Solution,DeltaCurved,MinDelta, NewmarkDamp,&
+                   & OutInBframe,OutInaframe,ElemProj,MaxIterations,           &
+                   & NumLoadSteps,Solution,DeltaCurved,MinDelta, NewmarkDamp,  &
                    & PosIni, PsiIni,                   & ! Initial Pos/Rot
                    & PosDef, PsiDef, InternalForces,   & ! Output Static
-                   & DensityVector, LengthVector       ) ! Design output
-
+                   & DensityVector, LengthVector,      & ! Design output
+                   & NumSteps, Time,                   & ! input_dynsetup
+                   & ForceTime, ForceDynAmp,           & ! input_dynforce
+                   & ForcedVel, ForcedVelDot,          & ! input_forcedvel
+                   & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
+                   & RefVel, RefVelDot, Quat)
 
 ! ---------------------------------------------------------------- Removed Input
 ! these variables have been removed from the input interface as they are managed
@@ -150,39 +154,39 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
  real(8), intent(inout) :: PosDef (NumNodes,3)             ! Current nodal position vector. (sm: local coordinates)
  real(8), intent(inout) :: PsiDef (NumElems,MaxElNod,3)    ! Current element orientation vectors.
 
+! Dynamic Input/Output
+ integer, intent(in)    :: NumSteps          ! Number of time steps
+ real(8), intent(inout) :: Time(NumSteps+1)           ! Discrete time vector in the dynamic simulation.
+ real(8), intent(inout) :: ForceDynAmp (NumNodes,3) ! Amplitude of the applied dynamic nodal forces.
+ real(8), intent(inout) :: ForceTime   (NumSteps+1)   ! Time history of the dynamic nodal forces.
+ real(8), intent(inout) :: ForcedVel   (NumSteps+1,6) ! Forced velocities at the support.
+ real(8), intent(inout) :: ForcedVelDot(NumSteps+1,6) ! Derivatives of the forced velocities at the support.
 
- real(8):: t0,dt                               ! Initial time and time step.
+ real(8), intent(inout) :: PosDotDef (NumNodes,3)   ! Current nodal position vector.
+ real(8), intent(inout) :: PsiDotDef (NumElems,MaxElNod,3) ! Current element orientation vectors.
+ real(8), intent(inout) :: PosPsiTime(NumSteps+1,6)   ! Position vector/rotation history at beam tip.
+ real(8), intent(inout) :: VelocTime(NumSteps+1,NumNodes)    ! History of velocities.
+ real(8), intent(inout) :: DynOut   ((NumSteps+1)*NumNodes,6)    ! Position of all nodes wrt to global frame a for each time step
+
+ ! Rigid-body variables
+ real(8), intent(inout) :: RefVel   (NumSteps+1,6) ! Velocities of reference frame at the support (rigid body).
+ real(8), intent(inout) :: RefVelDot(NumSteps+1,6) ! Derivatives of the velocities of reference frame a.
+ real(8), intent(inout) :: Quat     (4)            ! Quaternions to describe propagation of reference frame a.
+
+
  integer:: i,j                                 ! Counter.
- integer:: NumSteps                            ! Number of time steps.
  integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
 
  type(xbelem), allocatable:: Elem(:)            ! Element information.
  type(xbnode), allocatable:: Node(:)            ! Nodal information.
  integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
  real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
- real(8),      allocatable:: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
- real(8),      allocatable:: ForceTime   (:)   ! Time history of the dynamic nodal forces.
- real(8),      allocatable:: ForcedVel   (:,:) ! Forced velocities at the support.
- real(8),      allocatable:: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
+
 
 
  logical,      allocatable:: OutGrids(:)       ! Grid nodes where output is written.
  character(len=25)        :: OutFile           ! Output file.
 
-
- real(8),      allocatable:: PosDotDef (:,:)   ! Current nodal position vector.
- real(8),      allocatable:: PsiDotDef (:,:,:) ! Current element orientation vectors.
-
- real(8),      allocatable:: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
- real(8),      allocatable:: ForcesTime(:,:)   ! History of the force/moment vector at the beam root element.
- real(8),      allocatable:: VelocTime(:,:)    ! History of velocities.
- real(8),      allocatable:: Time(:)           ! Discrete time vector in the dynamic simulation.
-
- ! Rigid-body variables
- real(8),      allocatable:: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
- real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
- real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
- real(8),      allocatable:: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
 
  ! Optimisation
  character(len=3) :: gradmode ! gradient method
@@ -212,45 +216,6 @@ subroutine opt_main( NumElems, NumNodes,                            & ! Problem 
  ! -----------------------------------------------------------------------------
  ! Create Pointers to arrays
  ! real(8), pointer, dimension(:), intent(out) :: pCOST
-
-
- !------------------------------------------------------------------------------
- ! Print all Input:
-!print *, FollowerForce
-!print *, FollowerForceRig
-!print *, PrintInfo
-!print *, OutInBframe
-!print *, OutInaframe
-!print *, ElemProj
-!print *, MaxIterations
-!print *, NumLoadSteps
-!print *, Solution
-!print *, DeltaCurved
-!print *, MinDelta
-!print *, NewmarkDamp
-
-!print *, IN_BeamLength1, IN_BeamLength2
-!print *, IN_BeamStiffness
-!print *, IN_BeamMass
-!print *, IN_ExtForce
-!print *, IN_ExtMomnt
-!print *, IN_SectWidth,IN_SectHeight
-!print *, IN_ThetaRoot
-!print *, IN_ThetaTip
-!print *, IN_TipMass
-!print *, IN_TipMassY
-!print *, IN_TipMassZ
-!print *, IN_Omega
-
-!print *, NumElems
-!print *, NumNodes
-
-!print *, IN_NumNodesElem
-!print *, IN_ElemType
-!print *, IN_TestCase
-!print *, IN_BConds
-
- !------------------------------------------------------------------------------
 
  call tic
 
@@ -374,10 +339,10 @@ do NOPT=0,NOPTMAX
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-                 &            NumSteps, t0, dt,    &   ! input_dyn_setup
-                 &       ForceDynAmp,ForceTime,    &   ! input_dynforce
+                 &                        Time,    &   ! input_dyn_setup
+                 &       ForceTime,ForceDynAmp,    &   ! input_dynforce
                  &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
-                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! to be allocated in fwd_dynamic_presolve and out of dynamic analysis
+                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)
 
      ! sm 21 aug 2014
@@ -415,6 +380,7 @@ do NOPT=0,NOPTMAX
             select case (gradmode)
                 case ('FDF')
                     print *, 'Gradients will be computed via Finite Differences'
+                    ! interface not updated
                     call fd_main_prealloc( NumElems,OutFile,Options,           &
                                 & Elem,                                        &
                                 & NumNodes,                                    &
@@ -424,8 +390,8 @@ do NOPT=0,NOPTMAX
                                 & PsiIni,                                      &
                                 & Node, NumDof,                                &
                                 & PosDef, PsiDef, InternalForces,              &
-                                & NumSteps, t0, dt,                            &
-                                & ForceDynAmp,ForceTime,                       &
+                                & Time,                                        &
+                                & ForceTime,ForceDynAmp,                       &
                                 & ForcedVel,ForcedVelDot,                      &
                                 & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, &
                                 & RefVel, RefVelDot, Quat,                     &

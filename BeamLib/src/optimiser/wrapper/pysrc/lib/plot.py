@@ -34,6 +34,10 @@ font = {'family' : 'serif',
         'size'   : 14}
 
 
+
+
+
+
 def sta_unif(PosIni,PosDef,equal=False,hold=False):
     ''' Tool to visualise initial and deformed beam configuration '''
     
@@ -59,7 +63,6 @@ def sta_unif(PosIni,PosDef,equal=False,hold=False):
         plt.show()
     
       
-
 def linlin2Dplot(x,y,xlab,ylab,labels,savename,**kwargs):
     ''' plot with linear axis and standard format 
         x,y: array, these can be a list of arrays or single arrays 

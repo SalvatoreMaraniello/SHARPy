@@ -110,6 +110,40 @@ module input
 
   select case (trim(TestCase))
 
+! Results in Pai's book (p. 392). X axis goes along the vertical beam.
+  case ('FPAI')
+    NumElems   = 40
+    ThetaRoot  = 0.d0
+    ThetaTip   = 0.d0
+    BeamLength1= 479.d-3
+
+    SectWidth= 50.8d-3
+    SectHeight=0.45d-3
+    E  = 1.27d11
+    G  = E/(2.d0*(1.d0+0.36d0))
+    rho= 4.43d3
+
+    ExtForce=(/-9.81d0,0.d0,0.d0/)*rho*SectWidth*SectHeight*BeamLength1/dble(NumElems)
+    Options%FollowerForce=.false.
+    Options%NumLoadSteps = 10
+    BConds ='CF'
+    Options%MinDelta = 1.d-5
+
+    BeamStiffness(1,1)=SectWidth*SectHeight*E
+    BeamStiffness(2,2)=(5.d0/6.d0)*SectWidth*SectHeight*G
+    BeamStiffness(3,3)=(5.d0/6.d0)*SectWidth*SectHeight*G
+    BeamStiffness(5,5)=SectWidth*(SectHeight**3.d0)*E/12.d0
+    BeamStiffness(6,6)=SectHeight*(SectWidth**3.d0)*E/12.d0
+    BeamStiffness(4,4)=0.5d0*(BeamStiffness(5,5)+BeamStiffness(6,6))
+
+    BeamMass(1,1)= rho*SectWidth*SectHeight
+    BeamMass(2,2)=BeamMass(1,1)
+    BeamMass(3,3)=BeamMass(1,1)
+    BeamMass(5,5)=rho*SectWidth*(SectHeight**3.d0)/12.d0
+    BeamMass(6,6)=rho*SectHeight*(SectWidth**3.d0)/12.d0
+    BeamMass(4,4)=0.5d0*(BeamMass(5,5)+BeamMass(6,6))
+
+
      case ('PTW1', 'PTW2') ! Check effect of pre-twist
       ! Inputs are as per NCB1 but:
       ! a. GA and EI of cross-section 2 are halved to make the bean asimetric

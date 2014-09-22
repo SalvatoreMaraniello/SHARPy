@@ -27,6 +27,7 @@ from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
 import design.beamelem, design.beamnodes
+import dynamics.load, dynamics.forcedvel
 import beamvar
 import cost
 import lib.save
@@ -41,7 +42,15 @@ wrapso = ct.cdll.LoadLibrary(shared.wrapso_abspath)
 class XBeamSolver(Component):
  
     #-------------------------------------------------------- OpenMDAO Interface
-    
+
+    '''Shared Input'''
+    NumElems     = Int(10, iotype='in', desc='Total number of elements')
+    NumNodesElem = Enum(3, (2,3), iotype='in', desc='Number of nodes per element; (2) linear, (3) quadratic.')
+    ElemType     = Enum('DISP',('DISP','STRN'), iotype='in')
+    BConds       = Enum('CF'  ,('CF','FF')    , iotype='in', desc='Boundary conditions, (CF) clamped-free, (FF) free-free.') 
+      
+    TestCase = Str('test', iotype='in', desc='Test case name.')
+
     '''Options:'''
     FollowerForce   = Bool( True, iotype='in', desc='Follower Force; default: True')  
     FollowerForceRig= Bool( True, iotype='in', desc='Follower force in the body-fixed frame; default: True')  
@@ -60,15 +69,6 @@ class XBeamSolver(Component):
     MinDelta        = Float( 1e-8, iotype='in', desc='Convergence parameter for Newton-Raphson iterations')               
     NewmarkDamp     = Float( 1e-4, iotype='in', desc='Numerical damping in the Newmark integration scheme')
    
-    '''Shared Input'''
-    NumElems     = Int(10, iotype='in', desc='Total number of elements')
-    NumNodesElem = Enum(3, (2,3), iotype='in', desc='Number of nodes per element; (2) linear, (3) quadratic.')
-    ElemType     = Enum('DISP',('DISP','STRN'), iotype='in')
-    BConds       = Enum('CF'  ,('CF','FF')    , iotype='in', desc='Boundary conditions, (CF) clamped-free, (FF) free-free.') 
-      
-    TestCase = Str('test', iotype='in', desc='Test case name.')
-
-
     '''Design'''
     # general
     BeamLength1 = Float( 0.0, iotype='in', desc='')
@@ -76,13 +76,13 @@ class XBeamSolver(Component):
     TipMass     = Float( 0.0, iotype='in', desc='')
     TipMassY    = Float( 0.0, iotype='in', desc='')
     TipMassZ    = Float( 0.0, iotype='in', desc='')
-    Omega       = Float( 0.0, iotype='in', desc='') 
+
 
     # beam span reconstruction
     beam_shape = Enum('constant',('constant','spline','constant_hardcoded'),iotype='in')
  
     # isotropic material cross-sectional models(see design.isosec)
-    material = Enum( 'alumA',('alumA','test'), iotype='in', desc='Material for isotropic cross ection (see design.isosec)') 
+    material = Enum( 'alumA',('alumA','titnA','test'), iotype='in', desc='Material for isotropic cross section (see design.isosec)') 
     cross_section_type = Enum(('isorect','isoellip','isocirc',
                                'isohollowrect','isohollowellip','isohollowcirc',
                                'isorect_fact_torsion'),
@@ -119,7 +119,22 @@ class XBeamSolver(Component):
     XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
     NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')
     
+    # Loading Static (and Dynamic)
+    AppDynLoadType = Enum('nodal', ('uniform','nodal'), 
+                          desc='Dynamic prescribed external load uniform or concentrated to a node. see dynamics.load')
+    NodeAppForce = Int( -1, iotype='in', desc='Node at which a dynamic force is applied. -1 = tip')    
     
+    # Loading Dynamic Only
+    AppDynLoadVariation = Enum('constant', 
+                               ('constant','impulse','sin','cos','ramp','omcos','rampsin'), 
+                               desc='Method for time variation of prescribed dynamic load')
+    NumSteps = 0 # steps for dynamic simulation   
+
+    TimeRamp = Float(0.0, iotype='in', desc ='For time dependent loads having a ramp, time required to reach full loading')
+    Omega    = Float( 0.0, iotype='in', desc='Frequency for sin, cos, rampsin AppDynLoadVariation')   
+ 
+ 
+ 
     def __init__(self):
         
         # not to overwrite Component __init__
@@ -130,6 +145,8 @@ class XBeamSolver(Component):
         ###fwd_run=xbso.__opt_routine_MOD_opt_main 
         self.fwd_run = getattr(wrapso, "__opt_routine_MOD_opt_main")       
         
+        
+        #--------------------------------------------------------- Input Related
         # Applied external forces at the Tip
         self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
         self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')  
@@ -140,7 +157,15 @@ class XBeamSolver(Component):
         # for constant_hardcoded method only
         self.Mroot = np.zeros((6,6),dtype=float,order='F')
         self.Kroot = np.zeros((6,6),dtype=float,order='F')
-    
+
+        # Dynamic Simulation
+        self.Time = np.zeros((1),dtype=float,order='F')               # simulation time
+        self.AppDynForceVec    = np.zeros((3), dtype='float', order='F') # input for dynamics.load.set_***_ForceDynAmp
+        self.AppDynMomentumVec = np.zeros((3), dtype='float', order='F') # input for dynamics.load.set_***_ForceDynAmp
+        
+             
+        
+        #------------------------------------------------------------- Utilities
         # save directory
         self._savedir = '.'
     
@@ -148,13 +173,86 @@ class XBeamSolver(Component):
         self._counter = 0
         self._use_previous_solution = False
         
+        # append code version
+        self._version = shared.CodeVersion()        
+
 
     def pre_solve(self):
         
         # ------------------------------------------------ Determine Arrays Size
         self.NumNodes = beamvar.total_nodes(self.NumElems,self.NumNodesElem)
         self._NumNodes_copy = self.NumNodes  
-                       
+
+
+        #------------------------------------------- Take care of dynamics input
+        # Set Arrays Order
+        ### not required for 1D array, here for memo!
+        self.Time = np.array(self.Time, dtype=float, order='F')
+        self.NumSteps = len(self.Time)-1
+        
+        
+        #--------------------------------------------- Set Dynamics input/output
+        # these are always allocated (as they are passed in input to fortran
+        # solver. 
+        # For static simulation their size is, however, negligible.
+        
+        # Span Distribution of Prescribed Load           
+        if self.AppDynLoadType == 'uniform':
+            self.ForceDynAmp = dynamics.load.set_unif_ForceDynAmp(
+                                   self.NumNodes, self.AppDynForceVec, self.AppDynMomentumVec)    
+        elif self.AppDynLoadType == 'nodal':
+            self.ForceDynAmp = dynamics.load.set_nodal_ForceDynAmp(
+                                self.NumNodes, self.NodeAppForce,
+                                self.AppDynForceVec, self.AppDynMomentumVec)
+        else:
+            raise NameError('AppDynLoadType not valid!')
+            
+        # Time variation of Prescribed Load
+        if self.AppDynLoadVariation == 'constant':
+            self.ForceTime = dynamics.load.set_const_ForceTime(self.Time)
+        elif self.AppDynLoadVariation == 'impulse':
+            self.ForceTime = dynamics.load.set_impulse_ForceTime(self.Time)
+        elif self.AppDynLoadVariation == 'ramp':
+            self.ForceTime = dynamics.load.set_ramp_ForceTime(self.Time,self.TimeRamp)
+        elif self.AppDynLoadVariation == 'sin':
+            self.ForceTime = dynamics.load.set_sin_ForceTime(self.Time,self.Omega)
+        elif self.AppDynLoadVariation == 'cos':
+            self.ForceTime = dynamics.load.set_cos_ForceTime(self.Time,self.Omega)
+        elif self.AppDynLoadVariation == 'omcos':
+            self.ForceTime = dynamics.load.set_omcos_ForceTime(self.Time,self.Omega)
+        elif self.AppDynLoadVariation == 'rampsin':
+            self.ForceTime = dynamics.load.set_omcos_ForceTime(self.Time,self.TimeRamp,self.Omega) 
+        else:
+            raise NameError('AppDynLoadVariation not valid!')           
+
+        # Prescribed Velocities at support
+        # only one method available here
+        self.ForcedVel, self.ForcedVelDot = dynamics.forcedvel.zero(self.Time)
+
+        # output 
+        # Current nodal position vector
+        self.PosDotDef = np.zeros( (self.NumNodes,3), dtype='float', order='F' )
+        # Current element orientation vectors
+        self.PsiDotDef = np.zeros( (self.NumElems,3,3), dtype='float', order='F' ) # the 2nd index is the max nodes per element
+        # Position vector/rotation history at beam tip.
+        self.PosPsiTime= np.zeros( (self.NumSteps+1,6), dtype='float', order='F' )
+        # History of Velocities
+        self.VelocTime = np.zeros( (self.NumSteps+1,self.NumNodes), dtype='float', order='F' )
+        # Position of all nodes wrt to global frame a for each time step
+        self.DynOut    = np.zeros( ((self.NumSteps+1)*self.NumNodes,3), dtype='float', order='F' )
+        
+
+        if self.Solution == 142:
+            self.ForcedVel = np.zeros( (1,6), dtype='float', order='F' )
+
+
+        #-------------------------------- Set Rigid-Body + Dynamics input/output
+
+        ###self.RefVel     =np.zeros( (self.NumSteps+1,6), dtype='float', order='F') 
+        ###self.RefVelDot  =np.zeros( (self.NumSteps+1,6), dtype='float', order='F')         
+        self.RefVel = self.ForcedVel.copy()
+        self.RefVelDot=self.ForcedVelDot.copy()
+        self.Quat =np.array([1,0,0,0],dtype=float,order='F')
 
         #-------------------------------------------------------- Construct Beam   
         if self.beam_shape=='constant':
@@ -185,9 +283,14 @@ class XBeamSolver(Component):
 
 
         #-------------------------------------------------------- Prepare Output
-        # General
+        # Design Related
         self.DensityVector = np.zeros((self.NumElems),dtype=float,order='F')
         self.LengthVector  = np.zeros((self.NumElems),dtype=float,order='F')
+        
+        
+
+        
+        
         
         # Problem dependent
         
@@ -217,11 +320,14 @@ class XBeamSolver(Component):
         self.set_ctypes()
         
         #--------------------------------------------------------------- Testing
-        #print 'PhiNodes', self.PhiNodes
-        #print 'BeamMass', self.BeamSpanMass
-        #print 'BeamStiff'
-        #for ii in range(self.NumElems):
-        #    print np.diag(self.BeamSpanStiffness[ii,:,:])
+        #print self.Time
+        #print self.ForceTime
+        
+        #self.Time = np.array(self.Time, dtype=float, order='F')
+        #self.ForceTime = np.array(self.ForceTime, dtype=float, order='F')
+        #self.ForceDynAmp = np.array(self.ForceDynAmp, dtype=float, order='F')
+        #self.Time = np.zeros((5), dtype=float, order='F')
+        
         #------------------------------------------------------------------------------ 
         
         ###print 'Starting Solution:'
@@ -236,6 +342,7 @@ class XBeamSolver(Component):
         lib.save.h5comp( self, savename)
         
         # call xbeam solver
+
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
                      ct.byref(self.ct_NumNodesElem), self.ct_ElemType, self.ct_TestCase, self.ct_BConds,
                      ct.byref(self.ct_BeamLength1), ct.byref(self.ct_BeamLength2),
@@ -245,12 +352,20 @@ class XBeamSolver(Component):
                      self.ExtForce.ctypes.data_as(ct.c_void_p), self.ExtMomnt.ctypes.data_as(ct.c_void_p),
                      ct.byref(self.ct_TipMass), ct.byref(self.ct_TipMassY), ct.byref(self.ct_TipMassZ),
                      ct.byref(self.ct_Omega),
-                     ct.byref(self.ct_FollowerForce), ct.byref(self.ct_FollowerForceRig), ct.byref(self.ct_PrintInfo),   
+                     ct.byref(self.ct_FollowerForce), ct.byref(self.ct_FollowerForceRig), ct.byref(self.ct_PrintInfo),    # options
                      ct.byref(self.ct_OutInBframe), ct.byref(self.ct_OutInaframe), ct.byref(self.ct_ElemProj), ct.byref(self.ct_MaxIterations),
                      ct.byref(self.ct_NumLoadSteps), ct.byref(self.ct_Solution), ct.byref(self.ct_DeltaCurved), ct.byref(self.ct_MinDelta), ct.byref(self.ct_NewmarkDamp),
-                     self.PosIni.ctypes.data_as(ct.c_void_p), self.PsiIni.ctypes.data_as(ct.c_void_p),                  
+                     self.PosIni.ctypes.data_as(ct.c_void_p), self.PsiIni.ctypes.data_as(ct.c_void_p),       # output static           
                      self.PosDef.ctypes.data_as(ct.c_void_p), self.PsiDef.ctypes.data_as(ct.c_void_p), self.InternalForces.ctypes.data_as(ct.c_void_p),
-                     self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p)    )
+                     self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p) , # output design - part 1
+                     ct.byref(self.ct_NumSteps), self.Time.ctypes.data_as(ct.c_void_p),                            # dynamic input 
+                     self.ForceTime.ctypes.data_as(ct.c_void_p), self.ForceDynAmp.ctypes.data_as(ct.c_void_p),     # input_dynforce
+                     self.ForcedVel.ctypes.data_as(ct.c_void_p), self.ForcedVelDot.ctypes.data_as(ct.c_void_p),    # input_forcedvel
+                     self.PosDotDef.ctypes.data_as(ct.c_void_p), self.PsiDotDef.ctypes.data_as(ct.c_void_p),
+                     self.PosPsiTime.ctypes.data_as(ct.c_void_p), self.VelocTime.ctypes.data_as(ct.c_void_p),
+                     self.DynOut.ctypes.data_as(ct.c_void_p)  ,                                              # output from sol 202, 212, 302, 312, 322
+                     self.RefVel.ctypes.data_as(ct.c_void_p), self.RefVelDot.ctypes.data_as(ct.c_void_p), 
+                     self.Quat.ctypes.data_as(ct.c_void_p)   )                # output rigid-body + dynamics
         
         # output checks
         self.check()
@@ -284,6 +399,7 @@ class XBeamSolver(Component):
         self.ct_NumElems     = ct.c_int( self.NumElems     )
         self.ct_NumNodesElem = ct.c_int( self.NumNodesElem )
         self.ct_NumNodes     = ct.c_int( self.NumNodes )
+        self.ct_NumSteps     = ct.c_int( self.NumSteps )
         
         self.ct_ElemType     = ct.c_char_p( self.ElemType.ljust(4) )     # the ljust is not required
         self.ct_TestCase     = ct.c_char_p( self.TestCase.ljust(4) )
@@ -394,6 +510,9 @@ class XBeamSolver(Component):
         return argslist
 
 
+
+
+
 #------------------------------------------------------------------------------ 
         
 
@@ -430,7 +549,7 @@ if __name__=='__main__':
     xbsolver.PrintInfo=False              
     xbsolver.MaxIterations=99    
     xbsolver.NumLoadSteps=20
-    xbsolver.Solution=142
+    xbsolver.Solution=112
     xbsolver.MinDelta= 1.e-5
 
 
@@ -473,6 +592,11 @@ if __name__=='__main__':
     XBread=lib.read.h5comp('./component_after.h5')
     for tt in XBread.items():
         print tt
+        
+    # check version
+    print xbsolver._version.number
+    print xbsolver._version.description
+    
     
     
     

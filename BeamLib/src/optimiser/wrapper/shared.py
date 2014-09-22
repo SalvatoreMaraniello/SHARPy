@@ -17,6 +17,12 @@ Remark:
 import os
 import sys
 
+
+class CodeVersion():
+    number = '1.0'
+    description = 'Optimisation for Static Solution'
+
+
 # ----------------------------------------------------------------- Define Paths
 # openMDAO main folder
 openmdao_abspath='/home/sm6110/mylibs/openmdao-0.10.0'

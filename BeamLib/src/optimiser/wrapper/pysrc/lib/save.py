@@ -98,11 +98,18 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile['TipMass']=XBinst.TipMass
     hdfile['TipMassY']=XBinst.TipMassY
     hdfile['TipMassZ']=XBinst.TipMassZ
-    hdfile['Omega']=XBinst.Omega
     
     hdfile['beam_shape']=XBinst.beam_shape        
     hdfile['cross_section_type']=XBinst.cross_section_type
     hdfile['material']=XBinst.material
+
+    # dynamics
+    hdfile['NumSteps']=XBinst.NumSteps
+    hdfile['AppDynLoadType']=XBinst.AppDynLoadType
+    hdfile['AppDynLoadVariation']=XBinst.AppDynLoadVariation
+    hdfile['NodeAppForce']=XBinst.NodeAppForce
+    hdfile['TimeRamp']=XBinst.TimeRamp
+    hdfile['Omega']=XBinst.Omega
 
 
     # ---------------------------------------------------- input without default
@@ -163,6 +170,20 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'PsiDef')
     hdfile = conditional_saving(hdfile,XBinst,'InternalForces')
   
+
+    #---------------------------------------------------------- Dynamics Related
+    # input
+    hdfile = conditional_saving(hdfile,XBinst,'Time')   
+    hdfile = conditional_saving(hdfile,XBinst,'ForceDynAmp')   
+    hdfile = conditional_saving(hdfile,XBinst,'ForceTime')   
+    hdfile = conditional_saving(hdfile,XBinst,'ForcedVel')   
+    hdfile = conditional_saving(hdfile,XBinst,'ForcedVelDot') 
+    # output
+    hdfile = conditional_saving(hdfile,XBinst,'PosDotDef')   
+    hdfile = conditional_saving(hdfile,XBinst,'PsiDotDef')   
+    hdfile = conditional_saving(hdfile,XBinst,'PosPsiTime')   
+    hdfile = conditional_saving(hdfile,XBinst,'VelocTime')   
+    hdfile = conditional_saving(hdfile,XBinst,'DynOut')   
 
     '''
     # to add future fields...

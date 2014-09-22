@@ -237,7 +237,7 @@ if __name__=='__main__':
     
     #--------------------------------------------- Constant Properties Beam Test
     print 'Testing constant beam building'
-    material='allum'
+    material='titnA'
     NumElems = 3
     
     l2=0.2; l3=0.5;

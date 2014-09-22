@@ -32,7 +32,12 @@ contains
 ! subroutine getprop
 ! ------------------------------------------------------------------------------
     ! Return material properties
+    !
+    ! Remark:
+    !   - material names ofther have a letter to allow to add variations of the
+    !     same material.
     ! --------------------------------------------------------------------------
+
     subroutine getprop(material, E, G, rho)
 
         real(8),          intent(out) :: E        !   E: Young's module [Pa]
@@ -42,6 +47,12 @@ contains
         character(len=5), intent(in)  :: material
 
         select case(trim(material))
+
+            case ('titnA') ! Titanium (as per Pai/Palacios, Cook, Muroa)
+                E = 127.d9
+                mu = 0.36_8
+                G = E/( 2.0_8 * (1.0_8+mu) )
+                rho = 4430.0_8
 
             case ('alumA') ! typical aluminium alloy
                 E  = 70.d9

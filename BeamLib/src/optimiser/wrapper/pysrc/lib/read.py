@@ -22,28 +22,6 @@ from xbcomponent import XBeamSolver
 
 
 
-def h5sol(filename):
-    ''' 
-    Reads nodes displacements and rotations in h5 format. 
-    
-    Pos,Psi: position and rotation arrays in initial (Ini) or deformed (Def)
-    configuration
-    
-    Remark: for format and differences against Fortran code, see lib.save.h5
-    '''    
-    
-    hdfile = h5py.File(filename,'r') 
-    
-    PosIni=hdfile['PosIni'].value
-    PsiIni=hdfile['PsiIni'].value
-    PosDef=hdfile['PosDef'].value
-    PsiDef=hdfile['PsiDef'].value
-    
-    hdfile.close()    
-    
-    return PosIni,PsiIni,PosDef,PsiDef
-
-
 def h5comp(filename):
     ''' 
     Reads All variables of an instance of class XBeamSolver from a hdf5 file.
@@ -101,12 +79,19 @@ def h5comp(filename):
     setattr(XBinst,'TipMass',hdfile['TipMass'].value)
     setattr(XBinst,'TipMassY',hdfile['TipMassY'].value)    
     setattr(XBinst,'TipMassZ',hdfile['TipMassZ'].value)
-    setattr(XBinst,'Omega',hdfile['Omega'].value)
-
 
     setattr(XBinst,'beam_shape',hdfile['beam_shape'].value)
     setattr(XBinst,'cross_section_type',hdfile['cross_section_type'].value)
     setattr(XBinst,'material',hdfile['material'].value)
+    
+    # dynamics
+    setattr(XBinst,'NumSteps',hdfile['NumSteps'].value)
+    setattr(XBinst,'AppDynLoadType',hdfile['AppDynLoadType'].value)
+    setattr(XBinst,'AppDynLoadVariation',hdfile['AppDynLoadVariation'].value)
+    setattr(XBinst,'NodeAppForce',hdfile['NodeAppForce'].value)
+    setattr(XBinst,'TimeRamp',hdfile['TimeRamp'].value)
+    setattr(XBinst,'Omega',hdfile['Omega'].value)
+
     
     # ---------------------------------------------------- input without default
     # these values will appear as 'not found' if not allocated
@@ -165,6 +150,20 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'PsiIni')
     XBinst = conditional_reading(hdfile,XBinst,'PsiDef')
     XBinst = conditional_reading(hdfile,XBinst,'InternalForces')    
+    
+    #---------------------------------------------------------- Dynamics Related
+    # input
+    XBinst = conditional_reading(hdfile,XBinst,'Time')   
+    XBinst = conditional_reading(hdfile,XBinst,'ForceDynAmp')   
+    XBinst = conditional_reading(hdfile,XBinst,'ForceTime')   
+    XBinst = conditional_reading(hdfile,XBinst,'ForcedVel')   
+    XBinst = conditional_reading(hdfile,XBinst,'ForcedVelDot') 
+    # output
+    XBinst = conditional_reading(hdfile,XBinst,'PosDotDef')   
+    XBinst = conditional_reading(hdfile,XBinst,'PsiDotDef')   
+    XBinst = conditional_reading(hdfile,XBinst,'PosPsiTime')   
+    XBinst = conditional_reading(hdfile,XBinst,'VelocTime')   
+    XBinst = conditional_reading(hdfile,XBinst,'DynOut')     
     
 
     '''
@@ -238,28 +237,25 @@ if __name__=='__main__':
     
     import numpy as np
 
-    '''
-    #---------------------------------------------------------------- h4sol test
-    filename ='save_test.h5'
-    PosIni,PsiIni,PosDef,PsiDef=h5sol(filename) 
-    print PosIni,PsiIni,PosIni,PosDef
     
     #--------------------------------------------------------------- h5comp test
-    filename = 'fwd_model.h5' 
+    ###filename = 'fwd_model.h5' 
+    filename='/home/sm6110/git/SHARPy_studies/GEBM/20140918_str_dynamics/res/ramp_600kN_sol312_NE10_NL3_NS50_000.h5'
     XBinst = h5comp(filename)
     # print all the attributes
     #print XBinst.get_attributes()
     for tt in XBinst.items():
         print tt
-    print XBinst.PsiIni
-    '''
     
+    
+    
+    '''
     #------------------------------------------------------------- h5series test
     rootname = '/home/sm6110/git/SHARPy_studies/OPT/20140820_validation_static_opt/res_opt45/isorec_thick_45deg_6kN_sol102_'
     attrlist = ['cs_l2', 'cs_l3','TotalMass','XDisp','YDisp','ZDist','NodeDisp']
     outlist = h5series(rootname,attrlist)
     outvals = np.array(outlist)
     print outvals
-    
+    '''
  
     
