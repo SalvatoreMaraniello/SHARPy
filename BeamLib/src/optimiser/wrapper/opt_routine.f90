@@ -73,7 +73,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
                    & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
                    & BeamSpanStiffness, BeamSpanMass,                          & ! Properties along the span
                    & PhiNodes,                                                 & ! Twist angle along the span
-                   & IN_ExtForce, IN_ExtMomnt,                                 &
+                   & ForceStatic,                                              & ! Static Nodal forces
                    & IN_TipMass, IN_TipMassY, IN_TipMassZ,                     &
                    & IN_Omega,                                                 &
                    & FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
@@ -97,6 +97,8 @@ subroutine opt_main( NumElems, NumNodes,                                       &
    real(8)  :: IN_BeamStiffness(6,6)=0.0_8
    real(8)  :: IN_BeamMass(6,6)=0.0_8
    real(8)  :: IN_SectWidth=0.0_8,IN_SectHeight=0.0_8
+   real(8)  :: IN_ExtForce(3)
+   real(8)  :: IN_ExtMomnt(3)
 
 ! ---------------------------------------------------------------------- Options
         type(xbopts)                      :: Options ! not dummy
@@ -117,8 +119,6 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 ! ------------------------------------------------------ Design Variables Shared
 ! These are normally inported from the input module through input_setup.
    real(8), intent(inout)  :: IN_BeamLength1, IN_BeamLength2
-   real(8), intent(inout)  :: IN_ExtForce(3)
-   real(8), intent(inout)  :: IN_ExtMomnt(3)
    real(8), intent(inout)  :: IN_TipMass
    real(8), intent(inout)  :: IN_TipMassY
    real(8), intent(inout)  :: IN_TipMassZ
@@ -148,6 +148,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
  real(8), intent(inout) :: LengthVector (NumElems)        ! Length of each element of the beam. To be used for cost evaluation.
 
 ! Static
+ real(8), intent(inout) :: ForceStatic(NumNodes,6)         ! Internal force/moments at nodes.
  real(8), intent(inout) :: InternalForces(NumNodes,6)      ! Internal force/moments at nodes.
  real(8), intent(inout) :: PosIni (NumNodes,3)             ! Initial nodal Coordinates.
  real(8), intent(inout) :: PsiIni (NumElems,MaxElNod,3)    ! Initial element orientation vectors (CRV)
@@ -180,7 +181,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
  type(xbelem), allocatable:: Elem(:)            ! Element information.
  type(xbnode), allocatable:: Node(:)            ! Nodal information.
  integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
- real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+
 
 
 
@@ -296,12 +297,12 @@ subroutine opt_main( NumElems, NumNodes,                                       &
  call update_shared_setting(IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds)
 
  call update_shared_input( IN_BeamLength1, IN_BeamLength2,       &
-                       & IN_BeamStiffness, IN_BeamMass,          &
-                       & IN_ExtForce, IN_ExtMomnt,               &
-                       & IN_SectWidth, IN_SectHeight,            &
-                       & IN_ThetaRoot, IN_ThetaTip,              &
+                       & IN_BeamStiffness, IN_BeamMass,          & ! not used in fwd_code
+                       & IN_ExtForce, IN_ExtMomnt,               & ! not used in fwd code
+                       & IN_SectWidth, IN_SectHeight,            & ! not used in fwd code
+                       & IN_ThetaRoot, IN_ThetaTip,              & ! not used in fwd code
                        & IN_TipMass, IN_TipMassY, IN_TipMassZ,   &
-                       & IN_Omega                                )
+                       & IN_Omega                                ) ! not used in fwd code
 
  !call input_setup_wrap( NumElems,  OutFile, Options )
 

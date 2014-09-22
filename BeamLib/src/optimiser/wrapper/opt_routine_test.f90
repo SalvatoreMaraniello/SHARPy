@@ -40,6 +40,11 @@ program opt_routine_test
     real(8)  :: TipMassZ
     real(8)  :: Omega
 
+
+! Static Loading Input:
+     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+
+
 ! Problem Setup:
     integer :: NumElems     ! Number of elements
     integer :: NumNodes     ! Number of nodes in the model.
@@ -89,8 +94,6 @@ program opt_routine_test
     real(8),      allocatable:: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
     real(8),      allocatable:: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
     real(8),      allocatable:: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
-
-
 
  ! utilities
    integer :: ii ! counter
@@ -169,6 +172,10 @@ program opt_routine_test
  allocate( DensityVector (NumElems) )
  allocate(  LengthVector (NumElems) )
 
+ ! Static Forces
+ allocate( ForceStatic(NumNodes,6) )
+ ForceStatic(NumNodes,1:3)=ExtForce
+ ForceStatic(NumNodes,4:6)=ExtMomnt
 
 
  ! --------------------------------------------------------------- Dynamic Input
@@ -234,7 +241,7 @@ select case (Solution)
                      & BeamLength1, BeamLength2,         & ! design variables
                      & BeamSpanStiffness, BeamSpanMass,  & ! Span Properties
                      & PhiNodes,                         &
-                     & ExtForce, ExtMomnt,               &
+                     & ForceStatic,                      &
                      & TipMass, TipMassY, TipMassZ,      &
                      & Omega,                            &
                      & .false.,.true.,.true.,            & ! Options

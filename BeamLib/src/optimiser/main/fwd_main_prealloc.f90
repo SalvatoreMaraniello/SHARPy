@@ -81,6 +81,7 @@ contains
      real(8)   :: PhiNodes (NumNodes)             ! Initial twist at grid points.
 
  ! The following variables appear as allocatable in fwd_main
+     real(8) :: ForceStatic (NumNodes,6) ! Applied static nodal forces.
      real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
      real(8) :: PosIni   (:,:)    ! Initial nodal Coordinates.
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
@@ -113,7 +114,7 @@ contains
      type(xbnode), allocatable:: Node(:)            ! Nodal information.
      integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
 
-     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+
      logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
 
      ! Rigid-body variables
@@ -125,20 +126,18 @@ contains
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Set Up Input for Static Problem
      ! (stage required also for dynamic and coupled solutions)
-     call fwd_static_input( NumElems, OutFile, Options,                &   ! from input_setup
-                          &                       Elem,                &   ! from opt_main_xxx
-                          &                   NumNodes,                &   ! from input_ele
-                          & BeamSpanMass, BeamSpanStiffness,           &   ! Input added for the optimisation
-                          & BoundConds, PosIni, ForceStatic, PhiNodes, &   ! from input_node
-                          & OutGrids                                   )   ! from pt_main_xxx
-
-
+     call fwd_static_input( NumElems, OutFile, Options, &   ! from input_setup
+                          & Elem,                       &   ! from opt_main_xxx
+                          & NumNodes,                   &   ! from input_ele
+                          & BeamSpanMass, BeamSpanStiffness, &   ! Input added for the optimisation
+                          & BoundConds, PosIni,         &   ! from input_node
+                          & OutGrids                    )   ! from pt_main_xxx
 
 
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Reads Forward Problem Input and allocates the required variables for the
      ! forward static problem solution
-     call fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
+     call fwd_presolver(NumElems,OutFile,Options,     &   ! from input_setup
                     &                        Elem,    &   ! from opt_main_xxx
                     &                    NumNodes,    &   ! from input_elem
                     &  BoundConds,PosIni,PhiNodes,    &   ! from input_node
@@ -198,6 +197,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
 
     ! The following variables appear as allocatable in fwd_main
+    real(8) :: ForceStatic (:,:) ! Applied static nodal forces.
     real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
     real(8) :: PosIni   (:,:)    ! Initial nodal Coordinates.
     real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
@@ -234,7 +234,6 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     character(len=25)        :: OutFile           ! Output file.
 
 
-    real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
     logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
 
     ! Rigid-body variables
@@ -561,26 +560,23 @@ end subroutine fwd_presolver
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
-                    &                      Elem,         &   ! from opt_main_xxx
-                    &                  NumNodes,         &   ! from input_elem
-                    & BeamSpanMass, BeamSpanStiffness,  & ! Input added for the optimisation
-                    & BoundConds,PosIni,ForceStatic,PhiNodes, & ! from input_node
-                    &                  OutGrids)             ! from pt_main_xxx
+subroutine fwd_static_input(NumElems,OutFile,Options, &   ! from input_setup
+                           & Elem,                    &   ! from opt_main_xxx
+                           & NumNodes,                &   ! from input_elem
+                           & BeamSpanMass, BeamSpanStiffness,  & ! Input added for the optimisation
+                           & BoundConds, PosIni,      & ! from input_node
+                           & OutGrids)                  ! from pt_main_xxx
 
     ! Input added for the optimisaiton
      real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
      real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
 
-     ! The following variable appear as allocatable in fwd_main
-     real(8)                  :: PosIni   (:,:)    ! Initial nodal Coordinates.
-     real(8)                  :: PhiNodes (:)      ! Initial twist at grid points.
 
+     real(8)                  :: PosIni   (:,:)    ! Initial nodal Coordinates.
      integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
      type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
      type(xbelem), allocatable:: Elem(:)           ! Element information.
      integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
-     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
      logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
      character(len=25)        :: OutFile           ! Output file.
 
@@ -597,25 +593,15 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
 
  ! conditional allocation
  !!call array2_cond_alloc(     PosIni, NumNodes, 3, .true.)
- call array2_cond_alloc(ForceStatic, NumNodes, 6, .true.)
- !call array1_cond_alloc(   PhiNodes, NumNodes   , .true.)
+
  if ( allocated(BoundConds) .eqv. .false. ) then
     allocate(BoundConds (NumNodes));   BoundConds = 0
  end if
 
- call input_node (NumNodes,Elem,BoundConds,PosIni,ForceStatic)
+ call input_node (NumNodes,Elem,BoundConds,PosIni)
  ! sm: in input_xxx.f90
- !    input_node (NumNodes,Elem,BoundConds,Coords,     Forces,PhiNodes)
- !    input_node (      in,  in,       out,   out,        out,     out)
-
-
- ! sm 21 aug 2014
- ! all saving moved in python environment
- !
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Open main output file and select grid points where output will be written.
- ! Unit 12 is opened here but subprocesses can access it - not preferred solution
- !open (unit=12,file=OutFile(1:17)//'.mrb',status='replace')
+ !    input_node (NumNodes,Elem,BoundConds,Coords)
+ !    input_node (      in,  in,       out,   out)
 
  if ( allocated(OutGrids) .eqv. .false. ) then
      allocate(OutGrids(NumNodes))
@@ -623,13 +609,6 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &      ! from input_setup
 
  OutGrids          = .false.
  OutGrids(NumNodes)= .true.
- !call out_title (12,'GLOBAL CONSTANTS IN THE MODEL:')
- !write (12,'(14X,A,I12)')    'Number of Beam DOFs:    ', 6
- !call out_title (12,'OUTPUT OPTIONS:')
- !write (12,'(14X,A,I12)')    'Number of Output Nodes: ', 1
- !write (12,'(14X,A,I12)')    'Print Displacements:    ', 1
- !write (12,'(14X,A,I12)')    'Print Velocities:       ', 1
- !close(12)
 
 end subroutine fwd_static_input
 

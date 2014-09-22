@@ -630,8 +630,8 @@ subroutine input_elem_span (NumElems, NumNodes, Elem, BeamSpanMass, BeamSpanStif
 !    Define nodal properties.
 !
 !-> Remarks.-
-!   PhiNodes made optional to allow to pass it as input from optimiser python
-!   interface
+!   - Forces and PhiNodes made optional to allow to pass it as input from
+!     optimiser python interface
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine input_node (NumNodes,Elem,BoundConds,Coords,Forces,PhiNodes)
@@ -641,8 +641,9 @@ subroutine input_elem_span (NumElems, NumNodes, Elem, BeamSpanMass, BeamSpanStif
   type(xbelem), intent(in) :: Elem      (:)       ! Element information
   integer,      intent(out):: BoundConds(:)       ! =0 on free nodes; =1 on clamped nodes; =-1 on free nodes.
   real(8),      intent(out):: Coords    (:,:)     ! Initial nodal Coordinates.
-  real(8),      intent(out):: Forces    (:,:)     ! Applied nodal forces.
-  real(8), optional,   intent(out):: PhiNodes  (:)       ! Initial twist at grid points.
+
+  real(8), optional, intent(out):: Forces    (:,:)     ! Applied nodal forces.
+  real(8), optional, intent(out):: PhiNodes  (:)       ! Initial twist at grid points.
 
 ! Local variables.
   integer      :: i           ! Counters.
@@ -678,25 +679,23 @@ if (present(PhiNodes)) then
     end select
 end if
 
-! Static point forces.
-  !ffvec=0
-  Forces=0.d0
-  select case (trim(TestCase))
-
-  case default !('BEND','CANT','NCB1') ! Forces at the tip only
-      allocate(ffvec(1))
-      ffvec = (/ NumNodes /)
-      Forces(ffvec,1:3)=reshape(ExtForce,(/1,3/))
-      Forces(ffvec,4:6)=reshape(ExtMomnt,(/1,3/))
-      deallocate(ffvec)
-
-  case ('HALE','GOLD','TPY0')
-          Forces(1,1:3)=-ExtForce
-          Forces(1,4:6)=-ExtMomnt
-          Forces(NumNodes,1:3)=ExtForce
-          Forces(NumNodes,4:6)=ExtMomnt
-
-  end select
+! Static Forces
+if (present(Forces)) then
+      Forces=0.d0
+      select case (trim(TestCase))
+          case default !('BEND','CANT','NCB1') ! Forces at the tip only
+              allocate(ffvec(1))
+              ffvec = (/ NumNodes /)
+              Forces(ffvec,1:3)=reshape(ExtForce,(/1,3/))
+              Forces(ffvec,4:6)=reshape(ExtMomnt,(/1,3/))
+              deallocate(ffvec)
+          case ('HALE','GOLD','TPY0')
+              Forces(1,1:3)=-ExtForce
+              Forces(1,4:6)=-ExtMomnt
+              Forces(NumNodes,1:3)=ExtForce
+              Forces(NumNodes,4:6)=ExtMomnt
+      end select
+ end if
 
 ! Boundary conditions
   BoundConds=0

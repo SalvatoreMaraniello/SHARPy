@@ -72,6 +72,7 @@ module opt_fd_prealloc
      real(8)                :: BeamSpanTwist(NumNodes)         ! Local Twist angle (opt)
 
    ! The following variables are allocatable in opt_fd
+     real(8) :: ForceStatic (:,:) ! Applied static nodal forces.
      real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
      real(8) :: PosIni   (:,:)    ! Initial nodal Coordinates.
      real(8) :: PsiIni (:,:,:)    ! Initial element orientation vectors (CRV)
@@ -111,7 +112,7 @@ module opt_fd_prealloc
 
 
 
-     real(8),      allocatable:: ForceStatic (:,:) ! Applied static nodal forces.
+
      logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
 
 
