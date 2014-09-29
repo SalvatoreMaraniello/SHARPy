@@ -83,15 +83,21 @@ def h5comp(filename):
     setattr(XBinst,'beam_shape',hdfile['beam_shape'].value)
     setattr(XBinst,'cross_section_type',hdfile['cross_section_type'].value)
     setattr(XBinst,'material',hdfile['material'].value)
-    
-    # dynamics
+
+    # static loads
+    setattr(XBinst,'AppStaLoadType',hdfile['AppStaLoadType'].value)
+    setattr(XBinst,'NodeAppStaForce',hdfile['NodeAppStaForce'].value) 
+ 
+    # dynamics loads
     setattr(XBinst,'NumSteps',hdfile['NumSteps'].value)
     setattr(XBinst,'AppDynLoadType',hdfile['AppDynLoadType'].value)
     setattr(XBinst,'AppDynLoadVariation',hdfile['AppDynLoadVariation'].value)
-    setattr(XBinst,'NodeAppForce',hdfile['NodeAppForce'].value)
+    setattr(XBinst,'NodeAppDynForce',hdfile['NodeAppDynForce'].value)
     setattr(XBinst,'TimeRamp',hdfile['TimeRamp'].value)
     setattr(XBinst,'Omega',hdfile['Omega'].value)
 
+    # Prescribed velocities
+    setattr(XBinst,'PrVelType',hdfile['PrVelType'].value) 
     
     # ---------------------------------------------------- input without default
     # these values will appear as 'not found' if not allocated
@@ -136,6 +142,11 @@ def h5comp(filename):
     # __init__
     XBinst = conditional_reading(hdfile,XBinst,'ExtForce')
     XBinst = conditional_reading(hdfile,XBinst,'ExtMomnt')
+    XBinst = conditional_reading(hdfile,XBinst,'ExtForceDyn')
+    XBinst = conditional_reading(hdfile,XBinst,'ExtMomntDyn')  
+    XBinst = conditional_reading(hdfile,XBinst,'PrTrVelAmpl')
+    XBinst = conditional_reading(hdfile,XBinst,'PrRotVelAmpl')  
+  
     XBinst = conditional_reading(hdfile,XBinst,'Mroot')
     XBinst = conditional_reading(hdfile,XBinst,'Kroot')
     ###XBinst = conditional_reading(hdfile,XBinst,'BeamSpanStiffness')
@@ -150,6 +161,9 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'PsiIni')
     XBinst = conditional_reading(hdfile,XBinst,'PsiDef')
     XBinst = conditional_reading(hdfile,XBinst,'InternalForces')    
+    
+    #------------------------------------------------------------ Static Related
+    XBinst = conditional_reading(hdfile,XBinst,'ForceStatic')     
     
     #---------------------------------------------------------- Dynamics Related
     # input
@@ -239,8 +253,8 @@ if __name__=='__main__':
 
     
     #--------------------------------------------------------------- h5comp test
-    ###filename = 'fwd_model.h5' 
-    filename='/home/sm6110/git/SHARPy_studies/GEBM/20140918_str_dynamics/res/ramp_600kN_sol312_NE10_NL3_NS50_000.h5'
+    #filename = 'fwd_model.h5' 
+    #filename='save_test.h5'
     XBinst = h5comp(filename)
     # print all the attributes
     #print XBinst.get_attributes()

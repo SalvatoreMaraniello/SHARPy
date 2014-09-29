@@ -705,6 +705,8 @@ if (present(Forces)) then
     if (BConds(1:1).eq.'C') BoundConds(1)       = 1
     if (BConds(2:2).eq.'C') BoundConds(NumNodes)= 1
     if (BConds(2:2).eq.'F') BoundConds(NumNodes)=-1
+    if (BConds(1:1).eq.'H') BoundConds(1)       = 2
+    if (BConds(2:2).eq.'H') BoundConds(NumNodes)= 2
   end select
 
   return

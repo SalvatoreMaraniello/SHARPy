@@ -4,27 +4,29 @@ Created on 17 Sep 2014
 @author: sm6110
 
 
-The module contains methods to define dynamic loads
+The module contains methods to define static and dynamic loads by determining:
+
+    a. the force distribution on the beam (set_*_Force functions)    
+    b. the time variation (set_*_ForceTime functions)
+
+
+Remark:
 
 The methods are equivalent to those implemented in the subroutine:
 
     module: input
     input_dynforce (NumNodes,Time,ForceStatic,ForceDynAmp,ForceTime)
     
-of the original Fortran beam solver. The output variables are:
+of the original Fortran beam solver. The methods here implemented can be used
+to allocate the following variables of the original Fortran code:
 
+    ForceStatic (NUmNodes,6) ! Internal force/moments at nodes.
     ForceDynAmp (NumNodes,6) ! Amplitude of the applied dynamic nodal forces.
     ForceTime   (NumSteps+1) ! Time history of the dynamic nodal forces.
     
-these describe the loads over each node of the model at NumSteps, evenly spaced,
-time-steps.
-
 Note that the original Fortran code only allows for loads of the kind:
 
     Load = ForceDynAmp(position) * ForceTime(time)
-  
-Therefore, while only one method is required to allocate ForceDynAmp, several
-methods can be developed for ForceTime.
 
 '''
 
@@ -39,10 +41,10 @@ import numpy as np
 
 
 
-''' ------------------------------------------------------------ ForceDynAmp '''
+''' ---------------------------------------------------- Forces distribution '''
 
 
-def set_nodal_ForceDynAmp(NumNodes,NodeForce,
+def set_nodal_ForceDistr(NumNodes,NodeForce,
           ForceVec  = np.zeros((3)) ,
           MomentVec = np.zeros((3)) ):
     '''
@@ -53,17 +55,17 @@ def set_nodal_ForceDynAmp(NumNodes,NodeForce,
         tip:  NodeForce = -1
     '''
     
-    ForceDynAmp = np.zeros( (NumNodes,6), dtype='float', order='F')
+    ForceDistr = np.zeros( (NumNodes,6), dtype='float', order='F')
 
-    ForceDynAmp[NodeForce,:3]=ForceVec
-    ForceDynAmp[NodeForce,3:]=MomentVec
+    ForceDistr[NodeForce,:3]=ForceVec
+    ForceDistr[NodeForce,3:]=MomentVec
     
-    ForceDynAmp = np.array( ForceDynAmp, dtype='float', order='F')
+    ForceDistr = np.array( ForceDistr, dtype='float', order='F')
         
-    return ForceDynAmp
+    return ForceDistr
     
 
-def set_unif_ForceDynAmp(NumNodes,
+def set_unif_ForceDistr(NumNodes,
           ForceVec  = np.zeros((3)) ,
           MomentVec = np.zeros((3)) ):
     '''
@@ -72,13 +74,13 @@ def set_unif_ForceDynAmp(NumNodes,
     "shape" of the loads will remain the same
     ''' 
     
-    ForceDynAmp = np.zeros( (NumNodes,6), dtype='float', order='F')
+    ForceDistr = np.zeros( (NumNodes,6), dtype='float', order='F')
 
     for ii in range(NumNodes):
-        ForceDynAmp[ii,:3]=ForceVec
-        ForceDynAmp[ii,3:]=MomentVec
+        ForceDistr[ii,:3]=ForceVec
+        ForceDistr[ii,3:]=MomentVec
         
-    return ForceDynAmp
+    return ForceDistr
 
 
 
@@ -178,17 +180,17 @@ if __name__=='__main__':
     Omega = 2.0 * (2.0*np.pi)/Time[-1] # 2 periods in plot
     Tfull = 1.2
     
-    print 'Test set_unif_ForceDynAmp'
-    print set_unif_ForceDynAmp(NumNodes,F,M)
-    print set_unif_ForceDynAmp(NumNodes,F)
-    print set_unif_ForceDynAmp(NumNodes,MomentVec=M)
-    print set_unif_ForceDynAmp(NumNodes)
+    print 'Test set_unif_ForceDistr'
+    print set_unif_ForceDistr(NumNodes,F,M)
+    print set_unif_ForceDistr(NumNodes,F)
+    print set_unif_ForceDistr(NumNodes,MomentVec=M)
+    print set_unif_ForceDistr(NumNodes)
     
-    print 'Test set_nodal_ForceDynAmp'
+    print 'Test set_nodal_ForceDistr'
     print 'Tip'
-    print set_nodal_ForceDynAmp(NumNodes,-1,F,M)
+    print set_nodal_ForceDistr(NumNodes,-1,F,M)
     print 'Root'
-    print set_nodal_ForceDynAmp(NumNodes, 0,F,M)
+    print set_nodal_ForceDistr(NumNodes, 0,F,M)
     
     print '--------------------------------------------------------------------'
     print 'Time'

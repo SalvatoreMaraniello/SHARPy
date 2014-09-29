@@ -75,7 +75,6 @@ subroutine opt_main( NumElems, NumNodes,                                       &
                    & PhiNodes,                                                 & ! Twist angle along the span
                    & ForceStatic,                                              & ! Static Nodal forces
                    & IN_TipMass, IN_TipMassY, IN_TipMassZ,                     &
-                   & IN_Omega,                                                 &
                    & FollowerForce,FollowerForceRig,PrintInfo,                 & ! Options
                    & OutInBframe,OutInaframe,ElemProj,MaxIterations,           &
                    & NumLoadSteps,Solution,DeltaCurved,MinDelta, NewmarkDamp,  &
@@ -97,8 +96,9 @@ subroutine opt_main( NumElems, NumNodes,                                       &
    real(8)  :: IN_BeamStiffness(6,6)=0.0_8
    real(8)  :: IN_BeamMass(6,6)=0.0_8
    real(8)  :: IN_SectWidth=0.0_8,IN_SectHeight=0.0_8
-   real(8)  :: IN_ExtForce(3)
-   real(8)  :: IN_ExtMomnt(3)
+   real(8)  :: IN_ExtForce(3)=0.0_8
+   real(8)  :: IN_ExtMomnt(3)=0.0_8
+   real(8)  :: IN_Omega=0.0_8
 
 ! ---------------------------------------------------------------------- Options
         type(xbopts)                      :: Options ! not dummy
@@ -122,7 +122,6 @@ subroutine opt_main( NumElems, NumNodes,                                       &
    real(8), intent(inout)  :: IN_TipMass
    real(8), intent(inout)  :: IN_TipMassY
    real(8), intent(inout)  :: IN_TipMassZ
-   real(8), intent(inout)  :: IN_Omega
 
 ! ---------------------------------------------------------------- Problem Setup
 ! remark: NumNodes is recomputed inside input_elem (input module)

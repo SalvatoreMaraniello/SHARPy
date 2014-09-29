@@ -61,6 +61,8 @@ module cbeam3_asbly
 ! Local variables.
   logical:: Flags(MaxElNod)                ! Auxiliary flags.
   integer:: i,j,i1,j1                      ! Counters.
+  integer:: nn, mm                         ! Counter for node number in global ordering
+  integer:: rr, cc                         ! Counters for rows (rr) and column (cc) - for Kglobal only - in Kglobal, Qglobal and Fglobal
   integer:: iElem                          ! Counter on the finite elements.
   integer:: NumE                           ! Number of elements in the model.
   integer:: NumNE                          ! Number of nodes in an element.
@@ -132,23 +134,90 @@ module cbeam3_asbly
     call cbeam3_fext  (NumNE,rElem,Flags(1:NumNE),Felem,Options%FollowerForce,Options%FollowerForceRig,Unit)
     call cbeam3_dqext (NumNE,rElem,ForceElem,Flags(1:NumNE),Kelem,Options%FollowerForce)
 
+
+    print *, 'NE=', iElem
   ! Add to global matrix. Remove columns and rows at clamped points.
+    ! sm: a. loop for each node in the element (NumNE=2 or 3)
+    !     b. get the number of the ii-th node (local) in the global ordering:
+    !       nn=Elem(iElem)%Conn(i)
+    !     c. assign to i1 the value Node(nn)%Vdof
     do i=1,NumNE
-      i1=Node(Elem(iElem)%Conn(i))%Vdof
-      if (i1.ne.0) then
+      nn = Elem(iElem)%Conn(i)
+      i1=Node(nn)%Vdof
 
-        Qglobal(6*(i1-1)+1:6*i1)= Qglobal(6*(i1-1)+1:6*i1)+Qelem(6*(i-1)+1:6*i)
+      print *, '  nn=', nn
 
-        do j=1,NumNE
-          j1=Node(Elem(iElem)%Conn(j))%Vdof
-          if (j1.ne.0) then
-            call sparse_addmat (6*(i1-1),6*(j1-1),Kelem(6*(i-1)+1:6*i,6*(j-1)+1:6*j),&
-&                               ks,Kglobal)
-            call sparse_addmat (6*(i1-1),6*(j1-1),Felem(6*(i-1)+1:6*i,6*(j-1)+1:6*j),&
-&                               fs,Fglobal)
+      if (i1.ne.0) then ! not clamped: free node (internal or end)or hinged?
+
+        ! determine position of 1st dof related to node nn in global matrices
+        ! minus 1. The position is corrected by subtracting the number of hinges
+        ! in previous nodes. For nn=1, an empty array is generated, the sum being 0
+        rr = 6*(i1-1) - 3*sum(Node(1:nn-1)%Hflag)
+        !print *, 'nn=', nn, 'sum=', sum(Node(1:nn-1)%Hflag)
+        !print *, 'Node(1:nn-1)%Hflag=', Node(1:nn-1)%Hflag
+        print *, '    rr=', rr
+
+        if (Node(nn)%Hflag .eq. 0) then ! free node (internal or end): add all 6 dof to rows
+          Qglobal(rr+1:rr+6)= Qglobal(rr+1:rr+6)+Qelem(6*(i-1)+1:6*i)
+
+          do j=1,NumNE
+            mm=Elem(iElem)%Conn(j)
+            j1=Node(mm)%Vdof
+
+            print *, '      mm=', mm
+
+            ! determine position of 1st dof related to node Elem(iElem)%Conn(j)
+            ! in global matrices/vectors minus 1
+            cc = 6*(j1-1) - 3*sum(Node(1:mm-1)%Hflag)
+            print *, '        cc=', cc
+            if (j1.ne.0) then ! not clamped
+              if (Node(mm)%Hflag .eq. 0) then ! free node (internal or end): add all 6 dof to column
+                print *, '          alloc 6x6'
+                call sparse_addmat (rr, cc,Kelem(6*(i-1)+1:6*i,6*(j-1)+1:6*j), ks,Kglobal)
+                call sparse_addmat (rr, cc,Felem(6*(i-1)+1:6*i,6*(j-1)+1:6*j), fs,Fglobal)
+              else ! hinged: only add rotations to columns
+                print *, '          alloc 6x3'
+                call sparse_addmat (rr, cc,Kelem(6*(i-1)+1:6*i,6*(j-1)+4:6*j), ks,Kglobal)
+                call sparse_addmat (rr, cc,Felem(6*(i-1)+1:6*i,6*(j-1)+4:6*j), fs,Fglobal)
+              end if
+            end if
+          end do
+
+        else ! hinged node!
+          if (Node(nn)%Hflag .ne. 1) then ! check nothing is going wrong...
+            stop 'Node%Hflag must be 1 or 0! Other value found!'
           end if
-        end do
+
+          Qglobal(rr+1:rr+3)= Qglobal(rr+1:rr+3)+Qelem(6*(i-1)+4:6*i)
+
+          do j=1,NumNE
+            mm=Elem(iElem)%Conn(j)
+            j1=Node(mm)%Vdof
+
+            print *, '      mm=', mm
+
+            ! determine position of 1st dof related to node Elem(iElem)%Conn(j)
+            ! in global matrices/vectors minus 1
+            cc = 6*(j1-1) - 3*sum(Node(1:mm-1)%Hflag)
+
+            print *, '        cc=', cc
+            if (j1.ne.0) then ! not clamped
+              if (Node(mm)%Hflag .eq. 0) then ! free node (internal or end): add all 6 dof to column
+                print *, '          alloc 3x6'
+                call sparse_addmat (rr, cc,Kelem(6*(i-1)+4:6*i,6*(j-1)+1:6*j), ks,Kglobal)
+                call sparse_addmat (rr, cc,Felem(6*(i-1)+4:6*i,6*(j-1)+1:6*j), fs,Fglobal)
+              else ! hinged: only add rotations to columns
+                print *, '          alloc 3x3'
+                call sparse_addmat (rr, cc,Kelem(6*(i-1)+4:6*i,6*(j-1)+4:6*j), ks,Kglobal)
+                call sparse_addmat (rr, cc,Felem(6*(i-1)+4:6*i,6*(j-1)+4:6*j), fs,Fglobal)
+              end if
+            end if
+          end do
+
+        end if
+
       end if
+
     end do
 
   end do

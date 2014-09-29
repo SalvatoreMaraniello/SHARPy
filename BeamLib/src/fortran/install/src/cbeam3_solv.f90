@@ -405,12 +405,22 @@ TaPsi =           Psisc *Options%MinDelta
   call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,AppForces, & ! input
 &                           ks,Kglobal,fs,Fglobal,Qglobal,Options)               ! output (except for Options)
 
+  ! Check Kglobal is filled correctly
+  do k=1,size(Kglobal)+1
+    if ((Kglobal(k)%i>NumDof) .or. (Kglobal(k)%j>NumDof)) then
+      print *, 'Out of Bounds!!! Allocated: (', Kglobal(k)%i,',',Kglobal(k)%j,')'
+      stop 'Execution terminated!'
+    end if
+  end do
+
 ! Forces on the unconstrained nodes.
 ! sm: AppForces has shape (Nodes,6), where the columns contain forces and moments.
 ! fem_m2v reorders them into a vector (i.e. for node ii, (ii-1)+1 will be the x
 ! force and (ii-1)+6 the z moment. Nodes for which the solution has not to be
 ! found will not be counted.
   Qglobal= sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))
+
+stop 'sparse_matvmul ok!'
 
 ! Solve equation and update the global vectors.
 ! sm: Kglobal * deltaX = Qglobal

@@ -95,12 +95,11 @@ contains
     real(8), intent(inout) :: ForcedVel   (:,:) ! Forced velocities at the support.
     real(8), intent(inout) :: ForcedVelDot(:,:) ! Derivatives of the forced velocities at the support.
 
-    real(8), intent(inout) :: PosDotDef (:,:)   ! Current nodal position vector.
-    real(8), intent(inout) :: PsiDotDef (:,:,:) ! Current element orientation vectors.
-    real(8), intent(inout) :: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
-    !!!real(8), intent(inout) :: ForcesTime(:,:)   ! History of the force/moment vector at the beam root element.
-    real(8), intent(inout) :: VelocTime(:,:)    ! History of velocities.
-    real(8)  :: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
+    real(8), intent(inout) :: PosDotDef  (:,:)   ! Current nodal position vector.
+    real(8), intent(inout) :: PsiDotDef  (:,:,:) ! Current element orientation vectors.
+    real(8), intent(inout) :: PosPsiTime (:,:)   ! Position vector/rotation history at beam tip.
+    real(8), intent(inout) :: VelocTime  (:,:)   ! History of velocities.
+    real(8), intent(inout) :: DynOut     (:,:)   ! Position of all nodes wrt to global frame a for each time step
 
 
  character(len=25)        :: OutFile           ! Output file.
@@ -152,7 +151,7 @@ contains
      call fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                      &                        Elem,    &   ! from opt_main_xxx
                      &                    NumNodes,    &   ! from input_elem
-                     &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                     &  PosIni,ForceStatic,PhiNodes,    &   ! from input_node
                      &                  OutGrids,      &   ! from pt_main_xxx
                      &                      PsiIni,    &   ! from xbeam_undef_geom
                      &                Node, NumDof,    &   ! from xbeam_undef_dofs
@@ -162,7 +161,6 @@ contains
                  & ForcedVel, ForcedVelDot,          & ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
-
 
  end subroutine fwd_problem_prealloc
 
@@ -182,8 +180,8 @@ contains
 subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                  &                        Elem,    &   ! from opt_main_xxx
                  &                    NumNodes,    &   ! from input_elem
-                 &  BoundConds,PosIni,ForceStatic,PhiNodes,    &   ! from input_node
-                 &                  OutGrids,         &   ! from pt_main_xxx
+                 & PosIni,ForceStatic,PhiNodes,    &   ! from input_node
+                 &                  OutGrids,      &   ! from pt_main_xxx
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
@@ -227,7 +225,6 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
     type(xbelem), allocatable:: Elem(:)           ! Element information.
     type(xbnode), allocatable:: Node(:)           ! Nodal information.
-    integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
 
 
 
@@ -317,12 +314,6 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
         !!!allocate (PosPsiTime(NumSteps+1,6));        PosPsiTime=0.d0
         !!!allocate (VelocTime(NumSteps+1,NumNodes));  VelocTime= 0.d0
         !!!allocate (DynOut((NumSteps+1)*NumNodes,3)); DynOut=0.d0
-
-        print *, 'Time', Time
-        print *, 'ForceTime:  ' , ForceTime
-        print *, 'ForceDynAmp ' , ForceDynAmp
-        print *, 'ForcedVel   ' , ForcedVel
-        print *, 'ForcedVelDot' , ForcedVelDot
 
         ! ------------------------------------- Structural dynamic analysis only
         select case (Options%Solution)
@@ -422,33 +413,37 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
         ! Store results for general dynamic analysis.
         ! Dynamic response of specified node with respect to global frame a.
-        open (unit=11,file=OutFile(1:17)//'_dyn.txt',status='replace')
-            do i=1,NumSteps-1;  write (11,'(1X,1P7E15.6)') Time(i),PosPsiTime(i,:);  end do
-        close (11)
+        !open (unit=11,file=OutFile(1:17)//'_dyn.txt',status='replace')
+        !    do i=1,NumSteps-1;  write (11,'(1X,1P7E15.6)') Time(i),PosPsiTime(i,:);  end do
+        !close (11)
 
-        open (unit=11,file=OutFile(1:17)//'_vel.txt',status='replace')
-            do i=1,NumSteps-1;
-                if (Time(i).ge.0.d0) then
-                    do j=1,NumNodes
-                        write (11,'(1X,2I8,1PE15.6)') i,j,VelocTime(i,j)
-                    end do
-                end if
-            end do
-        close (11)
+        !open (unit=11,file=OutFile(1:17)//'_vel.txt',status='replace')
+        !    do i=1,NumSteps-1;
+        !        if (Time(i).ge.0.d0) then
+        !            do j=1,NumNodes
+        !                write (11,'(1X,2I8,1PE15.6)') i,j,VelocTime(i,j)
+        !            end do
+        !        end if
+        !    end do
+        !close (11)
 
-        ! Position vector of every node wrt global frame a at each time step.
-        open (unit=11,file=OutFile(1:17)//'_shape.txt',status='replace')
-            do i=1,NumSteps-1;
-                do j=1,NumNodes
-                    write (11,'(1X,1P7E15.6)') Time(i), DynOut((i-1)*NumNodes+j,:);
-                end do
-            end do
-        close (11)
+        !! Position vector of every node wrt global frame a at each time step.
+        !open (unit=11,file=OutFile(1:17)//'_shape.txt',status='replace')
+        !    do i=1,NumSteps-1;
+        !        do j=1,NumNodes
+        !            write (11,'(1X,1P7E15.6)') Time(i), DynOut((i-1)*NumNodes+j,:);
+        !        end do
+        !    end do
+        !close (11)
 
-        ! Screen output position and CRV of specified node at last time step.
-        write (*,'(1P6E12.4)') PosDef(NumNodes,:),PsiDef(NumElems,2,:)
+        !! Screen output position and CRV of specified node at last time step.
+        !!write (*,'(1P6E12.4)') PosDef(NumNodes,:),PsiDef(NumElems,2,:)
 
     end if     ! Dynamic analysis
+
+
+print *, 'max VelocTime: ', maxval(abs(VelocTime))
+
 
 
 end subroutine fwd_solver

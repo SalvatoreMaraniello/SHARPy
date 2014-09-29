@@ -27,7 +27,7 @@ from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
 import design.beamelem, design.beamnodes
-import dynamics.load, dynamics.forcedvel
+import input.load, input.forcedvel
 import beamvar
 import cost
 import lib.save
@@ -47,7 +47,7 @@ class XBeamSolver(Component):
     NumElems     = Int(10, iotype='in', desc='Total number of elements')
     NumNodesElem = Enum(3, (2,3), iotype='in', desc='Number of nodes per element; (2) linear, (3) quadratic.')
     ElemType     = Enum('DISP',('DISP','STRN'), iotype='in')
-    BConds       = Enum('CF'  ,('CF','FF')    , iotype='in', desc='Boundary conditions, (CF) clamped-free, (FF) free-free.') 
+    BConds       = Enum('CF'  ,('CF','CC','CH','HC','HH','HF'), iotype='in', desc='Boundary conditions: C (clamped end), F (free end), H (hinged end).') 
       
     TestCase = Str('test', iotype='in', desc='Test case name.')
 
@@ -119,20 +119,26 @@ class XBeamSolver(Component):
     XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
     NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')
     
-    # Loading Static (and Dynamic)
-    AppDynLoadType = Enum('nodal', ('uniform','nodal'), 
-                          desc='Dynamic prescribed external load uniform or concentrated to a node. see dynamics.load')
-    NodeAppForce = Int( -1, iotype='in', desc='Node at which a dynamic force is applied. -1 = tip')    
     
-    # Loading Dynamic Only
+    # Static Load Distribution
+    AppStaLoadType = Enum('nodal', ('uniform','nodal','userdef'), 
+                          desc='Static prescribed external load uniform, concentrated to a node or user defined. see load')
+    NodeAppStaForce = Int( -1, iotype='in', desc='Node at which a static force is applied. -1 = tip')    
+    # Dynamic Load distribution
+    AppDynLoadType = Enum('nodal', ('uniform','nodal','userdef'), 
+                          desc='Dynamic prescribed external load uniform or concentrated to a node or user defined. see load')
+    NodeAppDynForce = Int( -1, iotype='in', desc='Node at which a dynamic force is applied. -1 = tip')    
+    # Dynamic Load variation
     AppDynLoadVariation = Enum('constant', 
                                ('constant','impulse','sin','cos','ramp','omcos','rampsin'), 
                                desc='Method for time variation of prescribed dynamic load')
     NumSteps = 0 # steps for dynamic simulation   
-
-    TimeRamp = Float(0.0, iotype='in', desc ='For time dependent loads having a ramp, time required to reach full loading')
-    Omega    = Float( 0.0, iotype='in', desc='Frequency for sin, cos, rampsin AppDynLoadVariation')   
+    TimeRamp = Float(0.0, iotype='in', desc ='For ramp AppDynLoadVariation or PrVelType, time required to reach full loading')
+    Omega    = Float( 0.0, iotype='in', desc='Frequency for sin, cos, rampsin AppDynLoadVariation or PrVelType')   
  
+    # Prescribed velocities at the support
+    PrVelType = Enum('zero', ('zero','sin','ramp','rampsin','userdef'), desc='Prescribed velocity at beam support')
+    
  
  
     def __init__(self):
@@ -146,11 +152,7 @@ class XBeamSolver(Component):
         self.fwd_run = getattr(wrapso, "__opt_routine_MOD_opt_main")       
         
         
-        #--------------------------------------------------------- Input Related
-        # Applied external forces at the Tip
-        self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
-        self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')  
-          
+        #--------------------------------------------------------- Input Related  
         self.BeamSpanStiffness = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )
         self.BeamSpanMass      = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )  
         
@@ -158,12 +160,19 @@ class XBeamSolver(Component):
         self.Mroot = np.zeros((6,6),dtype=float,order='F')
         self.Kroot = np.zeros((6,6),dtype=float,order='F')
 
+
+        # ------------------------------------------------------- External Loads
+        # Static        
+        self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
+        self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')  
         # Dynamic Simulation
-        self.Time = np.zeros((1),dtype=float,order='F')               # simulation time
-        self.AppDynForceVec    = np.zeros((3), dtype='float', order='F') # input for dynamics.load.set_***_ForceDynAmp
-        self.AppDynMomentumVec = np.zeros((3), dtype='float', order='F') # input for dynamics.load.set_***_ForceDynAmp
+        self.Time        = np.zeros((1),dtype=float,order='F')     # simulation time
+        self.ExtForceDyn = np.zeros((3), dtype='float', order='F') # input for load.set_***_ForceDynAmp
+        self.ExtMomntDyn = np.zeros((3), dtype='float', order='F') # input for load.set_***_ForceDynAmp
         
-             
+        #------------------------------------------------- Prescribed Velocities
+        self.PrTrVelAmpl  = np.zeros(  (3), dtype=float, order='F')
+        self.PrRotVelAmpl = np.zeros(  (3), dtype=float, order='F')
         
         #------------------------------------------------------------- Utilities
         # save directory
@@ -190,44 +199,16 @@ class XBeamSolver(Component):
         self.Time = np.array(self.Time, dtype=float, order='F')
         self.NumSteps = len(self.Time)-1
         
-        
-        #--------------------------------------------- Set Dynamics input/output
-        # these are always allocated (as they are passed in input to fortran
-        # solver. 
-        # For static simulation their size is, however, negligible.
-        
-        # Span Distribution of Prescribed Load           
-        if self.AppDynLoadType == 'uniform':
-            self.ForceDynAmp = dynamics.load.set_unif_ForceDynAmp(
-                                   self.NumNodes, self.AppDynForceVec, self.AppDynMomentumVec)    
-        elif self.AppDynLoadType == 'nodal':
-            self.ForceDynAmp = dynamics.load.set_nodal_ForceDynAmp(
-                                self.NumNodes, self.NodeAppForce,
-                                self.AppDynForceVec, self.AppDynMomentumVec)
-        else:
-            raise NameError('AppDynLoadType not valid!')
-            
-        # Time variation of Prescribed Load
-        if self.AppDynLoadVariation == 'constant':
-            self.ForceTime = dynamics.load.set_const_ForceTime(self.Time)
-        elif self.AppDynLoadVariation == 'impulse':
-            self.ForceTime = dynamics.load.set_impulse_ForceTime(self.Time)
-        elif self.AppDynLoadVariation == 'ramp':
-            self.ForceTime = dynamics.load.set_ramp_ForceTime(self.Time,self.TimeRamp)
-        elif self.AppDynLoadVariation == 'sin':
-            self.ForceTime = dynamics.load.set_sin_ForceTime(self.Time,self.Omega)
-        elif self.AppDynLoadVariation == 'cos':
-            self.ForceTime = dynamics.load.set_cos_ForceTime(self.Time,self.Omega)
-        elif self.AppDynLoadVariation == 'omcos':
-            self.ForceTime = dynamics.load.set_omcos_ForceTime(self.Time,self.Omega)
-        elif self.AppDynLoadVariation == 'rampsin':
-            self.ForceTime = dynamics.load.set_omcos_ForceTime(self.Time,self.TimeRamp,self.Omega) 
-        else:
-            raise NameError('AppDynLoadVariation not valid!')           
-
         # Prescribed Velocities at support
         # only one method available here
-        self.ForcedVel, self.ForcedVelDot = dynamics.forcedvel.zero(self.Time)
+
+        #----------------------------------------- Set External Prescribed Loads
+        self.set_loads()
+        
+        
+        #--------------------------------------------- set Prescribed Velocities
+        self.set_prescr_vel()
+
 
         # output 
         # Current nodal position vector
@@ -287,13 +268,7 @@ class XBeamSolver(Component):
         self.DensityVector = np.zeros((self.NumElems),dtype=float,order='F')
         self.LengthVector  = np.zeros((self.NumElems),dtype=float,order='F')
         
-        
 
-        
-        
-        
-        # Problem dependent
-        
         ### sm 12 sep 2014:
         # Use old solution for initial guess in the optimisation. This if 
         # statement only prevents self.{Psi/Pos}Def not to be overwritten as
@@ -349,9 +324,8 @@ class XBeamSolver(Component):
                      self.BeamSpanStiffness.ctypes.data_as(ct.c_void_p),        # Properties along the span
                      self.BeamSpanMass.ctypes.data_as(ct.c_void_p),                       
                      self.PhiNodes.ctypes.data_as(ct.c_void_p),                 # PreTwist angle along the span
-                     self.ExtForce.ctypes.data_as(ct.c_void_p), self.ExtMomnt.ctypes.data_as(ct.c_void_p),
+                     self.ForceStatic.ctypes.data_as(ct.c_void_p), 
                      ct.byref(self.ct_TipMass), ct.byref(self.ct_TipMassY), ct.byref(self.ct_TipMassZ),
-                     ct.byref(self.ct_Omega),
                      ct.byref(self.ct_FollowerForce), ct.byref(self.ct_FollowerForceRig), ct.byref(self.ct_PrintInfo),    # options
                      ct.byref(self.ct_OutInBframe), ct.byref(self.ct_OutInaframe), ct.byref(self.ct_ElemProj), ct.byref(self.ct_MaxIterations),
                      ct.byref(self.ct_NumLoadSteps), ct.byref(self.ct_Solution), ct.byref(self.ct_DeltaCurved), ct.byref(self.ct_MinDelta), ct.byref(self.ct_NewmarkDamp),
@@ -366,6 +340,8 @@ class XBeamSolver(Component):
                      self.DynOut.ctypes.data_as(ct.c_void_p)  ,                                              # output from sol 202, 212, 302, 312, 322
                      self.RefVel.ctypes.data_as(ct.c_void_p), self.RefVelDot.ctypes.data_as(ct.c_void_p), 
                      self.Quat.ctypes.data_as(ct.c_void_p)   )                # output rigid-body + dynamics
+        
+        print 'Out of Fortran!!!'
         
         # output checks
         self.check()
@@ -515,6 +491,80 @@ class XBeamSolver(Component):
 
 #------------------------------------------------------------------------------ 
         
+
+    def set_loads(self):
+        
+        #------------------------------------------------- Set Static Load input
+        
+        # Span Distribution of Prescribed Load           
+        if self.AppStaLoadType == 'uniform':
+            self.ForceStatic = input.load.set_unif_ForceDistr(
+                                self.NumNodes, 
+                                self.ExtForce, self.ExtMomnt)    
+        elif self.AppStaLoadType == 'nodal':
+            self.ForceStatic = input.load.set_nodal_ForceDistr(
+                                self.NumNodes, self.NodeAppStaForce,
+                                self.ExtForce, self.ExtMomnt)
+        elif self.AppStaLoadType == 'userdef':
+            # make sure the array order is 'F'
+            self.ForceStatic = np.array(self.ForceStatic, dtype=float, order='F')
+        else:
+            raise NameError('AppStaLoadType not valid!')
+            
+        
+        #--------------------------------------------- Set Dynamics input/output
+        # these are always allocated (as they are passed in input to fortran
+        # solver. 
+        
+        # Span Distribution of Prescribed Load           
+        if self.AppDynLoadType == 'uniform':
+            self.ForceDynAmp = input.load.set_unif_ForceDistr(
+                                   self.NumNodes, self.ExtForceDyn, self.ExtMomntDyn)    
+        elif self.AppDynLoadType == 'nodal':
+            self.ForceDynAmp = input.load.set_nodal_ForceDistr(
+                                self.NumNodes, self.NodeAppDynForce,
+                                self.ExtForceDyn, self.ExtMomntDyn)
+        elif self.AppDynLoadType == 'userdef':
+            # make sure the array order is 'F'
+            self.ForceDynAmp = np.array(self.ForceDynAmp, dtype=float, order='F')
+        else:
+            raise NameError('AppDynLoadType not valid!')
+            
+        # Time variation of Prescribed Load
+        if self.AppDynLoadVariation == 'constant':
+            self.ForceTime = input.load.set_const_ForceTime(self.Time)
+        elif self.AppDynLoadVariation == 'impulse':
+            self.ForceTime = input.load.set_impulse_ForceTime(self.Time)
+        elif self.AppDynLoadVariation == 'ramp':
+            self.ForceTime = input.load.set_ramp_ForceTime(self.Time,self.TimeRamp)
+        elif self.AppDynLoadVariation == 'sin':
+            self.ForceTime = input.load.set_sin_ForceTime(self.Time,self.Omega)
+        elif self.AppDynLoadVariation == 'cos':
+            self.ForceTime = input.load.set_cos_ForceTime(self.Time,self.Omega)
+        elif self.AppDynLoadVariation == 'omcos':
+            self.ForceTime = input.load.set_omcos_ForceTime(self.Time,self.Omega)
+        elif self.AppDynLoadVariation == 'rampsin':
+            self.ForceTime = input.load.set_omcos_ForceTime(self.Time,self.TimeRamp,self.Omega) 
+        else:
+            raise NameError('AppDynLoadVariation not valid!')           
+
+
+    def set_prescr_vel(self):
+        ''' set prescribed velocities (input.forcedvel)'''
+     
+        if self.PrVelType == 'sin':
+            self.ForcedVel, self.ForcedVelDot = input.forcedvel.set_sin(self.Time, self.Omega, self.PrTrVelAmpl, self.PrRotVelAmpl)
+        elif self.PrVelType == 'ramp':
+            self.ForcedVel, self.ForcedVelDot = input.forcedvel.set_ramp(self.Time, self.TimeRamp, self.PrTrVelAmpl, self.PrRotVelAmpl) 
+        elif self.PrVelType == 'rampsin':
+            self.ForcedVel, self.ForcedVelDot = input.forcedvel.set_rampsin(self.Time, self.TimeRamp, self.Omega, self.PrTrVelAmpl, self.PrRotVelAmpl)         
+        elif self.PrVelType == 'zero':
+            self.ForcedVel, self.ForcedVelDot = input.forcedvel.set_zero(self.Time)             
+        elif self.PrVelType == 'userdef':
+            self.ForcedVel = np.array(self.ForcedVel, dtype=float, order='F')
+            self.ForcedVelDot = np.array( self.ForcedVelDot, dtype=float, order='F')
+        else:
+            raise NameError('PrVelType not valid!')         
 
 
 ''' ------------------------------------------------------------------------ ''' 

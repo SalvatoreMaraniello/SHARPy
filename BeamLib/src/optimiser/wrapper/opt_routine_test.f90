@@ -102,7 +102,7 @@ program opt_routine_test
 
 ! Options and Problem Setup
     NumElems = 10
-    Solution = 312
+    Solution = 112
 
     NumNodesElem = 3
     ElemType='DISP'
@@ -182,7 +182,7 @@ program opt_routine_test
 
  t0  =  0.0d0
  tfin= 10.0d0
- dt  = 1.0d-1
+ dt  = 1.0d-2
  NumSteps= ceiling((tfin-t0)/dt)
 
  Omega=20.d0    ! rad/s
@@ -243,7 +243,6 @@ select case (Solution)
                      & PhiNodes,                         &
                      & ForceStatic,                      &
                      & TipMass, TipMassY, TipMassZ,      &
-                     & Omega,                            &
                      & .false.,.true.,.true.,            & ! Options
                      & .true., .false., 0, 99,           &
                      & 10,Solution, 1.d-5, 1.d-5,  1.d-4,&

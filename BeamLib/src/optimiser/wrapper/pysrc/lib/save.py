@@ -103,14 +103,20 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile['cross_section_type']=XBinst.cross_section_type
     hdfile['material']=XBinst.material
 
-    # dynamics
+    # static loads
+    hdfile['AppStaLoadType']=XBinst.AppDynLoadType
+    hdfile['NodeAppStaForce']=XBinst.NodeAppStaForce
+
+    # dynamics loads
     hdfile['NumSteps']=XBinst.NumSteps
     hdfile['AppDynLoadType']=XBinst.AppDynLoadType
     hdfile['AppDynLoadVariation']=XBinst.AppDynLoadVariation
-    hdfile['NodeAppForce']=XBinst.NodeAppForce
+    hdfile['NodeAppDynForce']=XBinst.NodeAppDynForce
     hdfile['TimeRamp']=XBinst.TimeRamp
     hdfile['Omega']=XBinst.Omega
 
+    # Prescribed velocities
+    hdfile['PrVelType']=XBinst.PrVelType
 
     # ---------------------------------------------------- input without default
     # these values will appear as 'not found' if not allocated
@@ -155,6 +161,11 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     # __init__
     hdfile = conditional_saving(hdfile,XBinst,'ExtForce')
     hdfile = conditional_saving(hdfile,XBinst,'ExtMomnt')
+    hdfile = conditional_saving(hdfile,XBinst,'ExtForceDyn')
+    hdfile = conditional_saving(hdfile,XBinst,'ExtMomntDyn')
+    hdfile = conditional_saving(hdfile,XBinst,'PrTrVelAmpl')
+    hdfile = conditional_saving(hdfile,XBinst,'PrRotVelAmpl')
+    
     ###hdfile = conditional_saving(hdfile,XBinst,'BeamSpanStiffness')
     ###hdfile = conditional_saving(hdfile,XBinst,'BeamSpanMass')
     ###hdfile = conditional_saving(hdfile,XBinst,'PhiNodes')
@@ -170,6 +181,8 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'PsiDef')
     hdfile = conditional_saving(hdfile,XBinst,'InternalForces')
   
+    #------------------------------------------------------------ Static Related
+    hdfile = conditional_saving(hdfile,XBinst,'ForceStatic')  
 
     #---------------------------------------------------------- Dynamics Related
     # input
