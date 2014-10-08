@@ -420,7 +420,7 @@ TaPsi =           Psisc *Options%MinDelta
 ! found will not be counted.
   Qglobal= sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))
 
-stop 'sparse_matvmul ok!'
+!stop 'sparse_matvmul ok!'
 
 ! Solve equation and update the global vectors.
 ! sm: Kglobal * deltaX = Qglobal

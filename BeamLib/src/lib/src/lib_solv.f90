@@ -9,6 +9,8 @@
 ! - error_check: checks convergence making an estimation of the error
 ! - delta_check: original convergence check, based on the maximum residual value
 !   and the maximum incremental value
+! - solv_set_vec_rows_zero: (analogous to lib_sparse-sparse_set_rows_to_zero)
+!      Given a vector/matrix, sets rows specified in rows_list to zero.
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -272,6 +274,31 @@ module lib_solv
      end do
 
   end subroutine separate_dofs
+
+
+
+
+! subroutine solv_set_vec_rows_zero
+! ------------------------------------------------------------------------------
+  ! Given a vector v, the routine sets to zero the values on the rows specified
+  ! in rows_list
+  !-----------------------------------------------------------------------------
+
+ subroutine solv_set_vec_rows_zero (rows_list,v)
+
+  integer,     intent(in)   :: rows_list(:)! rows for which all entries of sparse matrix will be set to zero
+  real(8),     intent(inout) :: v(:)
+
+  integer:: nn, rr
+
+  do nn=1,size(rows_list)
+    rr = rows_list(nn)
+    v(rr)=0.d0
+  end do
+
+  return
+ end subroutine solv_set_vec_rows_zero
+
 
 
 end module lib_solv

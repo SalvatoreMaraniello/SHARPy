@@ -1,4 +1,5 @@
 !->Module LIB_SPARSE. Rafa Palacios. 30Aug2006
+!                     Salvatore Maraniello 29 Sep 2014
 !
 !->Description.-
 !
@@ -15,6 +16,11 @@
 !   sparse_matvmul  : Multiply a sparse matrix by a vector.
 !   sparse_precond:   Precondition linear system with sparse matrix.
 !   sparse_precond2:  Precondition linear dynamic system with sparse matrix.
+!
+!-> New Subroutines
+!   sparse_set_row_zero: given a sparse matrix, sets the specified rows to zero
+!   sparse_set_rows_zero: delete a list of rows (optimised)
+!   sparse print_nonzero: print all elements in a sparse matrix in list form
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module lib_sparse
@@ -427,6 +433,221 @@ module lib_sparse
 
   return
  end subroutine sparse_precond2
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine sparse_set_rows_unit
+!
+!-> Description:
+!
+!    Given a sparse matrix, the routine delete allocates unit values along
+!    the diagonal corresponding to the rows specified in rows_list
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_set_rows_unit (rows_list,DimArray,SprMat)
+
+  integer,     intent(in)   :: rows_list(:)! rows for which all entries of sparse matrix will be set to zero
+  integer,     intent(inout):: DimArray      ! Storage dimension of sparse matrix
+  type(sparse),intent(inout):: SprMat(:)     ! Sparse matrix.
+
+  integer:: nn, rr
+
+  do nn=1,size(rows_list)
+    rr = rows_list(nn)
+    call sparse_addval(rr,rr,1.d0,DimArray,SprMat,1.d0)
+  end do
+
+  return
+ end subroutine sparse_set_rows_unit
+
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine sparse_set_rows_zero
+!
+!-> Description:
+!
+!    Given a sparse matrix, the routine delete all the elements from a certain
+!    list of rows
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_set_rows_zero (rows_to_del,DimArray,SprMat)
+
+  integer,     intent(in)   :: rows_to_del(:)! rows for which all entries of sparse matrix will be set to zero
+  integer,     intent(inout):: DimArray      ! Storage dimension of sparse matrix
+  type(sparse),intent(inout):: SprMat(:)     ! Sparse matrix.
+
+  integer:: nn, jj
+  logical:: DelRow
+
+
+  nn=1
+  do while (nn<=DimArray)
+    DelRow=.false.
+    ! check if row is in the list
+    jj=1
+    do while (jj<=size(rows_to_del))
+      if (SprMat(nn)%i==rows_to_del(jj)) then
+        DelRow=.true.
+      end if
+      jj=jj+1
+    end do
+
+    !if (DelRow .eqv. .true.) then
+    if (DelRow) then
+      jj=nn+1
+      do while (jj<=DimArray)
+        SprMat(jj-1)=SprMat(jj)
+        jj=jj+1
+      end do
+      SprMat(DimArray)%i=0; SprMat(DimArray)%j=0; SprMat(DimArray)%a=0.d0
+      DimArray=DimArray-1
+    else
+      nn=nn+1
+    end if
+  end do
+
+
+  return
+ end subroutine sparse_set_rows_zero
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine sparse_set_row_zero
+!
+!-> Description:
+!
+!    Given a sparse matrix, the routine delete all the elements from a certain
+!    rows
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_set_row_zero (row_to_del,DimArray,SprMat)
+
+  integer,     intent(in)   :: row_to_del! rows for which all entries of sparse matrix will be set to zero
+  integer,     intent(inout):: DimArray  ! Storage dimension of sparse matrix
+  type(sparse),intent(inout):: SprMat(:) ! Sparse matrix.
+
+  integer:: nn, jj
+  logical:: DelEntry(DimArray)
+
+
+  !DelEntry(DimArray)=.false.
+
+  nn=1
+  do while (nn<=DimArray)
+    if (SprMat(nn)%i == row_to_del) then
+      !SprMat(nn)%a = 0.d0
+      !DelEntry(nn)=.true.
+      jj=nn+1
+      do while (jj<=DimArray)
+        SprMat(jj-1)=SprMat(jj)
+        jj=jj+1
+      end do
+      SprMat(DimArray)%i=0; SprMat(DimArray)%j=0; SprMat(DimArray)%a=0.d0
+      DimArray=DimArray-1
+    else
+      nn=nn+1
+    end if
+  end do
+
+
+  return
+ end subroutine sparse_set_row_zero
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine print_sparse
+!
+!-> Description:
+!
+!    Prints non-zero elements inside a sparse matrix
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_print_nonzero (DimArray,SprMat)
+
+  integer,     intent(in):: DimArray  ! Storage dimension of sparse matrix
+  type(sparse),intent(in):: SprMat(:) ! Sparse matrix.
+
+  integer:: nn
+
+  write (*,'(A4,A4,A12)'), 'i', 'j', 'val'
+
+  nn=1
+  do nn=1,DimArray
+    write (*,'(1I4,1I4,1PE12.3)'), SprMat(nn)%i, SprMat(nn)%j, SprMat(nn)%a
+  end do
+
+  return
+ end subroutine sparse_print_nonzero
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine print_mat
+!
+!-> Description:
+!
+!    Prints all elements (also zero) of a sparse matrix
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_print_mat (DimArray,SprMat)
+
+  integer,     intent(in):: DimArray  ! Storage dimension of sparse matrix
+  type(sparse),intent(in):: SprMat(:) ! Sparse matrix.
+
+  integer:: nn, mm, Imax, Jmax, ii, jj, Nfound
+  logical :: Found
+
+  !write (*,'(1I4,1I4,1PE12.3)'), SprMat(nn)%i, SprMat(nn)%j, SprMat(nn)%a
+  !write (*,'(A4,A4,A12)'), 'i', 'j', 'val'
+
+  ! get matrix size:
+  Imax = maxval(SprMat(1:DimArray)%i)
+  Jmax = maxval(SprMat(1:DimArray)%j)
+
+
+  Nfound=0
+
+  do ii=1,Imax
+    do jj=1,Jmax
+
+      ! find element
+      Found=.false.
+      nn=1
+      do while ( (nn<=DimArray) .and. (Found .eqv. .false.) )
+        if ( (SprMat(nn)%i == ii) .and. (SprMat(nn)%j == jj) ) then
+          Found=.true.
+          Nfound=nn
+        end if
+        nn=nn+1
+      end do
+
+      ! print
+      if ( Found .eqv. .true. ) then
+        write(*,'(1PE12.3,2X,$)'), SprMat(Nfound)%a
+      else
+        write(*,'(1PE12.3,2X,$)'), 0.d0
+      end if
+
+    end do
+
+    ! go next row
+    write(*,'(1X)')
+
+  end do
+
+  ! go next row
+  write(*,'(1X)')
+
+  return
+ end subroutine sparse_print_mat
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end module lib_sparse

@@ -45,14 +45,13 @@ module xbeam_shared
   integer:: Master (2)             ! Master node for current node.
                                    ! (1): # master elem.
                                    ! (2): # node within master element.
-  integer:: Vdof                   ! Number of node for which all displacements and rotations are unknown
-                                   ! (free (internal and not) in the velocity/displacements vector
+  integer:: Vdof                   ! Number of node for which displacements and rotations are unknown
+                                   ! (free -internal and not - and clamped) in the velocity/displacements vector
+                                   ! For clamped node, this signifies weak enforcement of BCs.
   integer:: Fdof                   ! Number of node in the force vector for which all the forces/moments need to be computed
                                    ! (clamped BC, internal nodes)
   integer:: Hflag                  ! Flag for hinges at the node (1: hinged, 0: no hinge)
-                                   ! This will add 3 rotations in the global displacements/velocity vectors
-                                   ! and 3 forces in the force vector. Hinged ndoes are counted
-                                   ! in Vdof and Fdof, but they will add only 3 dof per node (instead of 6)
+                                   ! This will imply weak enforcement of BCs
  end type xbnode
 
 ! Simulation options (with default values).

@@ -164,7 +164,7 @@ module xbeam_undef
   allocate (ListHflag(NumN)); ListHflag= 0
   ! NumDof is here the number of independent nodes
   call xbeam_undef_nodeindep (NumN,BoundConds,NumDof,ListIN,ListFr,ListHflag)
-  NumDof=NumDof*6-3*sum(ListHflag)
+  NumDof=NumDof*6!-3*sum(ListHflag)
 
   do j=1,NumN
     Node(j)%Vdof=ListIN(j)

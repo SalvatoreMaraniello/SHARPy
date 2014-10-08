@@ -21,6 +21,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module cbeam3_asbly
   use xbeam_shared
+  use lib_solv, only: solv_set_vec_rows_zero
   implicit none
 
  contains
@@ -42,6 +43,7 @@ module cbeam3_asbly
   use lib_fem
   use lib_sparse
   use lib_cbeam3
+
 
 ! I/O variables.
   type(xbelem), intent(in) :: Elem(:)           ! Element information.
@@ -66,6 +68,7 @@ module cbeam3_asbly
   integer:: iElem                          ! Counter on the finite elements.
   integer:: NumE                           ! Number of elements in the model.
   integer:: NumNE                          ! Number of nodes in an element.
+  integer:: Nhinge                         ! number of hinges
   real(8):: Felem (6*MaxElNod,6*MaxElNod)  ! Element force influence coefficients.  
   real(8):: Kelem (6*MaxElNod,6*MaxElNod)  ! Element tangent stiffness matrix.  
   real(8):: Qelem (6*MaxElNod)             ! Total generalized forces on the element.
@@ -73,6 +76,8 @@ module cbeam3_asbly
   real(8):: rElem (MaxElNod,6)             ! Current Coordinates/CRV of nodes in the element.
   real(8):: ForceElem (MaxElNod,6)         ! Current forces/moments of nodes in the element.
   real(8):: SB2B1 (6*MaxElNod,6*MaxElNod)  ! Transformation from master to global node orientations.
+
+  integer, allocatable:: row_hinge(:)      ! row in global matrices/vector associated with weakly enforced hinge BCs
 
 ! Loop in all elements in the model.
   NumE=size(Elem)
@@ -135,92 +140,89 @@ module cbeam3_asbly
     call cbeam3_dqext (NumNE,rElem,ForceElem,Flags(1:NumNE),Kelem,Options%FollowerForce)
 
 
-    print *, 'NE=', iElem
+    !!!print *, 'NE=', iElem
   ! Add to global matrix. Remove columns and rows at clamped points.
-    ! sm: a. loop for each node in the element (NumNE=2 or 3)
-    !     b. get the number of the ii-th node (local) in the global ordering:
-    !       nn=Elem(iElem)%Conn(i)
-    !     c. assign to i1 the value Node(nn)%Vdof
     do i=1,NumNE
       nn = Elem(iElem)%Conn(i)
       i1=Node(nn)%Vdof
-
-      print *, '  nn=', nn
-
-      if (i1.ne.0) then ! not clamped: free node (internal or end)or hinged?
-
-        ! determine position of 1st dof related to node nn in global matrices
-        ! minus 1. The position is corrected by subtracting the number of hinges
-        ! in previous nodes. For nn=1, an empty array is generated, the sum being 0
-        rr = 6*(i1-1) - 3*sum(Node(1:nn-1)%Hflag)
-        !print *, 'nn=', nn, 'sum=', sum(Node(1:nn-1)%Hflag)
-        !print *, 'Node(1:nn-1)%Hflag=', Node(1:nn-1)%Hflag
-        print *, '    rr=', rr
-
-        if (Node(nn)%Hflag .eq. 0) then ! free node (internal or end): add all 6 dof to rows
+      !!!print *, '  nn=', nn
+      if (i1.ne.0) then ! not clamped: free node (internal or end)or hinged
+        rr = 6*(i1-1)
+        !!!print *, '    rr=', rr
           Qglobal(rr+1:rr+6)= Qglobal(rr+1:rr+6)+Qelem(6*(i-1)+1:6*i)
-
           do j=1,NumNE
             mm=Elem(iElem)%Conn(j)
             j1=Node(mm)%Vdof
-
-            print *, '      mm=', mm
-
+            !!!print *, '      mm=', mm
             ! determine position of 1st dof related to node Elem(iElem)%Conn(j)
             ! in global matrices/vectors minus 1
-            cc = 6*(j1-1) - 3*sum(Node(1:mm-1)%Hflag)
-            print *, '        cc=', cc
+            cc = 6*(j1-1)
+            !print *, '        cc=', cc
             if (j1.ne.0) then ! not clamped
-              if (Node(mm)%Hflag .eq. 0) then ! free node (internal or end): add all 6 dof to column
-                print *, '          alloc 6x6'
-                call sparse_addmat (rr, cc,Kelem(6*(i-1)+1:6*i,6*(j-1)+1:6*j), ks,Kglobal)
-                call sparse_addmat (rr, cc,Felem(6*(i-1)+1:6*i,6*(j-1)+1:6*j), fs,Fglobal)
-              else ! hinged: only add rotations to columns
-                print *, '          alloc 6x3'
-                call sparse_addmat (rr, cc,Kelem(6*(i-1)+1:6*i,6*(j-1)+4:6*j), ks,Kglobal)
-                call sparse_addmat (rr, cc,Felem(6*(i-1)+1:6*i,6*(j-1)+4:6*j), fs,Fglobal)
-              end if
+              !!!print *, '          alloc 6x6'
+              !!!print '(F4.2)', Kelem
+              call sparse_addmat (rr, cc,Kelem(6*(i-1)+1:6*i,6*(j-1)+1:6*j), ks,Kglobal)
+              call sparse_addmat (rr, cc,Felem(6*(i-1)+1:6*i,6*(j-1)+1:6*j), fs,Fglobal)
             end if
           end do
-
-        else ! hinged node!
-          if (Node(nn)%Hflag .ne. 1) then ! check nothing is going wrong...
-            stop 'Node%Hflag must be 1 or 0! Other value found!'
-          end if
-
-          Qglobal(rr+1:rr+3)= Qglobal(rr+1:rr+3)+Qelem(6*(i-1)+4:6*i)
-
-          do j=1,NumNE
-            mm=Elem(iElem)%Conn(j)
-            j1=Node(mm)%Vdof
-
-            print *, '      mm=', mm
-
-            ! determine position of 1st dof related to node Elem(iElem)%Conn(j)
-            ! in global matrices/vectors minus 1
-            cc = 6*(j1-1) - 3*sum(Node(1:mm-1)%Hflag)
-
-            print *, '        cc=', cc
-            if (j1.ne.0) then ! not clamped
-              if (Node(mm)%Hflag .eq. 0) then ! free node (internal or end): add all 6 dof to column
-                print *, '          alloc 3x6'
-                call sparse_addmat (rr, cc,Kelem(6*(i-1)+4:6*i,6*(j-1)+1:6*j), ks,Kglobal)
-                call sparse_addmat (rr, cc,Felem(6*(i-1)+4:6*i,6*(j-1)+1:6*j), fs,Fglobal)
-              else ! hinged: only add rotations to columns
-                print *, '          alloc 3x3'
-                call sparse_addmat (rr, cc,Kelem(6*(i-1)+4:6*i,6*(j-1)+4:6*j), ks,Kglobal)
-                call sparse_addmat (rr, cc,Felem(6*(i-1)+4:6*i,6*(j-1)+4:6*j), fs,Fglobal)
-              end if
-            end if
-          end do
-
-        end if
-
       end if
-
     end do
-
   end do
+
+
+  ! ------------------------------------------------------ Hinged BCs correction
+  ! a. determine number of rows to delete
+  ! b. determine which rows to eleminate
+  ! c. delete themn from sparse matrix and resize it
+  ! d. add unitary value to Kglobal 9and resize)
+  Nhinge = sum(Node%Hflag)
+  if (Nhinge>0) then
+      allocate(row_hinge (3*Nhinge) )
+      !print *, 'allocated row_hinge of size: ', size(row_hinge)
+
+      cc=0 ! here cc is a counter for the number of hinges
+      do nn=1,size(Node)
+        if (Node(nn)%Hflag == 1) then
+          i1=Node(nn)%Vdof
+          rr = 6*(i1-1)
+          row_hinge( 3*cc+1:3*(cc+1) ) = (/ rr+1, rr+2, rr+3 /)
+          cc=cc+1
+        end if
+      end do
+
+     !print *, 'rows to delete in Kglobal: ', row_hinge
+
+     !print *, 'current size of Kglobal', ks
+     !call sparse_print_nonzero(ks+2,Kglobal)
+     !print *, 'current size of Fglobal', fs
+     !call sparse_print_nonzero(fs+2,Fglobal)
+
+     !do nn=1,3*Nhinge
+     !  print *, 'Delete row: ', row_hinge(nn)
+     !  call sparse_set_row_zero(row_hinge(nn),ks,Kglobal)
+     !  !call sparse_print_nonzero(ks+2,Kglobal)
+     !  call sparse_set_row_zero(row_hinge(nn),fs,Fglobal)
+     !end do
+     call sparse_set_rows_zero(row_hinge,ks,Kglobal)
+     call sparse_set_rows_zero(row_hinge,fs,Fglobal)
+     call sparse_set_rows_unit(row_hinge,ks,Kglobal)
+
+     !print *, 'new size of Kglobal', ks
+     !call sparse_print_nonzero(ks+2,Kglobal)
+     !print *, 'new size of Fglobal', fs
+     !call sparse_print_nonzero(fs+2,Fglobal)
+
+     !print *, 'new size of Kglobal', ks
+     !call sparse_print_nonzero(ks+2,Kglobal)
+
+
+     !print *, 'Qglobal before: ', Qglobal
+     !call solv_set_vec_rows_zero (row_hinge,Qglobal)
+     !print *, 'Qglobal after: ', Qglobal
+     deallocate(row_hinge)
+  end if
+
+  !!!call sparse_print_mat (ks,Kglobal)
 
   return
  end subroutine cbeam3_asbly_static
