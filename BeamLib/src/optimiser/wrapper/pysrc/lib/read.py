@@ -179,7 +179,12 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'VelocTime')   
     XBinst = conditional_reading(hdfile,XBinst,'DynOut')     
     
-
+    #---------------------------------------------------------------- Rigid Body
+    # output
+    XBinst = conditional_reading(hdfile,XBinst,'RefVel')  
+    XBinst = conditional_reading(hdfile,XBinst,'RefVelDot')  
+    XBinst = conditional_reading(hdfile,XBinst,'Quat') 
+    
     '''
     setattr(XBinst,'',hdfile[''].value)
     XBinst = conditional_reading(hdfile,XBinst,'')

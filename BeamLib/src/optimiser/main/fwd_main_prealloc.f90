@@ -399,14 +399,14 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
             end select
 
-            ! Store rigid body velocities and accelerations of global reference frame
-            open (unit=11,file=OutFile(1:17)//'_rigid.txt',status='replace')
-                do i=1,NumSteps+1;  write (11,'(1X,1P7E15.6)') Time(i),RefVel(i,:); end do
-            close (11)
-
-            open (unit=11,file=OutFile(1:17)//'_vreldot.txt',status='replace')
-                do i=1,NumSteps+1;  write (11,'(1X,1P7E15.6)') Time(i),RefVelDot(i,:); end do
-            close (11)
+            !!! Store rigid body velocities and accelerations of global reference frame
+            !open (unit=11,file=OutFile(1:17)//'_rigid.txt',status='replace')
+            !    do i=1,NumSteps+1;  write (11,'(1X,1P7E15.6)') Time(i),RefVel(i,:); end do
+            !close (11)
+            !
+            !open (unit=11,file=OutFile(1:17)//'_vreldot.txt',status='replace')
+            !    do i=1,NumSteps+1;  write (11,'(1X,1P7E15.6)') Time(i),RefVelDot(i,:); end do
+            !close (11)
 
         end if ! Coupled analysis
 
@@ -442,7 +442,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     end if     ! Dynamic analysis
 
 
-print *, 'max VelocTime: ', maxval(abs(VelocTime))
+!print *, 'max VelocTime: ', maxval(abs(VelocTime))
 
 
 

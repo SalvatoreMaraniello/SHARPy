@@ -89,7 +89,7 @@ def set_unif_ForceDistr(NumNodes,
 
 def set_const_ForceTime( Time ):
     '''    
-    Remark: this is not a step load as at the initial time the beam is already 
+    Remark: this is like a step load as at the initial time the beam is not 
     deformed (i.e. the load is not zero)!
     '''
     
@@ -168,6 +168,31 @@ def set_rampsin_ForceTime( Time, Tfull, Omega ):
     return ForceTime    
 
 
+def set_rect_ForceTime(Time,t_start,t_end):
+    '''
+    rectangular shape signal over time vector Time.
+    t_start,t_end: times at which the signal becomes equal to 1. At these 
+    time-steps the amplitude in 0.5. Otherwise, the signal has value 0
+    
+    ref. http://en.wikipedia.org/wiki/Rectangular_function
+    '''
+    
+    NumSteps = len(Time)-1
+    ForceTime = np.zeros( (NumSteps+1), dtype='float', order='F' )
+    
+    if t_start > Time[-1]:
+        raise NameError('T_start has to be less-equal then Time[-1]')
+    if t_end < t_start:
+        raise NameError('t_end mush be greater then t_start')
+    
+    iirect=(Time>t_start) * (Time<t_end)       # and
+    iibound = (Time==t_start) + (Time==t_end)  # or
+
+    ForceTime[iirect]=ForceTime[iirect]+1.0
+    ForceTime[iibound]=ForceTime[iibound]+0.5
+    
+    return ForceTime
+
 
 if __name__=='__main__':
     
@@ -223,4 +248,10 @@ if __name__=='__main__':
     plt.title('1 - Cosine')
     plt.show()
     
+    print 'Test set_omcos_ForceTime (and set_cos_ForceTime)'
+    FTomc=set_rect_ForceTime( Time, 1.5,2 )
+    print FTomc
+    plt.plot(Time,FTomc,'k')
+    plt.title('rect')
+    plt.show()
     

@@ -198,6 +198,12 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'VelocTime')   
     hdfile = conditional_saving(hdfile,XBinst,'DynOut')   
 
+    #---------------------------------------------------------------- Rigid Body
+    # output
+    hdfile = conditional_saving(hdfile,XBinst,'RefVel')  
+    hdfile = conditional_saving(hdfile,XBinst,'RefVelDot')  
+    hdfile = conditional_saving(hdfile,XBinst,'Quat')  
+    
     '''
     # to add future fields...
     hdfile['']=XBinst.

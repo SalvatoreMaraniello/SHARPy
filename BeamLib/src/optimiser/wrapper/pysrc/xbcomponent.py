@@ -77,7 +77,6 @@ class XBeamSolver(Component):
     TipMassY    = Float( 0.0, iotype='in', desc='')
     TipMassZ    = Float( 0.0, iotype='in', desc='')
 
-
     # beam span reconstruction
     beam_shape = Enum('constant',('constant','spline','constant_hardcoded'),iotype='in')
  
@@ -119,7 +118,6 @@ class XBeamSolver(Component):
     XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
     NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')
     
-    
     # Static Load Distribution
     AppStaLoadType = Enum('nodal', ('uniform','nodal','userdef'), 
                           desc='Static prescribed external load uniform, concentrated to a node or user defined. see load')
@@ -130,15 +128,33 @@ class XBeamSolver(Component):
     NodeAppDynForce = Int( -1, iotype='in', desc='Node at which a dynamic force is applied. -1 = tip')    
     # Dynamic Load variation
     AppDynLoadVariation = Enum('constant', 
-                               ('constant','impulse','sin','cos','ramp','omcos','rampsin'), 
+                               ('constant','impulse','sin','cos','ramp','omcos','rampsin','rect'), 
                                desc='Method for time variation of prescribed dynamic load')
     NumSteps = 0 # steps for dynamic simulation   
     TimeRamp = Float(0.0, iotype='in', desc ='For ramp AppDynLoadVariation or PrVelType, time required to reach full loading')
     Omega    = Float( 0.0, iotype='in', desc='Frequency for sin, cos, rampsin AppDynLoadVariation or PrVelType')   
+    TimeRectStart = Float(0.0, iotype='in', desc ='For rect AppDynLoadVariation or PrVelType, time when signal starts')
+    TimeRectEnd   = Float(0.0, iotype='in', desc ='For rect AppDynLoadVariation or PrVelType, time when signal ends')
  
     # Prescribed velocities at the support
     PrVelType = Enum('zero', ('zero','sin','ramp','rampsin','userdef'), desc='Prescribed velocity at beam support')
     
+ 
+    ''' Control '''
+    # Static
+    ExtForce = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
+                     iotype='in', dtype=float, shape=(3,) ,
+                     desc='Nodal applied force - single node or distributed according to self.AppStaLoadType')
+    ExtMomnt = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
+                     iotype='in', dtype=float, shape=(3,) ,
+                     desc='Nodal applied moments - single node or distributed according to self.AppStaLoadType')   
+    # Dynamic
+    ExtForceDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
+                     iotype='in', dtype=float, shape=(3,) ,
+                     desc='Nodal applied force - single node or distributed according to self.AppSDynLoadType (load.set_***_ForceDynAmp)')
+    ExtMomntDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
+                     iotype='in', dtype=float, shape=(3,) ,
+                     desc='Nodal applied moments - single node or distributed according to self.AppDynLoadType (load.set_***_ForceDynAmp)')   
  
  
     def __init__(self):
@@ -162,13 +178,15 @@ class XBeamSolver(Component):
 
 
         # ------------------------------------------------------- External Loads
+        ### commented below with #~# have been moved to head
+        
         # Static        
-        self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
-        self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')  
+        #~#self.ExtForce      = np.zeros(  (3), dtype=float, order='F')
+        #~#self.ExtMomnt      = np.zeros(  (3), dtype=float, order='F')  
         # Dynamic Simulation
         self.Time        = np.zeros((1),dtype=float,order='F')     # simulation time
-        self.ExtForceDyn = np.zeros((3), dtype='float', order='F') # input for load.set_***_ForceDynAmp
-        self.ExtMomntDyn = np.zeros((3), dtype='float', order='F') # input for load.set_***_ForceDynAmp
+        #~#self.ExtForceDyn = np.zeros((3), dtype='float', order='F') # input for load.set_***_ForceDynAmp
+        #~#self.ExtMomntDyn = np.zeros((3), dtype='float', order='F') # input for load.set_***_ForceDynAmp
         
         #------------------------------------------------- Prescribed Velocities
         self.PrTrVelAmpl  = np.zeros(  (3), dtype=float, order='F')
@@ -278,7 +296,7 @@ class XBeamSolver(Component):
             # self.PosDef, self.PsiDef are set to zero
             # all others are empty arrays
             [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems) 
-             
+
 
         # prepare saving directory:
         self._savedir=os.path.abspath(self._savedir)
@@ -545,6 +563,9 @@ class XBeamSolver(Component):
             self.ForceTime = input.load.set_omcos_ForceTime(self.Time,self.Omega)
         elif self.AppDynLoadVariation == 'rampsin':
             self.ForceTime = input.load.set_omcos_ForceTime(self.Time,self.TimeRamp,self.Omega) 
+        elif self.AppDynLoadVariation == 'rect':
+            self.ForceTime = input.load.set_rect_ForceTime(self.Time,self.TimeRectStart,self.TimeRectEnd)
+
         else:
             raise NameError('AppDynLoadVariation not valid!')           
 
@@ -588,16 +609,18 @@ if __name__=='__main__':
     xbsolver.material ='alumA'
     xbsolver.cross_section_type ='isorect'  
     xbsolver.BeamLength1 = 5.0   
-    xbsolver.cs_l2 = 0.15
-    xbsolver.cs_l3 = 0.15
+    xbsolver.cs_l2 = 0.1135
+    xbsolver.cs_l3 = 0.2417
 
     # Loading
+    xbsolver.AppStaLoadType='uniform'
     xbsolver.ExtForce[2]=6e5
+    
 
     # Options - NCB1 case:
     xbsolver.FollowerForce=False
     xbsolver.PrintInfo=False              
-    xbsolver.MaxIterations=99    
+    xbsolver.MaxIterations=30    
     xbsolver.NumLoadSteps=20
     xbsolver.Solution=112
     xbsolver.MinDelta= 1.e-5
@@ -638,10 +661,10 @@ if __name__=='__main__':
     # save:
     lib.save.h5comp(xbsolver, './component_after.h5')
     
-    # read test
-    XBread=lib.read.h5comp('./component_after.h5')
-    for tt in XBread.items():
-        print tt
+    #### read test
+    ##XBread=lib.read.h5comp('./component_after.h5')
+    ##for tt in XBread.items():
+    ##    print tt
         
     # check version
     print xbsolver._version.number
