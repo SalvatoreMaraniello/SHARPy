@@ -94,10 +94,12 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     
     # design
     hdfile['BeamLength1']=XBinst.BeamLength1
-    hdfile['BeamLength2']=XBinst.BeamLength2
     hdfile['TipMass']=XBinst.TipMass
     hdfile['TipMassY']=XBinst.TipMassY
     hdfile['TipMassZ']=XBinst.TipMassZ
+    
+    hdfile['BeamAxis']=XBinst.BeamAxis
+    hdfile['beam_geometry']=XBinst.beam_geometry    
     
     hdfile['beam_shape']=XBinst.beam_shape        
     hdfile['cross_section_type']=XBinst.cross_section_type

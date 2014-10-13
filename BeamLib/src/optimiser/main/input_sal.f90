@@ -640,8 +640,8 @@ subroutine input_elem_span (NumElems, NumNodes, Elem, BeamSpanMass, BeamSpanStif
   integer,      intent(in) :: NumNodes            ! Number of nodes in the model.
   type(xbelem), intent(in) :: Elem      (:)       ! Element information
   integer,      intent(out):: BoundConds(:)       ! =0 on free nodes; =1 on clamped nodes; =-1 on free nodes.
-  real(8),      intent(out):: Coords    (:,:)     ! Initial nodal Coordinates.
 
+  real(8), optional, intent(out):: Coords    (:,:)     ! Initial nodal Coordinates.
   real(8), optional, intent(out):: Forces    (:,:)     ! Applied nodal forces.
   real(8), optional, intent(out):: PhiNodes  (:)       ! Initial twist at grid points.
 
@@ -651,23 +651,23 @@ subroutine input_elem_span (NumElems, NumNodes, Elem, BeamSpanMass, BeamSpanStif
   real(8)      :: Theta       ! Parameter on curved beams.
   integer, allocatable :: ffvec(:) ! sm: store the indices of nodes with applied forces
 
+
 ! Initial position vector of grid points.
-  Coords= 0.d0
-    select case (trim(TestCase))
-
-    case default !('HALE','GOLD','TPY0','NCB1')
-        do i=1,NumNodes
-            Coords(i,1)=BeamLength1*(dble(i-1)/dble(NumNodes-1))
-        end do
-
-    case ('BEND')
-        do i=1,NumNodes
-            Theta=(Pi/4.d0)*(dble(i-1)/dble(NumNodes-1))
-            Coords(i,1)=BeamLength1*(1.d0-dcos(Theta))
-            Coords(i,2)=BeamLength1*(     dsin(Theta))
-        end do
-
-    end select
+if (present(Coords)) then
+      Coords= 0.d0
+      select case (trim(TestCase))
+        case default !('HALE','GOLD','TPY0','NCB1')
+            do i=1,NumNodes
+                Coords(i,1)=BeamLength1*(dble(i-1)/dble(NumNodes-1))
+            end do
+        case ('BEND')
+            do i=1,NumNodes
+                Theta=(Pi/4.d0)*(dble(i-1)/dble(NumNodes-1))
+                Coords(i,1)=BeamLength1*(1.d0-dcos(Theta))
+                Coords(i,2)=BeamLength1*(     dsin(Theta))
+            end do
+      end select
+ end if
 
 ! Initial pretwist angle.
 if (present(PhiNodes)) then

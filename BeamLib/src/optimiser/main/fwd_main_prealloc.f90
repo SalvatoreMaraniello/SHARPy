@@ -562,7 +562,7 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &   ! from input_setup
                            & BoundConds, PosIni,      & ! from input_node
                            & OutGrids)                  ! from pt_main_xxx
 
-    ! Input added for the optimisaiton
+    ! Input added for the optimisation
      real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
      real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
 
@@ -572,7 +572,7 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &   ! from input_setup
      type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
      type(xbelem), allocatable:: Elem(:)           ! Element information.
      integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
-     logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
+     logical,      allocatable:: OutGrids(:)       ! Grid nodes where output is written.
      character(len=25)        :: OutFile           ! Output file.
 
 
@@ -593,7 +593,7 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &   ! from input_setup
     allocate(BoundConds (NumNodes));   BoundConds = 0
  end if
 
- call input_node (NumNodes,Elem,BoundConds,PosIni)
+ call input_node (NumNodes,Elem,BoundConds)
  ! sm: in input_xxx.f90
  !    input_node (NumNodes,Elem,BoundConds,Coords)
  !    input_node (      in,  in,       out,   out)

@@ -70,7 +70,6 @@ contains
 
 subroutine opt_main( NumElems, NumNodes,                                       & ! Problem SetUp
                    & IN_NumNodesElem , IN_ElemType, IN_TestCase, IN_BConds,    & ! Problem Setup Shared
-                   & IN_BeamLength1, IN_BeamLength2,                           & ! Design Variables
                    & BeamSpanStiffness, BeamSpanMass,                          & ! Properties along the span
                    & PhiNodes,                                                 & ! Twist angle along the span
                    & ForceStatic,                                              & ! Static Nodal forces
@@ -91,6 +90,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 ! these variables have been removed from the input interface as they are managed
 ! in the python wrapper. They are set to zero and passed to the fwd solver to
 ! allow consistency with old code.
+   real(8)  :: IN_BeamLength1=0.0_8, IN_BeamLength2=0.0_8
    real(8)  :: IN_ThetaRoot=0.0_8
    real(8)  :: IN_ThetaTip=0.0_8
    real(8)  :: IN_BeamStiffness(6,6)=0.0_8
@@ -118,7 +118,6 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 
 ! ------------------------------------------------------ Design Variables Shared
 ! These are normally inported from the input module through input_setup.
-   real(8), intent(inout)  :: IN_BeamLength1, IN_BeamLength2
    real(8), intent(inout)  :: IN_TipMass
    real(8), intent(inout)  :: IN_TipMassY
    real(8), intent(inout)  :: IN_TipMassZ

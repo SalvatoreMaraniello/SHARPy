@@ -154,17 +154,26 @@ program opt_routine_test
  end do
  !BeamSpanStiffness(10,:,:)=0.1_8 * BeamStiffness
 
- ! Determine output size:
+ ! Determine static output size:
  if ( (NumNodesElem==2) .or. (NumNodesElem==3) ) then
     NumNodes = (NumNodesElem -1)*NumElems + 1
  else
     stop 'NumNodesElem must be equal to 2 or 3'
  end if
 
-
+ ! Preallocate:
  allocate( PhiNodes(NumNodes) )
+ allocate(        PosIni(          NumNodes,3)); PosIni=0.0_8;
+ allocate(        PosDef(          NumNodes,3)); PosDef=0.0_8;
+ allocate(        PsiIni(Numelems, MaxElNod,3)); PsiIni=0.0_8;
+ allocate(        PsiDef(Numelems, MaxElNod,3)); PsiDef=0.0_8;
+ allocate(InternalForces(          NumNodes,6)); InternalForces=0.0_8;
+
+
+ PosIni= 0.d0
  PhiNodes = 0.0_8
  do ii =1,NumNodes
+    PosIni(ii,1)=BeamLength1*(dble(ii-1)/dble(NumNodes-1))
     PhiNodes(ii) = ThetaRoot+(ThetaTip-ThetaRoot)*(dble(ii-1)/dble(NumNodes-1))
  end do
 
@@ -222,23 +231,10 @@ if ((Solution.ge.900).and.(Solution.le.952)) then
 
 end if
 
-! -------------------------------------------------------------------- Call Main
-! The select case is necessary to preallocate the outputs
 
-select case (Solution)
-    case default !(102, 112, 142)
-
-        ! Preallocate:
-        allocate(        PosIni(          NumNodes,3)); PosIni=0.0_8;
-        allocate(        PosDef(          NumNodes,3)); PosDef=0.0_8;
-        allocate(        PsiIni(Numelems, MaxElNod,3)); PsiIni=0.0_8;
-        allocate(        PsiDef(Numelems, MaxElNod,3)); PsiDef=0.0_8;
-        allocate(InternalForces(          NumNodes,6)); InternalForces=0.0_8;
-
-
-        call opt_main( NumElems, NumNodes,               &
+! ------------------------------------------------------------------ Call Solver
+  call opt_main( NumElems, NumNodes,               &
                      & NumNodesElem , ElemType, TestCase, BConds,    & ! Problem Setup Shared
-                     & BeamLength1, BeamLength2,         & ! design variables
                      & BeamSpanStiffness, BeamSpanMass,  & ! Span Properties
                      & PhiNodes,                         &
                      & ForceStatic,                      &
@@ -265,19 +261,7 @@ select case (Solution)
                     !& NumLoadSteps=10,Solution=112,MinDelta= 1.d-5)
 
 
-    !case default
-    !    stop '[opt_routine_test] Check the allocation process is defined for the Solution sought.'
-
-
-    end select
-
-    ! Correct
-    print *, 'Max. Tip Displ. ', cost_node_disp(PosIni,PosDef,NumNodes)
-
-    ! Looking for intertnal stresses:
-    !print *, 'Internal forces:'
-    !print '(F12.6)', Internalforces
-    !print *, 'load', ExtForce
+  print *, 'Max. Tip Displ. ', cost_node_disp(PosIni,PosDef,NumNodes)
 
 end program opt_routine_test
 

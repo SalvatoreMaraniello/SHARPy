@@ -75,10 +75,13 @@ def h5comp(filename):
     
     # design
     setattr(XBinst,'BeamLength1',hdfile['BeamLength1'].value)
-    setattr(XBinst,'BeamLength2',hdfile['BeamLength2'].value)
     setattr(XBinst,'TipMass',hdfile['TipMass'].value)
     setattr(XBinst,'TipMassY',hdfile['TipMassY'].value)    
     setattr(XBinst,'TipMassZ',hdfile['TipMassZ'].value)
+
+    setattr(XBinst,'BeamAxis',hdfile['BeamAxis'].value)
+    setattr(XBinst,'beam_geometry',hdfile['beam_geometry'].value)
+
 
     setattr(XBinst,'beam_shape',hdfile['beam_shape'].value)
     setattr(XBinst,'cross_section_type',hdfile['cross_section_type'].value)

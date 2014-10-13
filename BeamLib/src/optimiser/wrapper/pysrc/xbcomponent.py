@@ -26,7 +26,7 @@ from openmdao.main.api import Component, ComponentWithDerivatives
 from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
-import design.beamelem, design.beamnodes
+import design.beamelem, design.beamnodes, design.beamgeom
 import input.load, input.forcedvel
 import beamvar
 import cost
@@ -71,14 +71,16 @@ class XBeamSolver(Component):
    
     '''Design'''
     # general
-    BeamLength1 = Float( 0.0, iotype='in', desc='')
-    BeamLength2 = Float( 0.0, iotype='in', desc='')
+    beam_geometry = Enum('straight',('straight'),iotype='in', desc='Defines beam geometry')
+    BeamAxis = Array(np.array([1,0,0]),iotype='in',desc='Axis along which the straight beam develops')    
+    BeamLength1 = Float( 0.0, iotype='in', desc='beam length')
     TipMass     = Float( 0.0, iotype='in', desc='')
     TipMassY    = Float( 0.0, iotype='in', desc='')
     TipMassZ    = Float( 0.0, iotype='in', desc='')
 
     # beam span reconstruction
-    beam_shape = Enum('constant',('constant','spline','constant_hardcoded'),iotype='in')
+    beam_shape = Enum('constant',('constant','spline','constant_hardcoded'),iotype='in',desc='Define how elements properties vary along the span')
+
  
     # isotropic material cross-sectional models(see design.isosec)
     material = Enum( 'alumA',('alumA','titnA','test'), iotype='in', desc='Material for isotropic cross section (see design.isosec)') 
@@ -296,6 +298,8 @@ class XBeamSolver(Component):
             # self.PosDef, self.PsiDef are set to zero
             # all others are empty arrays
             [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems) 
+            # assign initial coordinates
+            self.PosIni = design.beamgeom.straight(self.PosIni,self.BeamLength1,self.BeamAxis)
 
 
         # prepare saving directory:
@@ -338,7 +342,6 @@ class XBeamSolver(Component):
 
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
                      ct.byref(self.ct_NumNodesElem), self.ct_ElemType, self.ct_TestCase, self.ct_BConds,
-                     ct.byref(self.ct_BeamLength1), ct.byref(self.ct_BeamLength2),
                      self.BeamSpanStiffness.ctypes.data_as(ct.c_void_p),        # Properties along the span
                      self.BeamSpanMass.ctypes.data_as(ct.c_void_p),                       
                      self.PhiNodes.ctypes.data_as(ct.c_void_p),                 # PreTwist angle along the span
@@ -400,7 +403,6 @@ class XBeamSolver(Component):
         self.ct_BConds       = ct.c_char_p( self.BConds.ljust(2)   )
         
         self.ct_BeamLength1 = ct.c_double( self.BeamLength1 )
-        self.ct_BeamLength2 = ct.c_double( self.BeamLength2 )
         self.ct_TipMass     = ct.c_double( self.TipMass     )
         self.ct_TipMassY    = ct.c_double( self.TipMassY    )
         self.ct_TipMassZ    = ct.c_double( self.TipMassZ    )
@@ -439,7 +441,6 @@ class XBeamSolver(Component):
         
         # update shared design
         self.BeamLength1 = self.ct_BeamLength1.value 
-        self.BeamLength2 = self.ct_BeamLength2.value
         self.TipMass = self.ct_TipMass.value
         self.TipMassY = self.ct_TipMassY.value
         self.TipMassZ = self.ct_TipMassZ.value
