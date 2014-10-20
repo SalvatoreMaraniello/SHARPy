@@ -249,10 +249,10 @@ class XBeamSolver(Component):
 
         #-------------------------------- Set Rigid-Body + Dynamics input/output
 
-        ###self.RefVel     =np.zeros( (self.NumSteps+1,6), dtype='float', order='F') 
-        ###self.RefVelDot  =np.zeros( (self.NumSteps+1,6), dtype='float', order='F')         
-        self.RefVel = self.ForcedVel.copy()
-        self.RefVelDot=self.ForcedVelDot.copy()
+        self.RefVel     =np.zeros( (self.NumSteps+1,6), dtype='float', order='F') 
+        self.RefVelDot  =np.zeros( (self.NumSteps+1,6), dtype='float', order='F')         
+        ###self.RefVel = self.ForcedVel.copy()
+        ###self.RefVelDot=self.ForcedVelDot.copy()
         self.Quat =np.array([1,0,0,0],dtype=float,order='F')
 
         #-------------------------------------------------------- Construct Beam   
