@@ -35,8 +35,15 @@ optimiser_abspath=os.path.abspath(wrapper_abspath+'/..')
 wrapso_abspath=optimiser_abspath+'/bin/xbeamopt.so'
 
 # ----------------------------------------------------------------- Append Paths
+
+# optimiser wrapper folder
 sys.path.append(optimiser_abspath+'/wrapper/pysrc')
 
+# Path to SHARPy Main setting
+sys.path.append(optimiser_abspath+'/../../../src/Main')
+import SharPySettings
+## Path to SHARPy PyBeam interface
+#sys.path.append(optimiser_abspath+'/../../../src')
 
 ''' 
 OpenMDAO libraries... 
@@ -115,4 +122,6 @@ try:
     sys.path.append(openmdao_abspath+'/lib/python2.7/site-packages/ipoptdriver-0.17-py2.7.egg')
 except:
     None
+
+
 
