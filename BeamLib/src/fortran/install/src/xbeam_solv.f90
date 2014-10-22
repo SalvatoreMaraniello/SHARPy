@@ -397,7 +397,8 @@ module xbeam_solv
   integer,allocatable::  ListIN     (:)    ! List of independent nodes.
 
   ! Define variables for structure system matrices.
-  integer:: as,cs,ks,ms,fs,cr,kr,mr,fr,ctot,ktot,mtot
+
+  integer:: as,cs,ks,ms,fs,cr,kr,mr,fr,ctot,ktot,mtot ! size of sparse matrices
   type(sparse),allocatable:: Asys(:)    ! System matrix for implicit Newmark method.
   type(sparse),allocatable:: CSS(:)     ! Sparse damping matrix.
   type(sparse),allocatable:: KSS(:)     ! Elast stiffness matrix in sparse storage.
@@ -431,6 +432,15 @@ module xbeam_solv
   character(len=80)  ::  Text          ! Text with current time information to print out.
   real(8),allocatable::  Displ(:,:)    ! Current nodal displacements/rotations.
   real(8),allocatable::  Veloc(:,:)    ! Current nodal velocities.
+
+
+  ! sm Define variables for sperical joint BC
+  logical :: SphFlag
+  integer :: sph_rows(3) ! rows to be modified to include a spherical joint BC
+  SphFlag=.true.
+  sph_rows = (/1,2,3/)+NumDof
+  !print *, sph_rows; stop
+
 
 ! Initialize.
   NumN=size(Node)
@@ -489,7 +499,8 @@ module xbeam_solv
 
 ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
-
+  ! sm: dXdt !=0 if the Pos/PsiDotDeform variables are non-zero
+  !     runs with the dynamic  solver showed we always start from 0 in the Dot variables
   Q(1:NumDof)             = X(:)
   Q(NumDof+1:NumDof+6)    = 0
   dQdt(1:NumDof)          = dXdt(:)
@@ -517,18 +528,40 @@ module xbeam_solv
   end do
 
 ! Compute initial acceleration (we are neglecting qdotdot in Kmass).
+!
+! sm: in cbeam3_asbly_dynamic the output are from ms....Qelast
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
 &                            F0+Ftime(1)*Fa,dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                          &
 &                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
-
+! sm: at this point, for Vre=0, only Q(1:NumDof)!=0
+! print *, 'Q', Q; print*, 'dQdt', dQdt; print*, 'dQddt', dQddt; stop
   Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Ftime(1)*Fa,NumDof,Filter=ListIN))
 
   call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,    &
 &                           dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                 &
 &                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
+  ! sm modify:
+  ! for consistency, the matrices are modified just outside the assembly.
+  ! the structural terms will remain untouched.
+  ! Frigid has only rows from 1 to 6 (but has as many columns as all the NumDof)
+  !print *, 'Frigid_before'; call sparse_print_nonzero (fr,Frigid)
+  if (SphFlag .eqv. .true.) then
+    call sparse_set_rows_zero((/1,2,3/),fr,Frigid)
+    Qrigid(1:3)=0.d0
+  end if
+  !print *, 'Frigid after'; call sparse_print_nonzero (fr,Frigid)
+
+  ! sm: the spars_mult contains the external force term. This, consists of (verified)
+  !     1. sum of translational forces
+  !     2. moment about the origin
+  ! the Qrigid should contain stiffness and gyroscopic terms
+  print *, 'sparse_mult', sparse_matvmul(fr,Frigid,6,fem_m2v(F0+Ftime(1)*Fa,NumDof+6))
+  print *, 'Qrigid', Qrigid
+
   Qrigid= Qrigid - sparse_matvmul(fr,Frigid,6,fem_m2v(F0+Ftime(1)*Fa,NumDof+6))
 
+  print *, 'MRR:'
   write (*,'(5X,1P6E12.4)') MRR
 
 ! Assemble coupled system
@@ -541,6 +574,16 @@ module xbeam_solv
   call sparse_addmat    (NumDof,0,transpose(MSR),mtot,Mtotal)
   call sparse_addmat    (NumDof,NumDof,MRR,mtot,Mtotal)
   call sparse_addmat    (NumDof+6,NumDof+6,Unit4,mtot,Mtotal)
+
+! sm modify:
+! unit diag term in Mtotal (or MRR + deleteing MRS rows)
+
+  if (SphFlag .eqv. .true.) then
+    !print *, 'Mtotal before'; call sparse_print_nonzero (mtot,Mtotal)
+    call sparse_set_colrows_zero(sph_rows,mtot,Mtotal)
+    call sparse_set_rows_unit(sph_rows,mtot,Mtotal)
+    !print *, 'Mtotal after'; call sparse_print_nonzero (mtot,Mtotal)
+  end if
 
 ! Solve matrix system
 !  call lapack_sparse (mtot,Mtotal,-Qtotal,dQddt)
@@ -555,6 +598,20 @@ module xbeam_solv
     Q    = Q + dt*dQdt + (0.5d0-beta)*dt*dt*dQddt
     dQdt = dQdt + (1.d0-gamma)*dt*dQddt
     dQddt= 0.d0
+
+    ! sm modify
+    ! Enforce zero in the predictor part?
+    print *, 'Q rigiddof predictor before'; write (*,'(5X,1P6E12.4)') Q(NumDof+1:NumDof+6)
+    !print *, 'dQ predictor before'; write (*,'(5X,1P6E12.4)') dQdt
+    !print *, 'ddQ predictor before'; write (*,'(5X,1P6E12.4)') dQddt
+    if (SphFlag .eqv. .true.) then
+      Q(NumDof+1:NumDof+3)=0.d0
+      dQdt(NumDof+1:NumDof+3)=0.d0
+      dQddt(NumDof+1:NumDof+3)=0.d0
+    end if
+    print *, 'Qrigiddof predictor after'; write (*,'(5X,1P6E12.4)') Q(NumDof+1:NumDof+6)
+    !print *, 'dQ predictor after'; write (*,'(5X,1P6E12.4)') dQdt
+    !print *, 'ddQ predictor after'; write (*,'(5X,1P6E12.4)') dQddt
 
 ! Iteration until convergence.
     do Iter=1,Options%MaxIterations+1
@@ -594,9 +651,23 @@ module xbeam_solv
 &                                F0+Ftime(iStep+1)*Fa,dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                    &
 &                                ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
 
-       call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
-&                                dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                &
-&                                mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
+      ! sm investigate:
+      print *, 'Qelastic(rigidof)';  write (*,'(5X,1P6E12.4)') Qelast(NumDof+1:NumDof+3)
+
+
+      call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
+&                               dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                &
+&                               mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
+
+      ! sm modify:
+      ! for spherical joint doesn't matter the orientation of a, we want the
+      ! global external force to be zero.
+      ! Regardless, the equations are in a frame, so even for hinge BCs no rotations
+      ! should be required to understand which forces have to be zero.
+      if (SphFlag .eqv. .true.) then
+        call sparse_set_rows_zero((/1,2,3/),fr,Frigid)
+        Qrigid(1:3)=0.d0
+      end if
 
 ! Compute admissible error.
       MinDelta=Options%MinDelta*max(1.d0,maxval(abs(Qelast)))
@@ -616,7 +687,19 @@ module xbeam_solv
       call sparse_addmat    (NumDof,NumDof,MRR,mtot,Mtotal)
       call sparse_addmat    (NumDof+6,NumDof+6,Unit4,mtot,Mtotal)
 
+      ! sm modify:
+      if (SphFlag .eqv. .true.) then
+        !print *, 'Mtotal before'; call sparse_print_nonzero (mtot,Mtotal)
+        call sparse_set_colrows_zero(sph_rows,mtot,Mtotal)
+        call sparse_set_rows_unit(sph_rows,mtot,Mtotal)
+        !print *, 'Mtotal after'; call sparse_print_nonzero (mtot,Mtotal)
+      end if
+
+      ! sm modify:
+      ! make sure that here Qtotal(RigidVelocities) is zero
+      !print *, 'Residual without inertia ='; write(*,'(1P6E12.4)') Qtotal(NumDof+1:NumDof+3)
       Qtotal= Qtotal + sparse_matvmul(mtot,Mtotal,NumDof+6+4,dQddt)
+      !print *, 'Residual with inerita ='; write(*,'(1P6E12.4)') Qtotal(NumDof+1:NumDof+3)
 
 ! Check convergence.
       if (maxval(abs(Qtotal)).lt.MinDelta) then
@@ -637,18 +720,46 @@ module xbeam_solv
       call sparse_addmat    (NumDof+6,NumDof  ,CQR,ctot,Ctotal)
       call sparse_addmat    (NumDof+6,NumDof+6,CQQ,ctot,Ctotal)
 
+
+      ! sm modify:
+      if (SphFlag .eqv. .true.) then
+        !print *, 'Ctotal before'; call sparse_print_nonzero (ctot,Ctotal)
+        call sparse_set_colrows_zero(sph_rows,ctot,Ctotal)
+        call sparse_set_colrows_zero(sph_rows,ktot,Ktotal)
+        !!!call sparse_set_rows_unit(sph_rows,mtot,Mtotal)
+        !print *, 'Ctotal after'; call sparse_print_nonzero (ctot,Ctotal)
+      end if
+
+
 ! Compute Jacobian
       call sparse_zero (as,Asys)
       call sparse_addsparse(0,0,ktot,Ktotal,as,Asys,Factor=1.d0)
       call sparse_addsparse(0,0,ctot,Ctotal,as,Asys,Factor=gamma/(beta*dt))
       call sparse_addsparse(0,0,mtot,Mtotal,as,Asys,Factor=1.d0/(beta*dt*dt))
+      !!!! sm modify
+      ! call sparse_print_nonzero(as,Asys)
 
 ! Calculation of the correction.
+
       call lapack_sparse (as,Asys,-Qtotal,DQ)
 
       Q     = Q     + DQ
       dQdt  = dQdt  + gamma/(beta*dt)*DQ
       dQddt = dQddt + 1.d0/(beta*dt*dt)*DQ
+
+      ! sm modify??????????
+      ! Enforce zero in the predictor part?
+      print *, 'Q corrector before'; write (*,'(5X,1P6E12.4)') Q(NumDof+1:NumDof+6)
+      !print *, 'dQ corrector before'; write (*,'(5X,1P6E12.4)') dQdt
+      !print *, 'ddQ corrector before'; write (*,'(5X,1P6E12.4)') dQddt
+      !if (SphFlag .eqv. .true.) then
+        !Q(NumDof+1:NumDof+3)=0.d0
+        !dQdt(NumDof+1:NumDof+3)=0.d0
+        !dQddt(NumDof+1:NumDof+3)=0.d0
+      !end if
+      print *, 'Q corrector after'; write (*,'(5X,1P6E12.4)') Q(NumDof+1:NumDof+6)
+      !print *, 'dQ corrector after'; write (*,'(5X,1P6E12.4)') dQdt
+      !print *, 'ddQ corrector after'; write (*,'(5X,1P6E12.4)') dQddt
 
     end do
 

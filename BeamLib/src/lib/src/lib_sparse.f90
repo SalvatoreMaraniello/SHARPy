@@ -20,6 +20,7 @@
 !-> New Subroutines
 !   sparse_set_row_zero: given a sparse matrix, sets the specified rows to zero
 !   sparse_set_rows_zero: delete a list of rows (optimised)
+!   sparse_set_colrows_zero: delete a list of rows and columns (optimised)
 !   sparse print_nonzero: print all elements in a sparse matrix in list form
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -514,6 +515,58 @@ module lib_sparse
 
   return
  end subroutine sparse_set_rows_zero
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine sparse_set_colrows_zero
+!
+!-> Description:
+!
+!    Given a sparse matrix, the routine delete all the elements from the rows
+!    and columns listed in colrows_to_del
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_set_colrows_zero (colrows_to_del,DimArray,SprMat)
+
+  integer,     intent(in)   :: colrows_to_del(:) ! col & rows for which all entries of sparse matrix will be set to zero
+  integer,     intent(inout):: DimArray          ! Storage dimension of sparse matrix
+  type(sparse),intent(inout):: SprMat(:)         ! Sparse matrix.
+
+  integer:: nn, jj
+  logical:: Del
+
+
+  nn=1
+  do while (nn<=DimArray)
+    Del=.false.
+    ! check if row/col is in the list
+    jj=1
+    do while (jj<=size(colrows_to_del))
+      if ( (SprMat(nn)%i==colrows_to_del(jj)) .or.  (SprMat(nn)%j==colrows_to_del(jj)) ) then
+        Del=.true.
+      end if
+      jj=jj+1
+    end do
+
+    if (Del) then
+      jj=nn+1
+      do while (jj<=DimArray)
+        SprMat(jj-1)=SprMat(jj)
+        jj=jj+1
+      end do
+      SprMat(DimArray)%i=0; SprMat(DimArray)%j=0; SprMat(DimArray)%a=0.d0
+      DimArray=DimArray-1
+    else
+      nn=nn+1
+    end if
+  end do
+
+
+  return
+ end subroutine sparse_set_colrows_zero
+
+
 
 
 
