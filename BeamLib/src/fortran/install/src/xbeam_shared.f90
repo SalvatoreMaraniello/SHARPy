@@ -51,7 +51,9 @@ module xbeam_shared
   integer:: Fdof                   ! Number of node in the force vector for which all the forces/moments need to be computed
                                    ! (clamped BC, internal nodes)
   integer:: Hflag                  ! Flag for hinges at the node (1: hinged, 0: no hinge)
-                                   ! This will imply weak enforcement of BCs
+                                   ! This will imply weak enforcement of BCs.
+                                   ! Only working AS A SPHERICAL JOINT for static solver and solution 912
+
  end type xbnode
 
 ! Simulation options (with default values).
