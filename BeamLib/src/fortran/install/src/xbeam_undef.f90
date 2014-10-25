@@ -126,15 +126,16 @@ module xbeam_undef
 !    association
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine xbeam_undef_dofs (Elem,BoundConds,Node,NumDof)
+ subroutine xbeam_undef_dofs (Elem,BoundConds,Node,NumDof, Solution)
   use lib_fem
   use lib_bgeom
 
 ! I/O Variables.
-  type(xbelem),intent(in)   :: Elem      (:)      ! Element information.
-  integer,      intent(in)   :: BoundConds(:)      ! Boundary conditions.
-  type(xbnode),intent(inout):: Node      (:)      ! Nodal information.
-  integer,      intent(out)  :: NumDof             ! Number of independent degrees of freedom.
+  type(xbelem),intent(in)    :: Elem      (:)      ! Element information.
+  integer,     intent(in)    :: BoundConds(:)      ! Boundary conditions.
+  type(xbnode),intent(inout) :: Node      (:)      ! Nodal information.
+  integer,     intent(out)   :: NumDof             ! Number of independent degrees of freedom.
+  integer,     intent(inout), optional :: Solution ! Solution number. Used for Sperical Joint BCs only
 
 ! Local variables.
   integer:: NumE                           ! Number of elements in the model.
@@ -142,7 +143,7 @@ module xbeam_undef
   integer :: j,k                           ! Counter on the elements.
   integer,allocatable:: ListFr    (:)      ! List of non-free nodes.
   integer,allocatable:: ListIN    (:)      ! List of independent nodes.
-  integer,allocatable:: ListHflag (:)     ! Flag for hinge BC (1: hinge / 0: no hinge)
+  integer,allocatable:: ListSflag (:)      ! Flag for spherical joint BC (1: hinge / 0: no hinge)
 
 ! Initialize
   NumE=size(Elem)
@@ -161,23 +162,28 @@ module xbeam_undef
 ! Get list of independent nodes.
   allocate (ListIN(NumN)); ListIN= 0
   allocate (ListFr(NumN)); ListFr= 0
-  allocate (ListHflag(NumN)); ListHflag= 0
+  allocate (ListSflag(NumN)); ListSflag= 0
   ! NumDof is here the number of independent nodes
-  call xbeam_undef_nodeindep (NumN,BoundConds,NumDof,ListIN,ListFr,ListHflag)
-  NumDof=NumDof*6!-3*sum(ListHflag)
+
+  if (present(Solution)) then
+    call xbeam_undef_nodeindep (NumN,BoundConds,NumDof,ListIN,ListFr,ListSflag,Solution)
+  else
+    call xbeam_undef_nodeindep (NumN,BoundConds,NumDof,ListIN,ListFr,ListSflag)
+  end if
+  NumDof=NumDof*6
 
   do j=1,NumN
     Node(j)%Vdof=ListIN(j)
     Node(j)%Fdof=ListFr(j)
-    Node(j)%Hflag=ListHflag(j)
+    Node(j)%Sflag=ListSflag(j)
   end do
 
-  deallocate (ListIn,ListFr,ListHflag)
+  deallocate (ListIn,ListFr,ListSflag)
 
   print *, 'NumDof: ', NumDof
   print *, 'Node%Vdof: ', Node%Vdof
   print *, 'Node%Fdof: ', Node%Fdof
-  print *, 'Node%Hflag:', Node%Hflag
+  print *, 'Node%Sflag:', Node%Sflag
 
   return
  end subroutine xbeam_undef_dofs
@@ -256,12 +262,12 @@ module xbeam_undef
 !      a. If ListIN(ii)=0 : the nn-th node (global numbering) is not independent
 !      b. If ListIN(ii)=jj: the nn-th node (global numbering) is associated to the
 !         jj-th independent nodal dispacement.
-!   3. ListHflag BEHAVES DIFFERENTLY FROM ListIN and ListFr: ListHg will return
+!   3. ListSflag BEHAVES DIFFERENTLY FROM ListIN and ListFr: ListHg will return
 !      1 if the node is hinged, 0 if not. This will add only 6 dof to the global
 !      velocity/displacement/force vector instead of 6
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine xbeam_undef_nodeindep (NumN,BoundCond,NumIN,ListIN,ListFr,ListHflag)
+ subroutine xbeam_undef_nodeindep (NumN,BoundCond,NumIN,ListIN,ListFr,ListSflag,Solution)
 
 ! I/O Variables.
   integer,intent(in)::  NumN               ! Number of nodes in the model.
@@ -270,7 +276,8 @@ module xbeam_undef
   integer,intent(out):: ListIN (:)         ! List of independent nodes.
   integer,intent(out):: ListFr (:)         ! List of nodes with independent force vector (not free nodes).
 
-  integer,intent(out):: ListHflag (:)      ! 1 if node is hinged, 0 if not
+  integer,intent(out):: ListSflag (:)      ! 1 if node is hinged, 0 if not
+  integer,intent(inout), optional :: Solution ! Solution number. Used for Sperical Joint BCs only
 
 ! Local variables.
   integer:: iNode                          ! Counter on the nodes.
@@ -281,7 +288,7 @@ module xbeam_undef
   NumFr=0
   ListIN=0
   ListFr=0
-  ListHflag=0
+  ListSflag=0
 
   do iNode=1,NumN
     select case (BoundCond(iNode))
@@ -297,11 +304,22 @@ module xbeam_undef
         NumFr=NumFr+1
         ListFr(iNode)=NumFr
       case (2)
-        NumIN=NumIN+1
-        NumFr=NumFr+1
-        ListIN(iNode)=NumIN
-        ListFr(iNode)=NumFr
-        ListHflag(iNode)=1
+        select case (Solution)
+          case default
+            print *, 'Spherical Joint not implemented for Solution: ', Solution
+            stop 'Program terminated'
+          case (102) ! spherical joint implemented
+            NumIN=NumIN+1
+            NumFr=NumFr+1
+            ListIN(iNode)=NumIN
+            ListFr(iNode)=NumFr
+            ListSflag(iNode)=1
+          case (912) ! treat the spherical joint as clamped
+            print *, 'Treating spherical joint as a clamp'
+            NumFr=NumFr+1
+            ListFr(iNode)=NumFr
+            ListSflag(iNode)=1
+        end select
     end select
   end do
 

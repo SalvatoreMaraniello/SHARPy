@@ -444,8 +444,11 @@ module xbeam_solv
 
 
 ! Initialize (sperical joint) sm
-  if (Node(1)%Hflag == 1) then
+print *, 'SphFlag is: ', SphFlag
+  SphFlag=.false.
+  if (Node(1)%Sflag == 1) then
     SphFlag=.true.
+    print *, 'Hinge BC detected!!!'
   end if
   sph_rows = (/1,2,3/)+NumDof
 
@@ -556,7 +559,7 @@ module xbeam_solv
   !  Frigid: influence coeff. matrix for applied forces.
   ! All terms related to the translational dof and that will influence the RHS
   ! of Newmark-beta time stepping are set to zero.
-  if (SphFlag .eqv. .true.) then
+  if (SphFlag) then
     call sparse_set_rows_zero((/1,2,3/),fr,Frigid)
     Qrigid(1:3)=0.d0
   end if
@@ -582,7 +585,8 @@ module xbeam_solv
 ! Note: also the columns deleted (though unecessary if the beam root is not
 ! moving) to avoid numerical error. If a moving hinge/spherical joint is implemented,
 ! the columns related to the translational dof can't be set to zero!
-  if (SphFlag .eqv. .true.) then
+  if (SphFlag) then
+  print *, '587: doing stuff for spherical joint'
     call sparse_set_colrows_zero(sph_rows,mtot,Mtotal)
     call sparse_set_rows_unit(sph_rows,mtot,Mtotal)
   end if

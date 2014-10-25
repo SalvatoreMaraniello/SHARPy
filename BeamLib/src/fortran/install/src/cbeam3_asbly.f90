@@ -68,7 +68,7 @@ module cbeam3_asbly
   integer:: iElem                          ! Counter on the finite elements.
   integer:: NumE                           ! Number of elements in the model.
   integer:: NumNE                          ! Number of nodes in an element.
-  integer:: Nhinge                         ! number of hinges
+  integer:: NsphBC                         ! number of hinges
   real(8):: Felem (6*MaxElNod,6*MaxElNod)  ! Element force influence coefficients.  
   real(8):: Kelem (6*MaxElNod,6*MaxElNod)  ! Element tangent stiffness matrix.  
   real(8):: Qelem (6*MaxElNod)             ! Total generalized forces on the element.
@@ -77,7 +77,7 @@ module cbeam3_asbly
   real(8):: ForceElem (MaxElNod,6)         ! Current forces/moments of nodes in the element.
   real(8):: SB2B1 (6*MaxElNod,6*MaxElNod)  ! Transformation from master to global node orientations.
 
-  integer, allocatable:: row_hinge(:)      ! row in global matrices/vector associated with weakly enforced hinge BCs
+  integer, allocatable:: row_sphBC(:)      ! row in global matrices/vector associated with weakly enforced hinge BCs
 
 ! Loop in all elements in the model.
   NumE=size(Elem)
@@ -175,37 +175,37 @@ module cbeam3_asbly
   ! b. determine which rows to eleminate
   ! c. delete themn from sparse matrix and resize it
   ! d. add unitary value to Kglobal 9and resize)
-  Nhinge = sum(Node%Hflag)
-  if (Nhinge>0) then
-      allocate(row_hinge (3*Nhinge) )
-      !print *, 'allocated row_hinge of size: ', size(row_hinge)
+  NsphBC = sum(Node%Sflag)
+  if (NsphBC>0) then
+      allocate(row_sphBC (3*NsphBC) )
+      !print *, 'allocated row_sphBC of size: ', size(row_sphBC)
 
-      cc=0 ! here cc is a counter for the number of hinges
+      cc=0 ! here cc is a counter for the number of s[herical joints
       do nn=1,size(Node)
-        if (Node(nn)%Hflag == 1) then
+        if (Node(nn)%Sflag == 1) then
           i1=Node(nn)%Vdof
           rr = 6*(i1-1)
-          row_hinge( 3*cc+1:3*(cc+1) ) = (/ rr+1, rr+2, rr+3 /)
+          row_sphBC( 3*cc+1:3*(cc+1) ) = (/ rr+1, rr+2, rr+3 /)
           cc=cc+1
         end if
       end do
 
-     !print *, 'rows to delete in Kglobal: ', row_hinge
+     !print *, 'rows to delete in Kglobal: ', row_sphBC
 
      !print *, 'current size of Kglobal', ks
      !call sparse_print_nonzero(ks+2,Kglobal)
      !print *, 'current size of Fglobal', fs
      !call sparse_print_nonzero(fs+2,Fglobal)
 
-     !do nn=1,3*Nhinge
-     !  print *, 'Delete row: ', row_hinge(nn)
-     !  call sparse_set_row_zero(row_hinge(nn),ks,Kglobal)
+     !do nn=1,3*NsphBC
+     !  print *, 'Delete row: ', row_sphBC(nn)
+     !  call sparse_set_row_zero(row_sphBC(nn),ks,Kglobal)
      !  !call sparse_print_nonzero(ks+2,Kglobal)
-     !  call sparse_set_row_zero(row_hinge(nn),fs,Fglobal)
+     !  call sparse_set_row_zero(row_sphBC(nn),fs,Fglobal)
      !end do
-     call sparse_set_rows_zero(row_hinge,ks,Kglobal)
-     call sparse_set_rows_zero(row_hinge,fs,Fglobal)
-     call sparse_set_rows_unit(row_hinge,ks,Kglobal)
+     call sparse_set_rows_zero(row_sphBC,ks,Kglobal)
+     call sparse_set_rows_zero(row_sphBC,fs,Fglobal)
+     call sparse_set_rows_unit(row_sphBC,ks,Kglobal)
 
      !print *, 'new size of Kglobal', ks
      !call sparse_print_nonzero(ks+2,Kglobal)
@@ -217,9 +217,9 @@ module cbeam3_asbly
 
 
      !print *, 'Qglobal before: ', Qglobal
-     !call solv_set_vec_rows_zero (row_hinge,Qglobal)
+     !call solv_set_vec_rows_zero (row_sphBC,Qglobal)
      !print *, 'Qglobal after: ', Qglobal
-     deallocate(row_hinge)
+     deallocate(row_sphBC)
   end if
 
   !!!call sparse_print_mat (ks,Kglobal)

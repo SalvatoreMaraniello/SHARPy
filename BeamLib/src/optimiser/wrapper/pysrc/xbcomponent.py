@@ -52,8 +52,8 @@ class XBeamSolver(Component):
     # - CF, CC: static/dynamics/rigid-body
     # - CH, HC, HH: static only
     # - HF: non-linear coupled rigid body + structural
-    BConds       = Enum('CF'  ,('CF','CC','CH','HC','HH','HF'), iotype='in', 
-                        desc='Boundary conditions: C (clamped end), F (free end), H (hinged end).')   
+    BConds       = Enum('CF'  ,('CF','CC','CS','SC','SS','SF'), iotype='in', 
+                        desc='Boundary conditions: C (clamped end), F (free end), S (spherical joint).')   
     TestCase = Str('test', iotype='in', desc='Test case name.')
 
     '''Options:'''

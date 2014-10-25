@@ -73,8 +73,6 @@ contains
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
 
 
-
-
  ! Input added for the optimisaiton
      real(8)   :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
      real(8)   :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
@@ -191,9 +189,6 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
 
-
-
-
     ! The following variables appear as allocatable in fwd_main
     real(8) :: ForceStatic (:,:) ! Applied static nodal forces.
     real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
@@ -216,7 +211,6 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     real(8), intent(inout) :: VelocTime(:,:)    ! History of velocities.
     real(8), intent(inout) :: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
 
-
     integer:: i,j                                 ! Counter.
     integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
     integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
@@ -226,10 +220,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     type(xbelem), allocatable:: Elem(:)           ! Element information.
     type(xbnode), allocatable:: Node(:)           ! Nodal information.
 
-
-
     character(len=25)        :: OutFile           ! Output file.
-
 
     logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
 
@@ -470,8 +461,6 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
                     &                Node, NumDof,    &   ! from xbeam_undef_dofs
                     & PosDef, PsiDef, InternalForces  )  ! allocated in fwd_presolve_static and output of static analysis
 
-
-
     ! The following variables appear as allocatable in fwd_main
     real(8) :: InternalForces(:,:)  ! Internal force/moments at nodes.
     real(8) :: PosIni   (:,:)    ! Initial nodal Coordinates.
@@ -479,10 +468,6 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
     real(8) :: PosDef (:,:)      ! Current nodal position vector. (sm: local coordinates)
     real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
     real(8) :: PhiNodes (:)      ! Initial twist at grid points.
-
-
-
-
 
     integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
     integer:: NumSteps                            ! Number of time steps.
@@ -492,11 +477,7 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
     type(xbnode), allocatable:: Node(:)            ! Nodal information.
     integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
 
-
-
     character(len=25)        :: OutFile           ! Output file.
-
-
 
 
  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -513,8 +494,13 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
  if ( allocated(Node) .eqv. .false. ) then
     allocate (Node(NumNodes))
  end if
- call xbeam_undef_dofs (Elem,BoundConds,  Node,NumDof)
- ! xbeam_undef_dofs    (  in,        in, inout,   out)
+
+ ! sm 25 Oct 2014
+ ! Options%Solution added in input as, for spherical joint BCs, the number of
+ ! Structural dofs depends on the solution (rigid-body+structural or static) as
+ ! well.
+ call xbeam_undef_dofs (Elem,BoundConds,  Node, NumDof, Options%Solution)
+ ! xbeam_undef_dofs    (  in,        in, inout,    out,      in)
  ! Node: Nodal information [type(xbnode)]
  !NumDof Number of independent degrees of freedom.
 
