@@ -117,14 +117,7 @@ class XBeamSolver(Component):
     ControlNodes = Array(iotype='in',dtype=np.int,desc="Control nodes for beam shape deformation") 
     CS_pretwist = Array(iotype='in',dtype=np.float,desc='beam pre-twist at nodes')
 
-    # Cost/Constrains
-    TotalMass =  Float( 0.0, iotype='out', desc='Total structural mass')
-    NodeDisp  =  Float(  iotype='out', desc='Absolute value of NNode displacement')
-    ZDisp     =  Float(  iotype='out', desc='z displacement of NNode')
-    YDisp     =  Float(  iotype='out', desc='y displacement of NNode')
-    XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
-    NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')
-    
+   
     # Static Load Distribution
     AppStaLoadType = Enum('nodal', ('uniform','nodal','userdef'), 
                           desc='Static prescribed external load uniform, concentrated to a node or user defined. see load')
@@ -163,6 +156,24 @@ class XBeamSolver(Component):
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppDynLoadType (load.set_***_ForceDynAmp)')   
  
+ 
+    ''' Optimisation '''
+    # this allows to define costumised optimisation functions. The output value 
+    # is stored in fval (scalar). The function is ffun and the arguments are 
+    # in fargs. 
+    # In some situations, the pre_solve method may have to be run before being
+    # able to define the arguments.
+    fval = Float( 0.0, iotype='out', desc='generic cost function')
+    
+    
+    # Specific Cost/Constrains [superceeded]
+    TotalMass =  Float( 0.0, iotype='out', desc='Total structural mass')
+    NodeDisp  =  Float(  iotype='out', desc='Absolute value of NNode displacement')
+    ZDisp     =  Float(  iotype='out', desc='z displacement of NNode')
+    YDisp     =  Float(  iotype='out', desc='y displacement of NNode')
+    XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
+    NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')    
+     
  
     def __init__(self):
         
@@ -208,7 +219,14 @@ class XBeamSolver(Component):
         self._use_previous_solution = False
         
         # append code version
-        self._version = shared.CodeVersion()        
+        self._version = shared.CodeVersion()    
+        
+        
+        #------------------------------------------------------------------ Cost
+        # dummy arguments for generic cost function
+        self.ffun = cost.f_xyz_disp
+        self.fargs=['PosIni','PosDef']
+        self.fname = self.ffun.func_name
 
 
     def pre_solve(self):
@@ -372,17 +390,24 @@ class XBeamSolver(Component):
         # output checks
         self.check()
         
-        # compute cost from Fortran functions
+        # compute cost from Fortran functions [superceeded]
         cost.f_total_mass( self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumElems), ct.byref(self.ct_TotalMass) )
         cost.f_node_disp( self.PosIni.ctypes.data_as(ct.c_void_p), self.PosDef.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumNodes), ct.byref(self.ct_NodeDisp), ct.byref(self.ct_NNode) )
         
         # update values
         self.update_variables()
         
-        # compute cost from Python functions
+        # compute cost from Python functions [superceeded]
         self.ZDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='z',NNode=self.NNode-1) # python indices starts from 0
         self.YDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='y',NNode=self.NNode-1)
         self.XDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='x',NNode=self.NNode-1)
+        
+        
+        # compute general cost
+        
+        #self.fval = self.ffun(*self.fargs)
+        tplargs = cost.return_args(self, self.fargs)
+        self.fval = self.ffun(*tplargs)
         
         # sm: savename etc moved before solver started
         ### save

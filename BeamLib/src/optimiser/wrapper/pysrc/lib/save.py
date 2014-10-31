@@ -206,6 +206,13 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'RefVelDot')  
     hdfile = conditional_saving(hdfile,XBinst,'Quat')  
     
+    
+    #-------------------------------------------------------------- Optimisation
+    hdfile = conditional_saving(hdfile,XBinst,'fval')  
+    hdfile = conditional_saving(hdfile,XBinst,'fname')  
+    hdfile = conditional_saving(hdfile,XBinst,'fargs')  
+    
+    
     '''
     # to add future fields...
     hdfile['']=XBinst.

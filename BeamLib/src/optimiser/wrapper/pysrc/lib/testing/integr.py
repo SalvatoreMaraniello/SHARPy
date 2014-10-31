@@ -11,10 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import sys
-sys.path.append('../..')
+sys.path.append('../../..')
 import shared
 
-import lib.postpr
+import lib.postpr, lib.integr
 
 
 
@@ -67,7 +67,7 @@ if __name__=='__main__':
     expmax=5
     eevec=np.arange(expmax)[1:]
     print eevec
-    method='1tay'
+    method='2tay'
     # create matrices to store the error
     Er = np.zeros((expmax,3))
 
@@ -104,31 +104,32 @@ if __name__=='__main__':
         
         # linear case
         Omega, dOmega = OmegaProfile(Time,nrot,profile='lin')
-        Xi = lib.postpr.integrate_rotations(Omega, Time, method=method, dOmega=dOmega)
+        Xi = lib.integr.rotations(Omega, Time, method=method, dOmega=dOmega)
         Er[ee,0]= np.linalg.norm( Xi_lin - Xi[  -1,:] )
         
         # sin case
         Omega, dOmega = OmegaProfile(Time,nrot,profile='sin')
-        Xi = lib.postpr.integrate_rotations(Omega, Time, method=method, dOmega=dOmega)
+        Xi = lib.integr.rotations(Omega, Time, method=method, dOmega=dOmega)
         Er[ee,1]= np.linalg.norm( Xi_sin - Xi[  -1,:] )
         
         # exp case
         Omega, dOmega = OmegaProfile(Time,nrot,profile='exp')
-        Xi = lib.postpr.integrate_rotations(Omega, Time, method=method, dOmega=dOmega)
+        Xi = lib.integr.rotations(Omega, Time, method=method, dOmega=dOmega)
         Er[ee,2]= np.linalg.norm( Xi_exp - Xi[  -1,:] )
     
     
 
     print Er
-    fig = plt.figure()
+    fig = plt.figure('Convergence Rate for "%s" method' %(method))
     ax = fig.add_subplot(1,1,1)
     ax.plot(np.arange(expmax),Er[:,0],'r')
     ax.plot(np.arange(expmax),Er[:,1],'b')
     ax.plot(np.arange(expmax),Er[:,2],'k')
     ax.set_yscale('log')
     plt.legend(('lin','sin','exp'))
-    plt.title('Convergence Rate for "%s" method' %(method))
+    #plt.title()
     fig.savefig('rotconvrate_'+method+'.png')
+    fig.savefig('rotconvrate_'+method+'.pdf')
     plt.show()
 
 

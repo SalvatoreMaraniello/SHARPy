@@ -188,6 +188,13 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'RefVelDot')  
     XBinst = conditional_reading(hdfile,XBinst,'Quat') 
     
+    
+    #-------------------------------------------------------------- Optimisaiton
+    XBinst = conditional_reading(hdfile,XBinst,'fval') 
+    XBinst = conditional_reading(hdfile,XBinst,'fname') 
+    XBinst = conditional_reading(hdfile,XBinst,'fargs') 
+    
+    
     '''
     setattr(XBinst,'',hdfile[''].value)
     XBinst = conditional_reading(hdfile,XBinst,'')
