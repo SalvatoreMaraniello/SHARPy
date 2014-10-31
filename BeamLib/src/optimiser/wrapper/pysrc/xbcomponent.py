@@ -27,7 +27,7 @@ from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
 import design.beamelem, design.beamnodes, design.beamgeom
-import input.load, input.forcedvel
+import input.load.modal, input.forcedvel
 import beamvar
 import cost
 import lib.save
@@ -149,6 +149,7 @@ class XBeamSolver(Component):
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppStaLoadType')   
     # Dynamic
+    DynForceParam = Enum('modal', ('modal'), desc='Method to model the dynamic force (see self.set_load)' )
     ExtForceDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied force - single node or distributed according to self.AppSDynLoadType (load.set_***_ForceDynAmp)')
@@ -348,7 +349,7 @@ class XBeamSolver(Component):
         #self.ForceDynAmp = np.array(self.ForceDynAmp, dtype=float, order='F')
         #self.Time = np.zeros((5), dtype=float, order='F')
         
-        #------------------------------------------------------------------------------ 
+        #-----------------------------------------------------------------------
         
         ###print 'Starting Solution:'
         ###print 'Initial Tip Displacements:'
@@ -376,8 +377,9 @@ class XBeamSolver(Component):
                      self.PosIni.ctypes.data_as(ct.c_void_p), self.PsiIni.ctypes.data_as(ct.c_void_p),       # output static           
                      self.PosDef.ctypes.data_as(ct.c_void_p), self.PsiDef.ctypes.data_as(ct.c_void_p), self.InternalForces.ctypes.data_as(ct.c_void_p),
                      self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p) , # output design - part 1
-                     ct.byref(self.ct_NumSteps), self.Time.ctypes.data_as(ct.c_void_p),                            # dynamic input 
-                     self.ForceTime.ctypes.data_as(ct.c_void_p), self.ForceDynAmp.ctypes.data_as(ct.c_void_p),     # input_dynforce
+                     ct.byref(self.ct_NumSteps), self.Time.ctypes.data_as(ct.c_void_p),                            # dynamic input
+                     self.ForceTime.ctypes.data_as(ct.c_void_p), self.ForceDynAmp.ctypes.data_as(ct.c_void_p),     # input_dynforce 
+                     self.ForceDynamic.ctypes.data_as(ct.c_void_p),                                                # new input dynforce
                      self.ForcedVel.ctypes.data_as(ct.c_void_p), self.ForcedVelDot.ctypes.data_as(ct.c_void_p),    # input_forcedvel
                      self.PosDotDef.ctypes.data_as(ct.c_void_p), self.PsiDotDef.ctypes.data_as(ct.c_void_p),
                      self.PosPsiTime.ctypes.data_as(ct.c_void_p), self.VelocTime.ctypes.data_as(ct.c_void_p),
@@ -544,14 +546,14 @@ class XBeamSolver(Component):
     def set_loads(self):
         
         #------------------------------------------------- Set Static Load input
-        
-        # Span Distribution of Prescribed Load           
+        # Static Load always use shape methods from input.load.modal
+        # Span Distribution of Prescribed Load
         if self.AppStaLoadType == 'uniform':
-            self.ForceStatic = input.load.set_unif_ForceDistr(
+            self.ForceStatic = input.load.modal.set_unif_ForceDistr(
                                 self.NumNodes, 
                                 self.ExtForce, self.ExtMomnt)    
         elif self.AppStaLoadType == 'nodal':
-            self.ForceStatic = input.load.set_nodal_ForceDistr(
+            self.ForceStatic = input.load.modal.set_nodal_ForceDistr(
                                 self.NumNodes, self.NodeAppStaForce,
                                 self.ExtForce, self.ExtMomnt)
         elif self.AppStaLoadType == 'userdef':
@@ -559,46 +561,54 @@ class XBeamSolver(Component):
             self.ForceStatic = np.array(self.ForceStatic, dtype=float, order='F')
         else:
             raise NameError('AppStaLoadType not valid!')
-            
         
-        #--------------------------------------------- Set Dynamics input/output
-        # these are always allocated (as they are passed in input to fortran
-        # solver. 
-        
-        # Span Distribution of Prescribed Load           
-        if self.AppDynLoadType == 'uniform':
-            self.ForceDynAmp = input.load.set_unif_ForceDistr(
-                                   self.NumNodes, self.ExtForceDyn, self.ExtMomntDyn)    
-        elif self.AppDynLoadType == 'nodal':
-            self.ForceDynAmp = input.load.set_nodal_ForceDistr(
-                                self.NumNodes, self.NodeAppDynForce,
-                                self.ExtForceDyn, self.ExtMomntDyn)
-        elif self.AppDynLoadType == 'userdef':
-            # make sure the array order is 'F'
-            self.ForceDynAmp = np.array(self.ForceDynAmp, dtype=float, order='F')
-        else:
-            raise NameError('AppDynLoadType not valid!')
             
-        # Time variation of Prescribed Load
-        if self.AppDynLoadVariation == 'constant':
-            self.ForceTime = input.load.set_const_ForceTime(self.Time)
-        elif self.AppDynLoadVariation == 'impulse':
-            self.ForceTime = input.load.set_impulse_ForceTime(self.Time)
-        elif self.AppDynLoadVariation == 'ramp':
-            self.ForceTime = input.load.set_ramp_ForceTime(self.Time,self.TimeRamp)
-        elif self.AppDynLoadVariation == 'sin':
-            self.ForceTime = input.load.set_sin_ForceTime(self.Time,self.Omega)
-        elif self.AppDynLoadVariation == 'cos':
-            self.ForceTime = input.load.set_cos_ForceTime(self.Time,self.Omega)
-        elif self.AppDynLoadVariation == 'omcos':
-            self.ForceTime = input.load.set_omcos_ForceTime(self.Time,self.Omega)
-        elif self.AppDynLoadVariation == 'rampsin':
-            self.ForceTime = input.load.set_omcos_ForceTime(self.Time,self.TimeRamp,self.Omega) 
-        elif self.AppDynLoadVariation == 'rect':
-            self.ForceTime = input.load.set_rect_ForceTime(self.Time,self.TimeRectStart,self.TimeRectEnd)
-
-        else:
-            raise NameError('AppDynLoadVariation not valid!')           
+        if self.DynForceParam=='modal': 
+            # In this method, loads are decomposed into a:
+            #   - shape: self.ForceDynAmp - only space dependent
+            #   - amplitude: self.ForceTime - only time dependent 
+            # such that the force at time-step tt on the node nn is:
+            # F(nn,tt) = shape(nn) * amplitude(tt)
+            
+            # Span Distribution of Prescribed Load           
+            if self.AppDynLoadType == 'uniform':
+                self.ForceDynAmp = input.load.modal.set_unif_ForceDistr(
+                                       self.NumNodes, self.ExtForceDyn, self.ExtMomntDyn)    
+            elif self.AppDynLoadType == 'nodal':
+                self.ForceDynAmp = input.load.modal.set_nodal_ForceDistr(
+                                    self.NumNodes, self.NodeAppDynForce,
+                                    self.ExtForceDyn, self.ExtMomntDyn)
+            elif self.AppDynLoadType == 'userdef':
+                self.ForceDynAmp = np.array(self.ForceDynAmp, dtype=float, order='F')
+            else:
+                raise NameError('AppDynLoadType not valid!')
+                
+            # Time variation of Prescribed Load
+            if self.AppDynLoadVariation == 'constant':
+                self.ForceTime = input.load.modal.set_const_ForceTime(self.Time)
+            elif self.AppDynLoadVariation == 'impulse':
+                self.ForceTime = input.load.modal.set_impulse_ForceTime(self.Time)
+            elif self.AppDynLoadVariation == 'ramp':
+                self.ForceTime = input.load.modal.set_ramp_ForceTime(self.Time,self.TimeRamp)
+            elif self.AppDynLoadVariation == 'sin':
+                self.ForceTime = input.load.modal.set_sin_ForceTime(self.Time,self.Omega)
+            elif self.AppDynLoadVariation == 'cos':
+                self.ForceTime = input.load.modal.set_cos_ForceTime(self.Time,self.Omega)
+            elif self.AppDynLoadVariation == 'omcos':
+                self.ForceTime = input.load.modal.set_omcos_ForceTime(self.Time,self.Omega)
+            elif self.AppDynLoadVariation == 'rampsin':
+                self.ForceTime = input.load.modal.set_omcos_ForceTime(self.Time,self.TimeRamp,self.Omega) 
+            elif self.AppDynLoadVariation == 'rect':
+                self.ForceTime = input.load.modal.set_rect_ForceTime(self.Time,self.TimeRectStart,self.TimeRectEnd)
+    
+            else:
+                raise NameError('AppDynLoadVariation not valid!')  
+        
+            # Build the final vector: DO NOT ADD STATIC PART
+            # in some solutions (e.g.312) the static solver is called first
+            self.ForceDynamic =  input.load.modal.assembly(self.ForceDynAmp,self.ForceTime)
+            
+            
 
 
     def set_prescr_vel(self):

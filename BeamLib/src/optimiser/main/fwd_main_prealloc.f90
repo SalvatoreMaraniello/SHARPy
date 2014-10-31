@@ -67,7 +67,7 @@ contains
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
                  & Time,                             & ! input_dynsetup
-                 & ForceTime, ForceDynAmp,           & ! input_dynforce
+                 & ForceTime, ForceDynAmp, ForceDynamic,& ! input_dynforce
                  & ForcedVel, ForcedVelDot,          & ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
@@ -88,6 +88,7 @@ contains
 
  ! Dynamic Input/Output
     real(8), intent(inout) :: Time(:)           ! Discrete time vector in the dynamic simulation.
+    real(8), intent(inout) :: ForceDynamic (:,:,:) ! applied dynamic force
     real(8), intent(inout) :: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
     real(8), intent(inout) :: ForceTime   (:)   ! Time history of the dynamic nodal forces.
     real(8), intent(inout) :: ForcedVel   (:,:) ! Forced velocities at the support.
@@ -155,7 +156,7 @@ contains
                      &                Node, NumDof,    &   ! from xbeam_undef_dofs
                      & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
                  & Time,                             & ! input_dynsetup
-                 & ForceTime, ForceDynAmp,           & ! input_dynforce
+                 & ForceTime, ForceDynAmp, ForceDynamic,   & ! input_dynforce
                  & ForcedVel, ForcedVelDot,          & ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
@@ -183,9 +184,9 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                  &                      PsiIni,    &   ! from xbeam_undef_geom
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
-                 & Time,                             & ! input_dynsetup
-                 & ForceTime, ForceDynAmp,           & ! input_dynforce
-                 & ForcedVel, ForcedVelDot,          & ! input_forcedvel
+                 & Time,                           &   ! input_dynsetup
+                 & ForceTime, ForceDynAmp, ForceDynamic, & ! input_dynforce
+                 & ForcedVel, ForcedVelDot,        &   ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
 
@@ -200,6 +201,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
  ! Dynamic Input/Output
     real(8), intent(inout) :: Time(:)           ! Discrete time vector in the dynamic simulation.
+    real(8), intent(inout) :: ForceDynamic (:,:,:) ! sm: applied dynamic force
     real(8), intent(inout) :: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
     real(8), intent(inout) :: ForceTime   (:)   ! Time history of the dynamic nodal forces.
     real(8), intent(inout) :: ForcedVel   (:,:) ! Forced velocities at the support.
@@ -270,42 +272,6 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
         NumSteps = size(Time)-1
 
-
-        !!!! Input data for transient dynamic solution.
-        !!!call input_dynsetup (NumSteps, t0, dt,Options)
-        !!!!    input_dynsetup (     out,out,out,  inout)
-        !!!! In Option the damping for the Newmark is assigned.
-        !!!allocate (Time(NumSteps+1))
-        !!!do i=1,NumSteps+1
-        !!!  Time(i)=t0+dt*dble(i-1)
-        !!!end do
-
-        !!!! Force or velocity input.
-        !!!allocate (ForceTime   (NumSteps+1));   ForceTime   = 0.d0
-        !!!allocate (ForceDynAmp (NumNodes,6));   ForceDynAmp = 0.d0
-        !!!allocate (ForcedVel   (NumSteps+1,6)); ForcedVel   = 0.d0
-        !!!allocate (ForcedVelDot(NumSteps+1,6)); ForcedVelDot= 0.d0
-
-        !call input_dynforce  (NumNodes,Time,ForceStatic,ForceDynAmp,ForceTime)
-        !    input_dynforce  (      in,  in,         in,        out,      out)
-        !call input_forcedvel (NumNodes,Time,ForcedVel,ForcedVelDot)
-        !    input_forcedvel (      in,  in,      out,         out)
-
-        ! sm 21 aug 2014
-        ! all saving moved to python environment
-        !
-        !open (unit=11,file=OutFile(1:17)//'_force.txt',status='replace')
-        !  do i=1,NumSteps
-        !    write (11,'(1X,1P14E13.5)') Time(i), ForceTime(i), ForcedVel(i,:), ForcedVelDot(i,:)
-        !  end do
-        !close (11)
-
-        !!!allocate (PosDotDef(NumNodes,3));           PosDotDef= 0.d0
-        !!!allocate (PsiDotDef(NumElems,MaxElNod,3));  PsiDotDef= 0.d0
-        !!!allocate (PosPsiTime(NumSteps+1,6));        PosPsiTime=0.d0
-        !!!allocate (VelocTime(NumSteps+1,NumNodes));  VelocTime= 0.d0
-        !!!allocate (DynOut((NumSteps+1)*NumNodes,3)); DynOut=0.d0
-
         ! ------------------------------------- Structural dynamic analysis only
         select case (Options%Solution)
 
@@ -327,8 +293,12 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
             case (212,312)
             ! CBEAM3: Nonlinear dynamic (around the current deformed beam).
-                call cbeam3_solv_nlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynAmp,              &
-                                        & ForceTime,ForcedVel,ForcedVelDot,PosIni,PsiIni,                &
+                !call cbeam3_solv_nlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynAmp,              &
+                !                        & ForceTime,ForcedVel,ForcedVelDot,PosIni,PsiIni,                &
+                !                        & PosDef,PsiDef,PosDotDef,PsiDotDef,PosPsiTime,VelocTime,DynOut, &
+                !                        & OutGrids,Options)
+                call cbeam3_solv_nlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic,             &
+                                        & ForcedVel,ForcedVelDot,PosIni,PsiIni,                          &
                                         & PosDef,PsiDef,PosDotDef,PsiDotDef,PosPsiTime,VelocTime,DynOut, &
                                         & OutGrids,Options)
 
@@ -369,8 +339,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
                 case (912)
                 ! coupled nonlinear rigid body dynamics and nonlinear structural dynamics
-                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic*0.d0,ForceDynAmp, &
-                                                  & ForceTime,RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
+                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic*0.d0,ForceDynamic, &
+                                                  & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
 
                 case (922)
@@ -378,8 +348,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                     call cbeam3_solv_nlnstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni,PosDef,PsiDef,Options)
                     PosIni = PosDef
                     PsiIni = PsiDef
-                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynAmp, &
-                                                  & ForceTime,RefVel,RefVelDot,Quat,PosIni,PsiIni,    &
+                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
+                                                  & RefVel,RefVelDot,Quat,PosIni,PsiIni,    &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
 
                 case (952)

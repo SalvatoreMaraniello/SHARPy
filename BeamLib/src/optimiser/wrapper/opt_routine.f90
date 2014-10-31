@@ -43,7 +43,7 @@ module opt_routine
  use input
  use lib_out
  use opt_input      ! Optimisation Modules
- use opt_fd_prealloc
+ !use opt_fd_prealloc
  use fwd_main_prealloc
  use lib_perf
  use opt_shared
@@ -81,7 +81,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
                    & PosDef, PsiDef, InternalForces,   & ! Output Static
                    & DensityVector, LengthVector,      & ! Design output
                    & NumSteps, Time,                   & ! input_dynsetup
-                   & ForceTime, ForceDynAmp,           & ! input_dynforce
+                   & ForceTime, ForceDynAmp, ForceDynamic,& ! input_dynforce
                    & ForcedVel, ForcedVelDot,          & ! input_forcedvel
                    & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
                    & RefVel, RefVelDot, Quat)
@@ -156,6 +156,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 ! Dynamic Input/Output
  integer, intent(in)    :: NumSteps          ! Number of time steps
  real(8), intent(inout) :: Time(NumSteps+1)           ! Discrete time vector in the dynamic simulation.
+ real(8), intent(inout) :: ForceDynamic (NumNodes,6,NumSteps+1) ! sm: applied dynamic force
  real(8), intent(inout) :: ForceDynAmp (NumNodes,3) ! Amplitude of the applied dynamic nodal forces.
  real(8), intent(inout) :: ForceTime   (NumSteps+1)   ! Time history of the dynamic nodal forces.
  real(8), intent(inout) :: ForcedVel   (NumSteps+1,6) ! Forced velocities at the support.
@@ -339,7 +340,7 @@ do NOPT=0,NOPTMAX
                  &                Node, NumDof,    &   ! from xbeam_undef_dofs
                  & PosDef, PsiDef, InternalForces, &   ! allocated in fwd_presolve_static and output of static analysis
                  &                        Time,    &   ! input_dyn_setup
-                 &       ForceTime,ForceDynAmp,    &   ! input_dynforce
+                 &  ForceTime,ForceDynAmp,ForceDynamic,    &   ! input_dynforce
                  &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! ! output from sol 202, 212, 302, 312, 322
                  & RefVel, RefVelDot, Quat)
@@ -380,24 +381,24 @@ do NOPT=0,NOPTMAX
                 case ('FDF')
                     print *, 'Gradients will be computed via Finite Differences'
                     ! interface not updated
-                    call fd_main_prealloc( NumElems,OutFile,Options,           &
-                                & Elem,                                        &
-                                & NumNodes,                                    &
-                                & BeamSpanMass, BeamSpanStiffness, &   ! Input added for the optimisation
-                                & BoundConds,PosIni,ForceStatic,PhiNodes,      &
-                                & OutGrids,                                    &
-                                & PsiIni,                                      &
-                                & Node, NumDof,                                &
-                                & PosDef, PsiDef, InternalForces,              &
-                                & Time,                                        &
-                                & ForceTime,ForceDynAmp,                       &
-                                & ForcedVel,ForcedVelDot,                      &
-                                & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, &
-                                & RefVel, RefVelDot, Quat,                     &
-                                & NOPT, fdmode, COST, CONSTR, &  ! cost and constraint at current design point!
-                                & FLAG_COST, W_COST, W_CONSTR,&  ! flags and weights
-                                & CONN_CONSTR, CONN_XSH,      &  ! connectivity matrices
-                                & DCDXSH, DCONDXSH            )  ! gradients
+                    !call fd_main_prealloc( NumElems,OutFile,Options,           &
+                    !            & Elem,                                        &
+                    !            & NumNodes,                                    &
+                    !            & BeamSpanMass, BeamSpanStiffness, &   ! Input added for the optimisation
+                    !            & BoundConds,PosIni,ForceStatic,PhiNodes,      &
+                    !            & OutGrids,                                    &
+                    !            & PsiIni,                                      &
+                    !            & Node, NumDof,                                &
+                    !            & PosDef, PsiDef, InternalForces,              &
+                    !            & Time,                                        &
+                    !            & ForceTime,ForceDynAmp,                       &
+                    !            & ForcedVel,ForcedVelDot,                      &
+                    !            & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, &
+                    !            & RefVel, RefVelDot, Quat,                     &
+                    !            & NOPT, fdmode, COST, CONSTR, &  ! cost and constraint at current design point!
+                    !            & FLAG_COST, W_COST, W_CONSTR,&  ! flags and weights
+                    !            & CONN_CONSTR, CONN_XSH,      &  ! connectivity matrices
+                    !            & DCDXSH, DCONDXSH            )  ! gradients
                 case default
                     stop 'Only FD method available!'
 

@@ -34,6 +34,29 @@ import numpy as np
 
 
 
+''' --------------------------------------------------------------- Assembly '''
+def assembly(ForceDistr,ForceTime):
+    '''
+    Given the output from one of the methods to set the force shape  
+    (set_*_ForceDistr) and to set the time variation set_*_ForceTime, the 
+    function creates a 3D array of dimension:
+        Fdyn(NumNodes,6,NumSteps+1)
+    containing the 6 components of the nodal force on each node at each time-step
+    '''
+    
+    (NumNodes,dummy)=ForceDistr.shape
+    NumSteps = len(ForceTime)-1
+    
+    Fdyn = np.zeros( (NumNodes,6,NumSteps+1), dtype=float, order='F')
+    
+    for tt in range(NumSteps+1):
+        Fdyn[:,:,tt]= ForceTime[tt]*ForceDistr
+    
+    return Fdyn
+    
+    
+
+
 ''' ----------------------------------------------------------- Dictionaries '''
 # not implemented
 # consider the idea of implementing a dictionary for the functions and a 
@@ -42,8 +65,6 @@ import numpy as np
 
 
 ''' ---------------------------------------------------- Forces distribution '''
-
-
 def set_nodal_ForceDistr(NumNodes,NodeForce,
           ForceVec  = np.zeros((3)) ,
           MomentVec = np.zeros((3)) ):
@@ -81,8 +102,6 @@ def set_unif_ForceDistr(NumNodes,
         ForceDistr[ii,3:]=MomentVec
         
     return ForceDistr
-
-
 
 
 ''' -------------------------------------------------------------- ForceTime '''

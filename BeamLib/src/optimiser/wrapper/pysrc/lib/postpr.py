@@ -22,7 +22,7 @@ import sys
 sys.path.append('../..')
 import shared
 import PyBeam.Utils.XbeamLib
-import lib.diff
+import lib.diff, lib.integr
 
 
 def reshape_DynOut(DynOut,NumSteps):
@@ -147,7 +147,7 @@ def compute_envelope(THres):
     
 def vector_time_history(Xi,vec0=np.array([1,0,0])):
     ''' 
-    Given a history of quaternions (see 'integrate_rotations'), and initial vector
+    Given a history of quaternions (see 'lib.integr.rotations'), and initial vector
     vec0, the function computes at each time-step tt the rotation matrix associated
     with the quaternion Xi[tt,:] and rotates vec0.
     The resulting vectors are stored into the matrix V
@@ -197,12 +197,12 @@ def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a'):
     if set_origin=='a':
         aOrigin = np.zeros((NumSteps+1,3)) # a bit memory consuming but who cares...
     elif set_origin=='G':
-        aOrigin = integrate_function(RefVel[:,:3],Time)
+        aOrigin = lib.integr.function(RefVel[:,:3],Time)
     else:
         raise NameError("Set a valid origin ('a' or 'G') for the positions vectors!")
         
     # compute quaternions associated with a frame rotation
-    Xi = integrate_rotations(RefVel[:,3:],Time)
+    Xi = lib.integr.rotations(RefVel[:,3:],Time)
     
     # apply rotation to the position vector of each node
     # nb: two loops are requires as the position vector changes at each time-step
@@ -264,7 +264,7 @@ if __name__=='__main__':
             dF[:,1] =-np.sin(Time)
             dF[:,2] =np.exp(Time)       
             
-            RefPos = integrate_function(F,Time,method=method,dF=dF)
+            RefPos = lib.integr.function(F,Time,method=method,dF=dF)
             print 'Computed: ', RefPos[-1,:]
             Er[ee,:] = RefPos[-1,:]-AnalSol            
             
@@ -306,7 +306,7 @@ if __name__=='__main__':
         Omega = np.zeros((NT,3))
         Omega[:,1]=np.ones(NT)*np.pi # pi rad/sec
         
-        Xi = integrate_rotations(Omega, Time)
+        Xi = lib.integr.rotations(Omega, Time)
         print 'Xi[-3:,:]'
         print Xi[-3:,:]
         
@@ -338,7 +338,7 @@ if __name__=='__main__':
         wvec = np.pi * nrot
         Omega = np.ones((NT,3))*wvec
         
-        Xi = integrate_rotations(Omega, Time)
+        Xi = lib.integr.rotations(Omega, Time)
         print 'Xi[-3:,:]'
         print Xi[-3:,:]    
         

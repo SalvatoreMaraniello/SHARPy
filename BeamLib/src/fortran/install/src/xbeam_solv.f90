@@ -351,7 +351,7 @@ module xbeam_solv
 !-> Remarks.-
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine xbeam_solv_couplednlndyn (iOut,NumDof,Time,Elem,Node,F0,Fa,Ftime,           &
+ subroutine xbeam_solv_couplednlndyn (iOut,NumDof,Time,Elem,Node,F0,Fdyn,           &
 &                                     Vrel,VrelDot,Quat,Coords,Psi0,PosDefor,PsiDefor,  &
 &                                     PosDotDefor,PsiDotDefor,DynOut,Options)
   use lib_fem
@@ -372,8 +372,9 @@ module xbeam_solv
   type(xbelem), intent(in)   :: Elem      (:)     ! Element information.
   type(xbnode), intent(in)   :: Node      (:)     ! Nodal information.
   real(8),      intent(in)   :: F0        (:,:)   ! Applied static nodal forces.
-  real(8),      intent(in)   :: Fa        (:,:)   ! Amplitude of the dynamic nodal forces.
-  real(8),      intent(in)   :: Ftime     (:)     ! Time history of the applied forces.
+  real(8),      intent(in)   :: Fdyn      (:,:,:) ! applied dynamic force of size (NumNodes, 6, NumSteps+1)
+  !real(8),      intent(in)   :: Fa        (:,:)   ! Amplitude of the dynamic nodal forces.
+  !real(8),      intent(in)   :: Ftime     (:)     ! Time history of the applied forces.
   real(8),      intent(out)  :: Vrel      (:,:)   ! Time history of the velocities of the reference frame.
   real(8),      intent(out)  :: VrelDot   (:,:)   ! Time history of the accelerations of the reference frame.
   real(8),      intent(inout):: Quat      (4)     ! Quaternions to describes motion of reference system.
@@ -544,10 +545,10 @@ print *, 'SphFlag is: ', SphFlag
 
 ! Compute initial acceleration (we are neglecting qdotdot in Kmass).
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
-&                            F0+Ftime(1)*Fa,dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                          &
+&                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                          &
 &                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
 
-  Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Ftime(1)*Fa,NumDof,Filter=ListIN))
+  Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Fdyn(:,:,1),NumDof,Filter=ListIN))
 
   call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,    &
 &                           dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                 &
@@ -563,7 +564,7 @@ print *, 'SphFlag is: ', SphFlag
     call sparse_set_rows_zero((/1,2,3/),fr,Frigid)
     Qrigid(1:3)=0.d0
   end if
-  Qrigid= Qrigid - sparse_matvmul(fr,Frigid,6,fem_m2v(F0+Ftime(1)*Fa,NumDof+6))
+  Qrigid= Qrigid - sparse_matvmul(fr,Frigid,6,fem_m2v(F0+Fdyn(:,:,1),NumDof+6))
 
   !!!print *, 'MRR:'
   !!!write (*,'(5X,1P6E12.4)') MRR
@@ -660,7 +661,7 @@ print *, 'SphFlag is: ', SphFlag
       call sparse_zero (ktot,Ktotal)
 
       call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
-&                                F0+Ftime(iStep+1)*Fa,dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                    &
+&                                F0+Fdyn(:,:,iStep+1),dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                    &
 &                                ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
 
       call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
@@ -681,8 +682,8 @@ print *, 'SphFlag is: ', SphFlag
       MinDelta=Options%MinDelta*max(1.d0,maxval(abs(Qelast)))
 
 ! Compute the residual.
-      Qelast = Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Ftime(iStep+1)*Fa,NumDof,Filter=ListIN))
-      Qrigid = Qrigid - sparse_matvmul(fr,Frigid,6,fem_m2v(F0+Ftime(iStep+1)*Fa,NumDof+6))
+      Qelast = Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Fdyn(:,:,iStep+1),NumDof,Filter=ListIN))
+      Qrigid = Qrigid - sparse_matvmul(fr,Frigid,6,fem_m2v(F0+Fdyn(:,:,iStep+1),NumDof+6))
 
       Qtotal(1:NumDof)          = Qelast
       Qtotal(NumDof+1:NumDof+6) = Qrigid

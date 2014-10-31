@@ -524,7 +524,7 @@ TaPsi =           Psisc *Options%MinDelta
 !-> Remarks.-
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine cbeam3_solv_nlndyn (iOut,NumDof,Time,Elem,Node,F0,Fa,Ftime,              &
+ subroutine cbeam3_solv_nlndyn (iOut,NumDof,Time,Elem,Node,F0,Fdyn,              &
 &                               Vrel,VrelDot,Coords,Psi0,PosDefor,PsiDefor,          &
 &                               PosDotDefor,PsiDotDefor,PosPsiTime,VelocTime,DynOut, &
 &                               OutGrids,Options)
@@ -549,8 +549,9 @@ TaPsi =           Psisc *Options%MinDelta
   type(xbelem), intent(in)   :: Elem      (:)     ! Element information.
   type(xbnode), intent(in)   :: Node      (:)     ! Nodal information.
   real(8),      intent(in)   :: F0        (:,:)   ! Applied static nodal forces.
-  real(8),      intent(in)   :: Fa        (:,:)   ! Amplitude of the dynamic nodal forces.
-  real(8),      intent(in)   :: Ftime     (:)     ! Time history of the applied forces.
+  !real(8),      intent(in)   :: Fa        (:,:)  ! Amplitude of the dynamic nodal forces.
+  !real(8),      intent(in)   :: Ftime     (:)    ! Time history of the applied forces.
+  real(8),      intent(in)   :: Fdyn      (:,:,:) ! applied dynamic force of size (NumNodes, 6, NumSteps+1)
   real(8),      intent(in)   :: Vrel      (:,:)   ! Time history of the velocities of the reference frame.
   real(8),      intent(in)   :: VrelDot   (:,:)   ! Time history of the accelerations of the reference frame.
   real(8),      intent(in)   :: Coords    (:,:)   ! Initial coordinates of the grid points.
@@ -630,18 +631,31 @@ TaPsi =           Psisc *Options%MinDelta
   allocate (Veloc(NumN,6)); Veloc=0.d0
   allocate (Displ(NumN,6)); Displ=0.d0
 
+! sm:
+  !allocate( Fdyn(NumN,6,size(Time)) ) ! temporary
+  !do iStep=1,size(Time)
+  !  Fdyn(:,:,iStep)=Ftime(iStep)*Fa
+  !end do
+
 ! Allocate quaternions and rotation operator for initially undeformed system
   Quat = (/1.d0,0.d0,0.d0,0.d0/); Cao = Unit; Temp = Unit4
 
 ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
 
+! sm: substitute applied force term with Fdyn
 ! Compute initial acceleration (we are neglecting qdotdot in Kmass).
+!  call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,           &
+!&                            0.d0*PosDefor,0.d0*PsiDefor,F0+Ftime(1)*Fa,Vrel(1,:),VrelDot(1,:),         &
+!&                            ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
+!
+!  Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Ftime(1)*Fa,NumDof,Filter=ListIN))
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,           &
-&                            0.d0*PosDefor,0.d0*PsiDefor,F0+Ftime(1)*Fa,Vrel(1,:),VrelDot(1,:),         &
+&                            0.d0*PosDefor,0.d0*PsiDefor,F0+Fdyn(:,:,1),Vrel(1,:),VrelDot(1,:),         &
 &                            ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
 
-  Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Ftime(1)*Fa,NumDof,Filter=ListIN))
+  Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Fdyn(:,:,1),NumDof,Filter=ListIN))
+
 
   call sparse_addsparse(0,0,ms,Mglobal,as,Asys)
 #ifdef NOLAPACK
@@ -683,8 +697,12 @@ TaPsi =           Psisc *Options%MinDelta
       call sparse_zero (ks,Kglobal)
       call sparse_zero (fs,Fglobal)
 
+ ! sm: substitute applied force term with Fdyn
+ !      call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,                  &
+ !&                                0.d0*PosDefor,0.d0*PsiDefor,F0+Ftime(iStep+1)*Fa,Vrel(iStep+1,:),VrelDot(iStep+1,:),    &
+ !&                                ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
       call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,                  &
-&                                0.d0*PosDefor,0.d0*PsiDefor,F0+Ftime(iStep+1)*Fa,Vrel(iStep+1,:),VrelDot(iStep+1,:),    &
+&                                0.d0*PosDefor,0.d0*PsiDefor,F0+Fdyn(:,:,iStep+1),Vrel(iStep+1,:),VrelDot(iStep+1,:),    &
 &                                ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
 
 ! Compute admissible error.
@@ -692,7 +710,9 @@ TaPsi =           Psisc *Options%MinDelta
 
 ! Compute the residual.
       Qglobal= Qglobal + sparse_matvmul(ms,Mglobal,NumDof,dXddt) + matmul(Mvel,Vreldot(iStep+1,:))
-      Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Ftime(iStep+1)*Fa,NumDof,Filter=ListIN))
+      ! sm: substitute applied force term with Fdyn
+      ! Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Ftime(iStep+1)*Fa,NumDof,Filter=ListIN))
+      Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Fdyn(:,:,iStep+1),NumDof,Filter=ListIN))
 
 ! Check convergence.
       if (maxval(abs(DX)+abs(Qglobal)).lt.MinDelta) then

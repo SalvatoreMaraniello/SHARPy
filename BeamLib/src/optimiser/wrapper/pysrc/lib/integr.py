@@ -11,7 +11,7 @@ Low level methods for integration;
 
 
 import numpy as np
-
+import scipy.integrate
 
 from warnings import warn
 
