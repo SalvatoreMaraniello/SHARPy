@@ -47,7 +47,7 @@ def dwgt(xv,xp,k=0):
 
 
 
-def difffun(x,f):
+def difffun(f,x):
     '''
     Compute II order accuracy first derivative of a function f over the equally
     spaced vector x.
@@ -98,7 +98,7 @@ if __name__=='__main__':
     x=np.linspace(0,2*np.pi,100)
     f=np.sin(x)
     
-    df = difffun(x,f)
+    df = difffun(f,x)
     plt.plot(x,f,'r')
     plt.plot(x,df,'b')
     plt.show()

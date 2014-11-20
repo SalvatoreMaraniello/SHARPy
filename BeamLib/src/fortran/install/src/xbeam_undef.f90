@@ -307,14 +307,14 @@ module xbeam_undef
         select case (Solution)
           case default
             print *, 'Spherical Joint not implemented for Solution: ', Solution
-            stop 'Program terminated'
+            stop 'Program terminated - xbeam_undef_nodeindep'
           case (102) ! spherical joint implemented
             NumIN=NumIN+1
             NumFr=NumFr+1
             ListIN(iNode)=NumIN
             ListFr(iNode)=NumFr
             ListSflag(iNode)=1
-          case (912) ! treat the spherical joint as clamped
+          case (912,932) ! treat the spherical joint as clamped
             print *, 'Treating spherical joint as a clamp'
             NumFr=NumFr+1
             ListFr(iNode)=NumFr

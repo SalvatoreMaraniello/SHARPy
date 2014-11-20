@@ -266,7 +266,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 ! Options%Solution are input - but has been kept for consistency with the
 ! original code
    select case (Options%Solution)
-       case (102,112,142,202,212,302,312,322,900,902,910,912,922,952)
+       case (102,112,142,202,212,302,312,322,900,902,910,912,922,932,952)
            IN_ElemType= 'DISP'
        case default
            STOP 'Error: Wrong solution code (51707)'

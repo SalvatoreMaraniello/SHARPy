@@ -27,7 +27,7 @@ from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
 import design.beamelem, design.beamnodes, design.beamgeom
-import input.load.modal, input.forcedvel
+import input.load.modal, input.load.fourier, input.forcedvel
 import beamvar
 import cost
 import lib.save
@@ -64,7 +64,7 @@ class XBeamSolver(Component):
     OutInaframe     = Bool(False, iotype='in', desc='print velocities in a-frame (if not, Inertial frame). default: False') 
       
     ElemProj        = Enum( 0, (0,1,2), iotype='in', desc='Element info computed in (0) global frame, (1) fixed element frame, (2) moving element frame.')  
-    _Solution_List = (102,112,142,202,212,302,312,900,910,902,912,922,952) # see header for possible values
+    _Solution_List = (102,112,142,202,212,302,312,900,910,902,912,922,932,952) # see header for possible values
     Solution        = Enum(112, _Solution_List, iotype='in', desc='Solution Process')  
        
     MaxIterations   = Int( 99, iotype='in', desc='Maximum number of iterations')          
@@ -102,7 +102,7 @@ class XBeamSolver(Component):
     cs_t3   = Float(iotype='in',desc='thickness along the x2 axis - (see design.isosec)')
     cs_r    = Float(iotype='in',desc='radius for circular cross-sections - (see design.isosec)')
     cs_t    = Float(iotype='in',desc='thickness for circular cross-sections - (see design.isosec)')
-    cs_pretwist = Float(0.0,iotype='in',desc='beam pretwist')
+    cs_pretwist = Float(0.0,iotype='in',desc='beam pre-twist')
     
     # parameters for spline reconstruction
     ControlElems = Array(iotype='in',dtype=np.int,desc="Control sections for beam shape deformation")
@@ -149,14 +149,22 @@ class XBeamSolver(Component):
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppStaLoadType')   
     # Dynamic
-    DynForceParam = Enum('modal', ('modal'), desc='Method to model the dynamic force (see self.set_load)' )
+    DynForceParam = Enum('modal', ('modal','fourier'), desc='Method to model the dynamic force (see self.set_load related modules)' )
     ExtForceDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied force - single node or distributed according to self.AppSDynLoadType (load.set_***_ForceDynAmp)')
     ExtMomntDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppDynLoadType (load.set_***_ForceDynAmp)')   
- 
+    '''
+    Acf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Sin related to Fourier coefficients (see design.load.fourier)')   
+    Bcf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Cin related to Fourier coefficients (see design.load.fourier)')
+    Fcf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Frequencies related to Fourier coefficients (see design.load.fourier)')
+    ''' '''
+    Acf = Array( iotype='in', dtype=float, desc='Sin related to Fourier coefficients (see design.load.fourier)')   
+    Bcf = Array( iotype='in', dtype=float, desc='Cin related to Fourier coefficients (see design.load.fourier)')
+    Fcf = Array( iotype='in', dtype=float, desc='Frequencies related to Fourier coefficients (see design.load.fourier)')
+    '''
  
     ''' Optimisation '''
     # this allows to define costumised optimisation functions. The output value 
@@ -173,7 +181,7 @@ class XBeamSolver(Component):
     ZDisp     =  Float(  iotype='out', desc='z displacement of NNode')
     YDisp     =  Float(  iotype='out', desc='y displacement of NNode')
     XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
-    NNode     =    Int(  -1, iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')    
+    NNode     =    Int(-1,iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')    
      
  
     def __init__(self):
@@ -410,7 +418,7 @@ class XBeamSolver(Component):
         #self.fval = self.ffun(*self.fargs)
         tplargs = cost.return_args(self, self.fargs)
         self.fval = self.ffun(*tplargs)
-        
+        self.fname = self.ffun.func_name
         # sm: savename etc moved before solver started
         ### save
         #counter_string =  '%.3d' % (self._counter)
@@ -549,6 +557,7 @@ class XBeamSolver(Component):
         # Static Load always use shape methods from input.load.modal
         # Span Distribution of Prescribed Load
         if self.AppStaLoadType == 'uniform':
+            print 'setting static uniform force'
             self.ForceStatic = input.load.modal.set_unif_ForceDistr(
                                 self.NumNodes, 
                                 self.ExtForce, self.ExtMomnt)    
@@ -607,7 +616,14 @@ class XBeamSolver(Component):
             # Build the final vector: DO NOT ADD STATIC PART
             # in some solutions (e.g.312) the static solver is called first
             self.ForceDynamic =  input.load.modal.assembly(self.ForceDynAmp,self.ForceTime)
-            
+        
+
+        if self.DynForceParam=='fourier': 
+            self.ForceDynAmp = np.zeros( (self.NumNodes,6), dtype='float', order='F')
+            self.ForceTime = np.ones( (self.NumSteps+1), dtype='float', order='F' )
+            self.ForceDynamic =  input.load.fourier.glsin_nodal(
+                                self.NumNodes, self.Time, self.NodeAppDynForce, 
+                                self.Acf, self.Fcf)
             
 
 
@@ -633,7 +649,7 @@ class XBeamSolver(Component):
     
 if __name__=='__main__':
     
-    from lib.plot import sta_unif
+    from lib.plot.sta import sta_unif
     import lib.save, lib.read
     
     xbsolver=XBeamSolver()

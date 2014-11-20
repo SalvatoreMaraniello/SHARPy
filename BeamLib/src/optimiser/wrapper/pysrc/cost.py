@@ -57,7 +57,7 @@ def f_xyz_disp(PosIni,PosDef,**kwargs):
     except KeyError:
         raise NameError('Specify a direction:x x, y, or z')
 
-    print 'extract: (%d,%d)' %(NNode,jj)
+    # print 'extract: (%d,%d)' %(NNode,jj)
     return PosDef[NNode,jj] - PosIni[NNode,jj]
 
 

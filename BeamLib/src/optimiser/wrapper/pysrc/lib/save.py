@@ -193,12 +193,19 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'ForceTime')   
     hdfile = conditional_saving(hdfile,XBinst,'ForcedVel')   
     hdfile = conditional_saving(hdfile,XBinst,'ForcedVelDot') 
+    hdfile = conditional_saving(hdfile,XBinst,'ForceDynamic')
+    
+    hdfile = conditional_saving(hdfile,XBinst,'Acf')
+    hdfile = conditional_saving(hdfile,XBinst,'Bcf')
+    hdfile = conditional_saving(hdfile,XBinst,'Fcf') 
+    
     # output
     hdfile = conditional_saving(hdfile,XBinst,'PosDotDef')   
     hdfile = conditional_saving(hdfile,XBinst,'PsiDotDef')   
     hdfile = conditional_saving(hdfile,XBinst,'PosPsiTime')   
     hdfile = conditional_saving(hdfile,XBinst,'VelocTime')   
     hdfile = conditional_saving(hdfile,XBinst,'DynOut')   
+    
 
     #---------------------------------------------------------------- Rigid Body
     # output

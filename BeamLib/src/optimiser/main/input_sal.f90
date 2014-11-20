@@ -384,6 +384,8 @@ module input
   select case (Options%Solution)
   case (102,112,142,202,212,302,312,322,900,902,910,912,922,952)
     ElemType= 'DISP'
+  case (932) ! variation of 912 used for spherical joint
+    ElemType= 'DISP'
   case default
     STOP 'Error: Wrong solution code (51707)'
   end select

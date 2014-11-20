@@ -124,6 +124,9 @@ contains
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Set Up Input for Static Problem
      ! (stage required also for dynamic and coupled solutions)
+
+     print *, 'start fwd_static_input'
+
      call fwd_static_input( NumElems, OutFile, Options, &   ! from input_setup
                           & Elem,                       &   ! from opt_main_xxx
                           & NumNodes,                   &   ! from input_ele
@@ -131,7 +134,7 @@ contains
                           & BoundConds, PosIni,         &   ! from input_node
                           & OutGrids                    )   ! from pt_main_xxx
 
-
+    print *, 'fwd_static_input done!'
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Reads Forward Problem Input and allocates the required variables for the
      ! forward static problem solution
@@ -342,6 +345,16 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                     call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic*0.d0,ForceDynamic, &
                                                   & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
+
+                case (932)
+                ! sm
+                ! coupled nonlinear rigid body dynamics and nonlinear structural dynamics with capability
+                ! of static load
+                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
+                                                  & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
+                                                  & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
+
+
 
                 case (922)
                 ! static and then nonlinear rigid body dynamics and nonlinear structural dynamics

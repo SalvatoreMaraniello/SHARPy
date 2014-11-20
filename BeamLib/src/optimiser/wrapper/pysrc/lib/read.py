@@ -174,7 +174,16 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'ForceDynAmp')   
     XBinst = conditional_reading(hdfile,XBinst,'ForceTime')   
     XBinst = conditional_reading(hdfile,XBinst,'ForcedVel')   
-    XBinst = conditional_reading(hdfile,XBinst,'ForcedVelDot') 
+    XBinst = conditional_reading(hdfile,XBinst,'ForcedVelDot')
+    XBinst = conditional_reading(hdfile,XBinst,'ForceDynamic')
+    
+    XBinst = conditional_reading(hdfile,XBinst,'Acf')
+    XBinst = conditional_reading(hdfile,XBinst,'Bcf')
+    XBinst = conditional_reading(hdfile,XBinst,'Fcf')
+    
+    
+    
+    
     # output
     XBinst = conditional_reading(hdfile,XBinst,'PosDotDef')   
     XBinst = conditional_reading(hdfile,XBinst,'PsiDotDef')   

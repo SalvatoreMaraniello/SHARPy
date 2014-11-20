@@ -72,8 +72,15 @@ def function(F,x,method='trap',dF=0.0):
         # use trapezoidal rule
         # equivalent to I order Taylor expansion with average on the I derivative:
         # I[ii+1,:]=I[ii,:] + 0.5*dx*(F[ii,:]+F[ii+1,:])
-        for jj in range(sh[1]):
-            I[1:,jj]=scipy.integrate.cumtrapz(F[:,jj],x=x)
+        if len(sh)==2:
+            for jj in range(sh[1]):
+                I[1:,jj]=scipy.integrate.cumtrapz(F[:,jj],x=x)
+        elif len(sh)==1:
+            print '1d array detected'
+            I[1:]=scipy.integrate.cumtrapz(F,x=x)
+        else: 
+            raise NameError("Can't have F as 3 dimensional array!")
+        
                     
     elif method=='2tay':
         # Taylor expansion II order with Forward formula
@@ -209,9 +216,20 @@ if __name__=='__main__':
     import matplotlib.pyplot as plt
     import postpr, lib.plot.dyn
 
-    test='rot'#'tran' # 'rot' # 'rotconv'
+    test='tran1d'#'rot'#'tran' # 'rot' # 'rotconv'
 
 
+
+    if test=='tran1d':
+        x=np.linspace(0,2*np.pi,100)
+        f=np.sin(x)
+        I=function(f, x, 'trap')
+        fig=plt.figure('1D integration')
+        ax=fig.add_subplot(111)
+        ax.plot(x,f,'r')
+        ax.plot(x,I,'k')
+        plt.legend(('sin','integral'))
+        plt.show()
 
     if test=='rotconv': 
         print '--------------- Check Convergence rate of Rotations Integration '
