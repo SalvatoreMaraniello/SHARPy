@@ -167,10 +167,10 @@ def vector_time_history(Xi,vec0=np.array([1,0,0])):
 
 
 
-def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a'):
+def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a',xi0=np.array([1,0,0,0])):
     ''' 
     Given a time simulation, the function changes the FoR in which the Position
-    pf each node of the beam, at each time-step of the simulation, from local (a)
+    of each node of the beam, at each time-step of the simulation, from local (a)
     (default output in xbeam code - PosDef variable) to ground (G).
     
     According to the value of origin the output will be:
@@ -202,7 +202,7 @@ def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a'):
         raise NameError("Set a valid origin ('a' or 'G') for the positions vectors!")
         
     # compute quaternions associated with a frame rotation
-    Xi = lib.integr.rotations(RefVel[:,3:],Time)
+    Xi = lib.integr.rotations(RefVel[:,3:],Time,xi0=xi0)
     
     # apply rotation to the position vector of each node
     # nb: two loops are requires as the position vector changes at each time-step

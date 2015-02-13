@@ -27,9 +27,9 @@ from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 import shared
 import design.beamelem, design.beamnodes, design.beamgeom
-import input.load.modal, input.load.fourier, input.forcedvel
+import input.load.modal, input.load.fourier, input.load.spline, input.forcedvel
 import beamvar
-import cost
+import cost, constr.common
 import lib.save
 
         
@@ -88,7 +88,7 @@ class XBeamSolver(Component):
 
  
     # isotropic material cross-sectional models(see design.isosec)
-    material = Enum( 'alumA',('alumA','titnA','test'), iotype='in', desc='Material for isotropic cross section (see design.isosec)') 
+    material = Enum( 'alumA',('alumA','titnA','test','qiqi1'), iotype='in', desc='Material for isotropic cross section (see design.isosec)') 
     cross_section_type = Enum(('isorect','isoellip','isocirc',
                                'isohollowrect','isohollowellip','isohollowcirc',
                                'isorect_fact_torsion'),
@@ -139,7 +139,7 @@ class XBeamSolver(Component):
     # Prescribed velocities at the support
     PrVelType = Enum('zero', ('zero','sin','ramp','rampsin','userdef'), desc='Prescribed velocity at beam support')
     
- 
+    
     ''' Control '''
     # Static
     ExtForce = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
@@ -149,21 +149,22 @@ class XBeamSolver(Component):
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppStaLoadType')   
     # Dynamic
-    DynForceParam = Enum('modal', ('modal','fourier'), desc='Method to model the dynamic force (see self.set_load related modules)' )
+    DynForceParam = Enum('modal', ('modal','fourier','spline'), desc='Method to model the dynamic force (see self.set_load related modules)' )
     ExtForceDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied force - single node or distributed according to self.AppSDynLoadType (load.set_***_ForceDynAmp)')
     ExtMomntDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppDynLoadType (load.set_***_ForceDynAmp)')   
-    '''
+    '''# spline control
+    DynFrc_spline_order=Int(3, iotype='in', desc='order of B-spline control parametrisation')
+    TCint = Array( iotype='in', dtype=float, desc='TCint[:,cc] contains the NC+1 knots points for generating the spline representation over the cc-th force/moment component')
+    Scf = Array( iotype='in', dtype=float, desc='spline weights related to the NS = spline_order+NC')  
+    '''  
+    '''# fourier control
     Acf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Sin related to Fourier coefficients (see design.load.fourier)')   
     Bcf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Cin related to Fourier coefficients (see design.load.fourier)')
     Fcf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Frequencies related to Fourier coefficients (see design.load.fourier)')
-    ''' '''
-    Acf = Array( iotype='in', dtype=float, desc='Sin related to Fourier coefficients (see design.load.fourier)')   
-    Bcf = Array( iotype='in', dtype=float, desc='Cin related to Fourier coefficients (see design.load.fourier)')
-    Fcf = Array( iotype='in', dtype=float, desc='Frequencies related to Fourier coefficients (see design.load.fourier)')
     '''
  
     ''' Optimisation '''
@@ -173,7 +174,8 @@ class XBeamSolver(Component):
     # In some situations, the pre_solve method may have to be run before being
     # able to define the arguments.
     fval = Float( 0.0, iotype='out', desc='generic cost function')
-    
+    geqval=Array(iotype='out', desc='value of equality constraints')
+    gdisval=Array(iotype='out', desc='value of disequality constraints')
     
     # Specific Cost/Constrains [superceeded]
     TotalMass =  Float( 0.0, iotype='out', desc='Total structural mass')
@@ -186,6 +188,7 @@ class XBeamSolver(Component):
  
     def __init__(self):
         
+       
         # not to overwrite Component __init__
         super(XBeamSolver, self).__init__()
         
@@ -194,7 +197,7 @@ class XBeamSolver(Component):
         ###fwd_run=xbso.__opt_routine_MOD_opt_main 
         self.fwd_run = getattr(wrapso, "__opt_routine_MOD_opt_main")       
         
-        
+
         #--------------------------------------------------------- Input Related  
         self.BeamSpanStiffness = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )
         self.BeamSpanMass      = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )  
@@ -219,6 +222,35 @@ class XBeamSolver(Component):
         self.PrTrVelAmpl  = np.zeros(  (3), dtype=float, order='F')
         self.PrRotVelAmpl = np.zeros(  (3), dtype=float, order='F')
         
+        
+        # initial conditions
+        
+        # initial a FoR orientation (0 deg.s default)
+        self.Quat0 = np.array( [1, 0, 0, 0], dtype=float, order='F')
+        # initial a FoR velocity in inertial FoR G
+        self.RefVel0 = np.zeros((1,6), dtype=float, order='F')
+        self.RefVelDot0 = np.zeros((1,6), dtype=float, order='F')
+        # DynOut0: initial deformation
+        # note that each NumNodes rows of DynOut are equal to PosDef at that time-step
+        # because the restart is only applicable to dynamic cases, the variable to specify
+        # the initial beam deformation has been labelled DynOut0 and not PosDef0.
+        # Note that DynOut0 requires the knowledge of the number of nodes in the
+        # beam, so assumes a restart.
+        ##self.DynOut0 = np.array((1,3),dtype=float,order='F')
+
+        # Initial nodal position 
+        self.PosDef0 = np.zeros( (1,3), dtype='float', order='F' )
+        # Initial element orientation vectors
+        self.PsiDef0 = np.zeros( (1,3,3), dtype='float', order='F' ) # the 2nd index is the max nodes per element
+
+        # Initial nodal position velocity
+        self.PosDotDef0 = np.zeros( (1,3), dtype='float', order='F' )
+        # Initial element orientation velocity vectors
+        self.PsiDotDef0 = np.zeros( (1,3,3), dtype='float', order='F' ) # the 2nd index is the max nodes per element
+        
+        
+        
+        
         #------------------------------------------------------------- Utilities
         # save directory
         self._savedir = '.'
@@ -227,15 +259,27 @@ class XBeamSolver(Component):
         self._counter = 0
         self._use_previous_solution = False
         
+        # restart option
+        self._restart= False
+        self._restart_file=''
+        
         # append code version
         self._version = shared.CodeVersion()    
         
         
         #------------------------------------------------------------------ Cost
         # dummy arguments for generic cost function
-        self.ffun = cost.f_xyz_disp
-        self.fargs=['PosIni','PosDef']
-        self.fname = self.ffun.func_name
+        #self.ffun = cost.f_xyz_disp
+        #self.fargs=['PosIni','PosDef']
+        #self.fname = self.ffun.func_name
+        
+        # dummy arguments for constraint functions
+        #self.geqfun  =[]
+        #self.geqargs =[]
+        #self.gdisfun =[]
+        #self.gdisargs=[]
+
+
 
 
     def pre_solve(self):
@@ -261,31 +305,6 @@ class XBeamSolver(Component):
         #--------------------------------------------- set Prescribed Velocities
         self.set_prescr_vel()
 
-
-        # output 
-        # Current nodal position vector
-        self.PosDotDef = np.zeros( (self.NumNodes,3), dtype='float', order='F' )
-        # Current element orientation vectors
-        self.PsiDotDef = np.zeros( (self.NumElems,3,3), dtype='float', order='F' ) # the 2nd index is the max nodes per element
-        # Position vector/rotation history at beam tip.
-        self.PosPsiTime= np.zeros( (self.NumSteps+1,6), dtype='float', order='F' )
-        # History of Velocities
-        self.VelocTime = np.zeros( (self.NumSteps+1,self.NumNodes), dtype='float', order='F' )
-        # Position of all nodes wrt to global frame a for each time step
-        self.DynOut    = np.zeros( ((self.NumSteps+1)*self.NumNodes,3), dtype='float', order='F' )
-        
-
-        if self.Solution == 142:
-            self.ForcedVel = np.zeros( (1,6), dtype='float', order='F' )
-
-
-        #-------------------------------- Set Rigid-Body + Dynamics input/output
-
-        self.RefVel     =np.zeros( (self.NumSteps+1,6), dtype='float', order='F') 
-        self.RefVelDot  =np.zeros( (self.NumSteps+1,6), dtype='float', order='F')         
-        ###self.RefVel = self.ForcedVel.copy()
-        ###self.RefVelDot=self.ForcedVelDot.copy()
-        self.Quat =np.array([1,0,0,0],dtype=float,order='F')
 
         #-------------------------------------------------------- Construct Beam   
         if self.beam_shape=='constant':
@@ -334,10 +353,56 @@ class XBeamSolver(Component):
             self.PosIni = design.beamgeom.straight(self.PosIni,self.BeamLength1,self.BeamAxis)
 
 
+
+        #--------------------------------------- Set output & initial conditions
+        # output
+        # Current nodal position vector
+        self.PosDotDef = np.zeros( (self.NumNodes,3), dtype='float', order='F' )
+        # Current element orientation vectors
+        self.PsiDotDef = np.zeros( (self.NumElems,3,3), dtype='float', order='F' ) # the 2nd index is the max nodes per element
+        # Position vector/rotation history at beam tip.
+        self.PosPsiTime= np.zeros( (self.NumSteps+1,6), dtype='float', order='F' )
+        # History of Velocities
+        self.VelocTime = np.zeros( (self.NumSteps+1,self.NumNodes), dtype='float', order='F' )
+        # Position of all nodes wrt to global frame a for each time step
+        self.DynOut    = np.zeros( ((self.NumSteps+1)*self.NumNodes,3), dtype='float', order='F' )
+        
+        if self.Solution == 142:
+            self.ForcedVel = np.zeros( (1,6), dtype='float', order='F' )
+
+
+        # Set Rigid-Body + Dynamics input/output
+        # initial values can be added to displacements and velocities
+        self.RefVel    = np.zeros( (self.NumSteps+1,6), dtype='float', order='F')
+        self.RefVelDot = np.zeros( (self.NumSteps+1,6), dtype='float', order='F')
+        
+        
+        #------------------------------------------------------ set general ICs:
+
+        # a FoR 
+        self.Quat =np.array(self.Quat0,dtype=float,order='F')
+        self.RefVel[0,:]=self.RefVel0
+        self.RefVelDot[0,:]=self.RefVelDot0
+        ### Fortran initialisation discarded
+        ### self.RefVel[0,:] = self.ForcedVel[0,:]          
+        ### self.RefVelDot[0,:]=self.ForceVelDot[0,:] # discarded: acceleration not a valid IC for a II order problem            
+
+        if self._restart==True:
+            # initial deformation (in a FoR)
+            # WARNING: this overrides self.PoseDef defined above           
+            ##self.DynOut[:self.NumNodes,:]=self.DynOut0 ## <-- does nothing!
+            self.PosDef=np.array(self.PosDef0, dtype='float', order='F')
+            self.PsiDef=np.array(self.PsiDef0, dtype='float', order='F')
+            self.PosDotDef=np.array(self.PosDotDef0, dtype='float', order='F')
+            self.PsiDotDef=np.array(self.PsiDotDef0, dtype='float', order='F')
+
+
         # prepare saving directory:
         self._savedir=os.path.abspath(self._savedir)
         if os.path.isdir(self._savedir) is False:
             os.makedirs(self._savedir)
+            
+        return self
         
 
     def execute(self):
@@ -369,9 +434,9 @@ class XBeamSolver(Component):
         counter_string =  '%.3d' % (self._counter)
         savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
         lib.save.h5comp( self, savename)
-        
-        # call xbeam solver
 
+
+        # call xbeam solver
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
                      ct.byref(self.ct_NumNodesElem), self.ct_ElemType, self.ct_TestCase, self.ct_BConds,
                      self.BeamSpanStiffness.ctypes.data_as(ct.c_void_p),        # Properties along the span
@@ -413,12 +478,10 @@ class XBeamSolver(Component):
         self.XDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='x',NNode=self.NNode-1)
         
         
-        # compute general cost
-        
-        #self.fval = self.ffun(*self.fargs)
-        tplargs = cost.return_args(self, self.fargs)
-        self.fval = self.ffun(*tplargs)
-        self.fname = self.ffun.func_name
+        # evaluate cost and constraints
+        self.eval_functionals()      
+                        
+                        
         # sm: savename etc moved before solver started
         ### save
         #counter_string =  '%.3d' % (self._counter)
@@ -625,7 +688,14 @@ class XBeamSolver(Component):
                                 self.NumNodes, self.Time, self.NodeAppDynForce, 
                                 self.Acf, self.Fcf)
             
-
+        if self.DynForceParam=='spline': 
+            self.ForceDynAmp = np.zeros( (self.NumNodes,6), dtype='float', order='F')
+            self.ForceTime = np.ones( (self.NumSteps+1), dtype='float', order='F' )
+            #spline_nodal(NumNodes, Time, NodeForce, TCint, Scf, p )
+            self.ForceDynamic =  input.load.spline.nodal_force(
+                                self.NumNodes, self.Time, self.NodeAppDynForce, 
+                                self.TCint, self.Scf, self.DynFrc_spline_order)            
+            
 
     def set_prescr_vel(self):
         ''' set prescribed velocities (input.forcedvel)'''
@@ -645,12 +715,69 @@ class XBeamSolver(Component):
             raise NameError('PrVelType not valid!')         
 
 
+    def eval_functionals(self):
+        '''
+        Evaluate the cost and constraintsfunctionals given in the lists
+        self.ffun, self.geqfun and self.gdisfun
+        '''
+        # compute general cost
+        if hasattr(self,'ffun'):
+            #self.fval = self.ffun(*self.fargs)
+            tplargs = cost.return_args(self, self.fargs)
+            self.fval = self.ffun(*tplargs)
+            self.fname = self.ffun.func_name
+        
+        # compute equality constraints
+        if hasattr(self, 'geqfun'):
+            #if len(self.geqfun)>0:
+            geqval_list=[]
+            self.geqname=[]
+            Ngeq = len(self.geqfun)
+            for gg in range(Ngeq):
+                ggeqfun  = self.geqfun[gg]
+                ggeqargs = self.geqargs[gg]
+                #geqval_list.append( ggeqfun(*constr.common.return_args(self, ggeqargs)) )
+                ggeqval = ggeqfun(*constr.common.return_args(self, ggeqargs))
+                if np.isscalar(ggeqval): # output is a scalar
+                    geqval_list.append( ggeqval )
+                else: # output is an array
+                    Nelems = np.prod(ggeqval.shape)
+                    gvec = np.reshape( ggeqval, ( Nelems ,) )
+                    for gelem in gvec:
+                        geqval_list.append( gelem )                
+                self.geqname.append( ggeqfun.func_name )
+            self.geqval=np.array(geqval_list)
+            print 'eq constr: ', self.geqval
+        
+        # compute disequality constraints
+        if hasattr(self, 'gdisfun'):
+            #if len(self.gdisfun)>0:
+            gdisval_list=[]
+            self.gdisname=[]
+            Ngdis = len(self.gdisfun)
+            for gg in range(Ngdis):
+                ggdisfun  = self.gdisfun[gg]
+                ggdisargs = self.gdisargs[gg]
+                #gdisval_list.append( ggdisfun(*constr.common.return_args(self, ggdisargs)) )
+                ggdisval = ggdisfun(*constr.common.return_args(self, ggdisargs))
+                if np.isscalar(ggdisval): # output is a scalar
+                    gdisval_list.append( ggdisval )
+                else: # output is an array
+                    Nelems = np.prod(ggdisval.shape)
+                    gvec = np.reshape( ggdisval, ( Nelems ,) )
+                    for gelem in gvec:
+                        gdisval_list.append( gelem )                         
+                self.gdisname.append( ggdisfun.func_name ) 
+            self.gdisval = np.array(gdisval_list)       
+            print 'dis constr:', self.gdisval
+        
+        return
+
 ''' ------------------------------------------------------------------------ ''' 
     
 if __name__=='__main__':
     
     from lib.plot.sta import sta_unif
-    import lib.save, lib.read
     
     xbsolver=XBeamSolver()
     

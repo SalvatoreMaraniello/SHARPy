@@ -19,8 +19,9 @@ import sys
 
 
 class CodeVersion():
-    number = '2.0'
-    description = 'Optimisation for Dynamic Solution with Rigid Body Motion'
+    number = '2.01'
+    description = 'Optimisation for Dynamic Solution with Rigid Body Motion + '+ \
+                  '(01) restart option; '
 
 
 # ----------------------------------------------------------------- Define Paths

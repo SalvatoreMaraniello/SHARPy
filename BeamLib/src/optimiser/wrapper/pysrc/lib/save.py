@@ -195,9 +195,12 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'ForcedVelDot') 
     hdfile = conditional_saving(hdfile,XBinst,'ForceDynamic')
     
-    hdfile = conditional_saving(hdfile,XBinst,'Acf')
+    hdfile = conditional_saving(hdfile,XBinst,'Acf') # fourier
     hdfile = conditional_saving(hdfile,XBinst,'Bcf')
     hdfile = conditional_saving(hdfile,XBinst,'Fcf') 
+    hdfile = conditional_saving(hdfile,XBinst,'TCint') # spline
+    hdfile = conditional_saving(hdfile,XBinst,'Scf')     
+    hdfile = conditional_saving(hdfile,XBinst,'DynFrc_spline_order') 
     
     # output
     hdfile = conditional_saving(hdfile,XBinst,'PosDotDef')   
@@ -212,13 +215,28 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'RefVel')  
     hdfile = conditional_saving(hdfile,XBinst,'RefVelDot')  
     hdfile = conditional_saving(hdfile,XBinst,'Quat')  
-    
+     
+    #----------------------------------------------------- ics (restart sol 932)
+    hdfile = conditional_saving(hdfile,XBinst,'Quat0') 
+    hdfile = conditional_saving(hdfile,XBinst,'RefVel0')  
+    hdfile = conditional_saving(hdfile,XBinst,'RefVelDot0')
+    hdfile = conditional_saving(hdfile,XBinst,'PosDotDef0')   
+    hdfile = conditional_saving(hdfile,XBinst,'PsiDotDef0')       
+    hdfile = conditional_saving(hdfile,XBinst,'PosDef0')
+    hdfile = conditional_saving(hdfile,XBinst,'PsiDef0')   
     
     #-------------------------------------------------------------- Optimisation
     hdfile = conditional_saving(hdfile,XBinst,'fval')  
     hdfile = conditional_saving(hdfile,XBinst,'fname')  
     hdfile = conditional_saving(hdfile,XBinst,'fargs')  
     
+    hdfile = conditional_saving(hdfile,XBinst,'geqval')  
+    hdfile = conditional_saving(hdfile,XBinst,'geqname')  
+    hdfile = conditional_saving(hdfile,XBinst,'geqargs')      
+ 
+    hdfile = conditional_saving(hdfile,XBinst,'gdisval')  
+    hdfile = conditional_saving(hdfile,XBinst,'gdisname')  
+    hdfile = conditional_saving(hdfile,XBinst,'gdisargs')   
     
     '''
     # to add future fields...

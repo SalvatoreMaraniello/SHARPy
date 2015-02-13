@@ -177,11 +177,12 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'ForcedVelDot')
     XBinst = conditional_reading(hdfile,XBinst,'ForceDynamic')
     
-    XBinst = conditional_reading(hdfile,XBinst,'Acf')
+    XBinst = conditional_reading(hdfile,XBinst,'Acf') # fourier
     XBinst = conditional_reading(hdfile,XBinst,'Bcf')
     XBinst = conditional_reading(hdfile,XBinst,'Fcf')
-    
-    
+    XBinst = conditional_reading(hdfile,XBinst,'Scf') # spline
+    XBinst = conditional_reading(hdfile,XBinst,'TCint')
+    XBinst = conditional_reading(hdfile,XBinst,'DynFrc_spline_order')
     
     
     # output
@@ -195,14 +196,31 @@ def h5comp(filename):
     # output
     XBinst = conditional_reading(hdfile,XBinst,'RefVel')  
     XBinst = conditional_reading(hdfile,XBinst,'RefVelDot')  
-    XBinst = conditional_reading(hdfile,XBinst,'Quat') 
+    XBinst = conditional_reading(hdfile,XBinst,'Quat')
     
     
-    #-------------------------------------------------------------- Optimisaiton
+    #----------------------------------------------------- ics (restart sol 932)
+    XBinst = conditional_reading(hdfile,XBinst,'Quat0')
+    XBinst = conditional_reading(hdfile,XBinst,'RefVel0') 
+    XBinst = conditional_reading(hdfile,XBinst,'RefVelDot0') 
+    XBinst = conditional_reading(hdfile,XBinst,'PosDotDef0')   
+    XBinst = conditional_reading(hdfile,XBinst,'PsiDotDef0')       
+    XBinst = conditional_reading(hdfile,XBinst,'PosDef0')
+    XBinst = conditional_reading(hdfile,XBinst,'PsiDef0')        
+    
+    #-------------------------------------------------------------- Optimisation
     XBinst = conditional_reading(hdfile,XBinst,'fval') 
     XBinst = conditional_reading(hdfile,XBinst,'fname') 
     XBinst = conditional_reading(hdfile,XBinst,'fargs') 
     
+    XBinst = conditional_reading(hdfile,XBinst,'geqval') 
+    XBinst = conditional_reading(hdfile,XBinst,'geqname') 
+    XBinst = conditional_reading(hdfile,XBinst,'geqargs') 
+
+    XBinst = conditional_reading(hdfile,XBinst,'gdisval') 
+    XBinst = conditional_reading(hdfile,XBinst,'gdisname') 
+    XBinst = conditional_reading(hdfile,XBinst,'gdisargs') 
+
     
     '''
     setattr(XBinst,'',hdfile[''].value)

@@ -193,6 +193,9 @@ def set_rect_ForceTime(Time,t_start,t_end):
     t_start,t_end: times at which the signal becomes equal to 1. At these 
     time-steps the amplitude in 0.5. Otherwise, the signal has value 0
     
+    If t_start<0, the Force at time 0 is equal to 1 (added for testing and 
+    restarting)
+    
     ref. http://en.wikipedia.org/wiki/Rectangular_function
     '''
     
@@ -209,6 +212,9 @@ def set_rect_ForceTime(Time,t_start,t_end):
 
     ForceTime[iirect]=ForceTime[iirect]+1.0
     ForceTime[iibound]=ForceTime[iibound]+0.5
+    
+    if t_start<0:
+        ForceTime[0]=1.0
     
     return ForceTime
 
