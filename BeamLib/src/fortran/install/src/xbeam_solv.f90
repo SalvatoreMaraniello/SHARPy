@@ -18,10 +18,12 @@
 !-> Remark:
 ! - SM: xbeam_solv_couplednlindyn modified to account for spherical BCs at the
 !       root (node 1). The BCs are trigged by the Node(1)%Hflag.
+! - SM: convergence check improved for sol932
 !
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!# sm: uneffective for sol932. To be investigated.!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module xbeam_solv
  use xbeam_shared
+ use lib_solv
  implicit none
 
 ! Shared variables within the module.
@@ -351,7 +353,7 @@ module xbeam_solv
 !-> Remarks.-
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- subroutine xbeam_solv_couplednlndyn (iOut,NumDof,Time,Elem,Node,F0,Fdyn,           &
+ subroutine xbeam_solv_couplednlndyn (iOut,NumDof,Time,Elem,Node,F0,Fdyn,               &
 &                                     Vrel,VrelDot,Quat,Coords,Psi0,PosDefor,PsiDefor,  &
 &                                     PosDotDefor,PsiDotDefor,DynOut,Options)
   use lib_fem
@@ -443,13 +445,50 @@ module xbeam_solv
   logical :: SphFlag
   integer :: sph_rows(3) ! rows to be modified to include a spherical joint BC
 
+  ! Parameters to Check Convergence
+  logical :: converged = .false.
+  logical :: passed_delta = .false.! true if the subiteration (newton) converged according to delta check
+  logical :: passed_res      = .false.! true if the subiteration (newton) converged according to residual check
+  logical :: passed_resfrc   = .false.! true if the subiteration (newton) converged according to residual check (forces only)
+  logical :: passed_resmmt   = .false.! true if the subiteration (newton) converged according to residual check (Moments only)
+  logical :: passed_err      = .false.! true if the subiteration (newton) converged according to error check
+  logical :: passed_errpos   = .false.! true if the subiteration (newton) converged according to error check (position only)
+  logical :: passed_errpsi   = .false.! true if the subiteration (newton) converged according to error check (rotations only)
+
+  ! variables for residual check
+  real(8) :: Fsc, Msc                   ! scaling factor for forces and moments
+  real(8) :: QglFrc(NumDof/2), QglMmt(NumDof/2) ! residual related to forces and moments
+  real(8) :: Res, Res0                  ! current and  initial residual
+  real(8) :: ResFrc, ResFrc0, ResFrcRel ! absolute, initial and relative residual
+  real(8) :: ResMmt, ResMmt0, ResMmtRel ! absolute, initial and relative residual
+  real(8) :: TaRes, TaResFrc, TaResMmt  ! absolute tolerance for Res, ResMmt, ResFrc
+
+ ! variables for error based check
+  real(8)   :: Possc, Psisc         ! scaling factor for position and rotations (Psi and quaternion)
+  real(8)   :: DeltaPos(NumDof/2)   ! delta displacements at current and previous iteration
+  real(8)   :: DeltaPsi(NumDof/2)   ! delta rotations at current and previous iteration
+  real(8)   :: ErrX, ErrPos, ErrPsi ! Error extimation for all DoF, displacements and rotations
+  real(8)   :: DX_now, DX_old       ! Norm of DeltaX at current and old iteration
+  real(8)   :: DPos_now, DPos_old   ! Norm of translational dofs of DeltaX at current and old iteration
+  real(8)   :: DPsi_now, DPsi_old   ! Norm of rotational dofs of DeltaX at current and old iteration
+  real(8)   :: TaX, TaPos, TaPsi    ! Absolute tolerance for DeltaX, DeltaPos and DeltaPsi
+
+ ! Determine scaling factors for convergence test (absolute tolerances)
+  Psisc = 1.0_8 ! used for quaternion scaling as well
+  Possc = maxval(abs(Coords))
+  Fsc = 1.0_8; Msc = 1.0_8;
+  do iStep=1,size(Time)-1
+    Fsc = max( maxval(abs( F0(:,1:3)+Fdyn(:,1:3,iStep+1) )), Fsc);
+    Msc = max( maxval(abs( F0(:,4:6)+Fdyn(:,4:6,iStep+1) )), Msc);
+  end do
+  print*, 'xbeam_solv_couplednlndyn:'
+  print*, 'scaling factor for simulation:'
+  print*, 'Fsc=', Fsc, 'Msc=', Msc
 
 ! Initialize (sperical joint) sm
-print *, 'SphFlag is: ', SphFlag
   SphFlag=.false.
   if (Node(1)%Sflag == 1) then
     SphFlag=.true.
-    print *, 'Hinge BC detected!!!'
   end if
   sph_rows = (/1,2,3/)+NumDof
 
@@ -508,6 +547,24 @@ print *, 'SphFlag is: ', SphFlag
   allocate (Veloc(NumN,6)); Veloc=0.d0
   allocate (Displ(NumN,6)); Displ=0.d0
 
+  ! -------------------------- sm start: give initial values to rigid body frame
+  dQdt(NumDof+7:NumDof+10)=Quat
+  ! dQddt(NumDof+1:NumDof+6)=VrelDot(1,:) ! acceleration is not a valid IC for a II order system
+  Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
+  ACoa(1:3,1:3) = Cao ! ACoa is inappropriate. Should be ACao in this case
+  ACoa(4:6,4:6) = Cao ! ACoa is inappropriate. Should be ACao in this case
+  ! Export velocities and accelerations in body frame
+  if (Options%OutInaframe) then
+      dQdt (NumDof+1:NumDof+6) = Vrel   (1,:)
+      dQddt(NumDof+1:NumDof+6) = VrelDot(1,:)
+  ! Export velocities and accelerations in inertial frame
+  else
+      dQdt (NumDof+1:NumDof+6) = matmul(ACoa,Vrel   (1,:)) ! ACoa is inappropriate here. Should be ACao
+      dQddt(NumDof+1:NumDof+6) = matmul(ACoa,VrelDot(1,:))
+  end if
+  ! --------------------------------------------------------------------- sm end
+
+
 ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
   ! sm: dXdt !=0 if the Pos/PsiDotDeform variables are non-zero
@@ -516,23 +573,22 @@ print *, 'SphFlag is: ', SphFlag
   Q(NumDof+1:NumDof+6)    = 0
   dQdt(1:NumDof)          = dXdt(:)
   dQdt(NumDof+7:NumDof+10)= Quat
+
+
   ! (spherical joint - sm)
-  if (SphFlag) then
-    dQdt(NumDof+1:NumDof+6) = 0.d0
-  else
-    dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
-  end if
+  !if (SphFlag) then
+  !  dQdt(NumDof+1:NumDof+6) = 0.d0
+  !else
+  !  dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
+  !end if
 
   Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
-
   ACoa(1:3,1:3) = transpose(Cao)
   ACoa(4:6,4:6) = transpose(Cao)
-
 ! Export velocities and accelerations in body frame
   if (Options%OutInaframe) then
       Vrel   (1,:) = dQdt (NumDof+1:NumDof+6)
       VrelDot(1,:) = dQddt(NumDof+1:NumDof+6)
-
 ! Export velocities and accelerations in inertial frame
   else
       Vrel   (1,:) = matmul(ACoa,dQdt (NumDof+1:NumDof+6))
@@ -544,14 +600,18 @@ print *, 'SphFlag is: ', SphFlag
   end do
 
 ! Compute initial acceleration (we are neglecting qdotdot in Kmass).
+! sm: why we are neglecting it? Let's set it to be on-zero
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
-&                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),                          &
+&                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),            &
+&                            0.d0*dQddt(NumDof+1:NumDof+6),                     & ! sm old: 0.d0*dQddt(NumDof+1:NumDof+6),
 &                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
 
   Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Fdyn(:,:,1),NumDof,Filter=ListIN))
 
   call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,    &
-&                           dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                 &
+&                           dQdt(NumDof+1:NumDof+6),                            &
+&                           0.d0*dQddt(NumDof+1:NumDof+6),                      & ! sm old: 0.d0*dQddt(NumDof+1:NumDof+6),
+&                           dQdt(NumDof+7:NumDof+10),                                                                       &
 &                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
   ! Sperical Joint - sm:
@@ -587,7 +647,6 @@ print *, 'SphFlag is: ', SphFlag
 ! moving) to avoid numerical error. If a moving hinge/spherical joint is implemented,
 ! the columns related to the translational dof can't be set to zero!
   if (SphFlag) then
-  print *, '587: doing stuff for spherical joint'
     call sparse_set_colrows_zero(sph_rows,mtot,Mtotal)
     call sparse_set_rows_unit(sph_rows,mtot,Mtotal)
   end if
@@ -614,6 +673,8 @@ print *, 'SphFlag is: ', SphFlag
       dQddt(NumDof+1:NumDof+3)=0.d0
     end if
 
+! Iteration until convergence.
+  converged=.false.
 ! Iteration until convergence.
     do Iter=1,Options%MaxIterations+1
       !Spherical Joint - sm
@@ -706,11 +767,23 @@ print *, 'SphFlag is: ', SphFlag
 
       Qtotal= Qtotal + sparse_matvmul(mtot,Mtotal,NumDof+6+4,dQddt)
 
-! Check convergence.
+! ----------------------------------------------------------- Check convergence.
+
+      ! delta check (original code)
+      write (*,'(2X,1PE10.3,$)') maxval(abs(Qtotal))
       if (maxval(abs(Qtotal)).lt.MinDelta) then
         write (*,'(5X,A,I4,A,1PE12.3)') 'Subiteration',Iter, '  Delta=', maxval(abs(Qtotal))
+        converged=.true. ! sm
+      end if
+
+      ! exit do loop
+      if (converged.eqv..true.) then
         exit
       end if
+
+
+
+! ----------------------------------------------------- end check of convergence
 
 ! Compute total damping and stiffness matrices linear system
       call sparse_addsparse (0,0,cs,CSS,ctot,Ctotal)

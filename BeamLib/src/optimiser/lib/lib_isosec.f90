@@ -48,6 +48,23 @@ contains
 
         select case(trim(material))
 
+            case ('qiqi1') ! dummy material to reproduce Qiqi stiffer beam
+
+                !!!assuming a full square cross-section of size 0.2 x 0.2 m^2
+                !E = 75000.0_8
+                !rho = 25.0_8
+                !!!assuming a full square cross-section of size 0.1 x 0.1 m^2
+                E = 1200000.0_8
+                rho = 100.0_8
+                mu = 0.36_8
+                G = E/( 2.0_8 * (1.0_8+mu) ) ! not tested
+
+
+
+
+
+
+
             case ('titnA') ! Titanium (as per Pai/Palacios, Cook, Muroa)
                 E = 127.d9
                 mu = 0.36_8
@@ -64,6 +81,7 @@ contains
                 E  = 1.0d7
                 G  = 1.0d5
                 rho= 1.0_8
+
 
         end select
 

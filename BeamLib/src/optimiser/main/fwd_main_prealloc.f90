@@ -101,17 +101,14 @@ contains
     real(8), intent(inout) :: DynOut     (:,:)   ! Position of all nodes wrt to global frame a for each time step
 
 
- character(len=25)        :: OutFile           ! Output file.
+    character(len=25)        :: OutFile           ! Output file.
+    integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
+    integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
 
-
-     integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
-     integer:: NumDof                              ! Number of independent degrees of freedom (2nd-order formulation).
-
-     type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
-     type(xbelem), allocatable:: Elem(:)            ! Element information.
-     type(xbnode), allocatable:: Node(:)            ! Nodal information.
-     integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
-
+    type(xbopts)             :: Options            ! Solution options (structure defined in xbeam_shared).
+    type(xbelem), allocatable:: Elem(:)            ! Element information.
+    type(xbnode), allocatable:: Node(:)            ! Nodal information.
+    integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
 
      logical,      allocatable:: OutGrids(:)        ! Grid nodes where output is written.
 
@@ -124,9 +121,6 @@ contains
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Set Up Input for Static Problem
      ! (stage required also for dynamic and coupled solutions)
-
-     print *, 'start fwd_static_input'
-
      call fwd_static_input( NumElems, OutFile, Options, &   ! from input_setup
                           & Elem,                       &   ! from opt_main_xxx
                           & NumNodes,                   &   ! from input_ele
@@ -134,7 +128,6 @@ contains
                           & BoundConds, PosIni,         &   ! from input_node
                           & OutGrids                    )   ! from pt_main_xxx
 
-    print *, 'fwd_static_input done!'
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Reads Forward Problem Input and allocates the required variables for the
      ! forward static problem solution
@@ -145,8 +138,6 @@ contains
                     &                      PsiIni,    &   ! from xbeam_undef_geom
                     &                Node, NumDof,    &   ! from xbeam_undef_dofs
                     & PosDef, PsiDef, InternalForces  )  ! allocated in fwd_presolve_static and output of static analysis
-
-
 
      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
      ! Forward Solution.
@@ -165,9 +156,6 @@ contains
                  & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
 
  end subroutine fwd_problem_prealloc
-
-
-
 
 
 
@@ -311,14 +299,14 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
         ! --------------------------- Coupled Structural and Rigid-Body Dynamics
         if ((Options%Solution.ge.900).and.(Options%Solution.le.952)) then
 
-            ! Initialize
-            !!!allocate (RefVel   (NumSteps+1,6));      RefVel   =ForcedVel;       ! RefVel(1,5)=0.5d0
-            !!!allocate (RefVelDot(NumSteps+1,6));      RefVelDot=ForcedVelDot
-            !!!allocate (Quat     (4));                 Quat     =(/1.d0,0.d0,0.d0,0.d0/)
-            RefVel   =ForcedVel       ! RefVel(1,5)=0.5d0
-            RefVelDot=ForcedVelDot
-            Quat     =(/1.d0,0.d0,0.d0,0.d0/)
+            ! Initialize (sm: commented out - moved to python wrapper)
+            !RefVel   =ForcedVel       ! RefVel(1,5)=0.5d0
+            !RefVelDot=ForcedVelDot
+            !Quat     =(/1.d0,0.d0,0.d0,0.d0/)
 
+            !print *, PosDotDef
+            !print *, PsiDotDef
+            !stop
 
             select case (Options%Solution)
 
@@ -349,7 +337,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                 case (932)
                 ! sm
                 ! coupled nonlinear rigid body dynamics and nonlinear structural dynamics with capability
-                ! of static load
+                ! of static load. The static solution is not run first (e.g. case of shperical joint, where
+                ! a static solution does not apply)
                     call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
                                                   & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
@@ -384,47 +373,9 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
         end if ! Coupled analysis
 
-
-        ! Store results for general dynamic analysis.
-        ! Dynamic response of specified node with respect to global frame a.
-        !open (unit=11,file=OutFile(1:17)//'_dyn.txt',status='replace')
-        !    do i=1,NumSteps-1;  write (11,'(1X,1P7E15.6)') Time(i),PosPsiTime(i,:);  end do
-        !close (11)
-
-        !open (unit=11,file=OutFile(1:17)//'_vel.txt',status='replace')
-        !    do i=1,NumSteps-1;
-        !        if (Time(i).ge.0.d0) then
-        !            do j=1,NumNodes
-        !                write (11,'(1X,2I8,1PE15.6)') i,j,VelocTime(i,j)
-        !            end do
-        !        end if
-        !    end do
-        !close (11)
-
-        !! Position vector of every node wrt global frame a at each time step.
-        !open (unit=11,file=OutFile(1:17)//'_shape.txt',status='replace')
-        !    do i=1,NumSteps-1;
-        !        do j=1,NumNodes
-        !            write (11,'(1X,1P7E15.6)') Time(i), DynOut((i-1)*NumNodes+j,:);
-        !        end do
-        !    end do
-        !close (11)
-
-        !! Screen output position and CRV of specified node at last time step.
-        !!write (*,'(1P6E12.4)') PosDef(NumNodes,:),PsiDef(NumElems,2,:)
-
     end if     ! Dynamic analysis
 
-
-!print *, 'max VelocTime: ', maxval(abs(VelocTime))
-
-
-
 end subroutine fwd_solver
-
-
-
-
 
 
 
@@ -462,55 +413,41 @@ subroutine fwd_presolver(NumElems,OutFile,Options,    &   ! from input_setup
 
     character(len=25)        :: OutFile           ! Output file.
 
+    ! ------------------------------------ Compute initial (undeformed) geometry
+    !call array3_cond_alloc(PsiIni,NumElems,MaxElNod,3,.true.)
+    !allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
+    call xbeam_undef_geom ( Elem,PosIni,PhiNodes,PsiIni,Options)
+    !    xbeam_undef_geom (inout,    in,      in,   out,     in)
+    ! - PosIni (in): Coords in unput_xxx.f90
+    ! - PhiNodes (in): pretwist
+    ! - PsiIni (out): CRV at the node
 
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- ! Compute initial (undeformed) geometry.
- !call array3_cond_alloc(PsiIni,NumElems,MaxElNod,3,.true.)
- !allocate(PsiIni(NumElems,MaxElNod,3)); PsiIni=0.d0
- call xbeam_undef_geom ( Elem,PosIni,PhiNodes,PsiIni,Options)
- !    xbeam_undef_geom (inout,    in,      in,   out,     in)
- ! - PosIni (in): Coords in unput_xxx.f90
- ! - PhiNodes (in): pretwist
- ! - PsiIni (out): CRV at the node
+    ! Identify nodal degrees of freedom.
+    if ( allocated(Node) .eqv. .false. ) then
+        allocate (Node(NumNodes))
+    end if
 
- ! Identify nodal degrees of freedom.
- if ( allocated(Node) .eqv. .false. ) then
-    allocate (Node(NumNodes))
- end if
+    ! sm 25 Oct 2014
+    ! Options%Solution added in input as, for spherical joint BCs, the number of
+    ! Structural dofs depends on the solution (rigid-body+structural or static) as
+    ! well.
+    call xbeam_undef_dofs (Elem,BoundConds,  Node, NumDof, Options%Solution)
+    ! xbeam_undef_dofs    (  in,        in, inout,    out,      in)
+    ! Node: Nodal information [type(xbnode)]
+    !NumDof Number of independent degrees of freedom.
 
- ! sm 25 Oct 2014
- ! Options%Solution added in input as, for spherical joint BCs, the number of
- ! Structural dofs depends on the solution (rigid-body+structural or static) as
- ! well.
- call xbeam_undef_dofs (Elem,BoundConds,  Node, NumDof, Options%Solution)
- ! xbeam_undef_dofs    (  in,        in, inout,    out,      in)
- ! Node: Nodal information [type(xbnode)]
- !NumDof Number of independent degrees of freedom.
-
-
- ! Avoid overwriting {Pos/Psi}Def to allow previous solution from optimisation
- ! to be passed in input:
- !if ( max( maxval(abs(PosDef)),maxval(abs(PsiDef)) ) < 1.e-16 ) then
- if ( max( maxval(abs(PosDef)),maxval(abs(PsiDef)) ) < epsilon(PosDef(1,1)) ) then
-    print *, 'Initial Guess Overwritten with Initial Positions/Rotations!!!'
-    print *, '(Max. Elem. < epsilon = ', epsilon(PosDef(1,1))
-    PosDef= PosIni
-    PsiDef= PsiIni
- end if
-
- ! old code
- !allocate (PosDef(NumNodes,3));          PosDef= PosIni
- !allocate (PsiDef(NumElems,MaxElNod,3)); PsiDef= PsiIni
- !allocate (InternalForces(NumNodes,6));  InternalForces= 0.d0
-
- ! sm 21 aug 2014
- ! all saving moved in python environment
- !
- ! Store undeformed geometry in external text file.
- !open (unit=11,file=OutFile(1:17)//'_und.txt',status='replace')
- !    call output_elems (11,Elem,PosIni,PsiIni)
- !close (11)
-
+    ! Avoid overwriting {Pos/Psi}Def to allow previous solution from optimisation
+    ! to be passed in input:
+    !if ( max( maxval(abs(PosDef)),maxval(abs(PsiDef)) ) < 1.e-16 ) then
+    print *, '[frw_main_prealloc, fwd_problem_prealloc, fwd_presolver]'
+    if ( max( maxval(abs(PosDef)),maxval(abs(PsiDef)) ) < epsilon(PosDef(1,1)) ) then
+        print *, 'Initial Guess Overwritten with Initial Positions/Rotations!!!'
+        print *, '(Max. Elem. < epsilon = ', epsilon(PosDef(1,1))
+        PosDef= PosIni
+        PsiDef= PsiIni
+    else
+        print *, 'Initial guess for PosDef and PsiDef found!'
+    end if
 
 end subroutine fwd_presolver
 
@@ -532,49 +469,44 @@ subroutine fwd_static_input(NumElems,OutFile,Options, &   ! from input_setup
                            & OutGrids)                  ! from pt_main_xxx
 
     ! Input added for the optimisation
-     real(8)                :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
-     real(8)                :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
+     real(8)  :: BeamSpanStiffness(NumElems,6,6) ! Element by Element Stiffness matrix
+     real(8)  :: BeamSpanMass(NumElems,6,6)      ! Element by Element Mass matrix
+     ! Original Input
+     real(8)  :: PosIni(:,:)                     ! Initial nodal Coordinates.
+     integer  :: NumElems,NumNodes               ! Number of elements/nodes in the model.
+     type(xbopts)             :: Options         ! Solution options (structure defined in xbeam_shared).
+     type(xbelem), allocatable:: Elem(:)         ! Element information.
+     integer,      allocatable:: BoundConds(:)   ! =0: no BC; =1: clamped nodes; =-1: free node
+     logical,      allocatable:: OutGrids(:)     ! Grid nodes where output is written.
+     character(len=25)        :: OutFile         ! Output file.
 
+    ! sm: moved in opt_main Read input data.
+    ! call input_setup (NumElems,OutFile,Options)
 
-     real(8)                  :: PosIni   (:,:)    ! Initial nodal Coordinates.
-     integer :: NumElems,NumNodes                  ! Number of elements/nodes in the model.
-     type(xbopts)             :: Options           ! Solution options (structure defined in xbeam_shared).
-     type(xbelem), allocatable:: Elem(:)           ! Element information.
-     integer,      allocatable:: BoundConds(:)     ! =0: no BC; =1: clamped nodes; =-1: free node
-     logical,      allocatable:: OutGrids(:)       ! Grid nodes where output is written.
-     character(len=25)        :: OutFile           ! Output file.
+    ! if required for optimisation/sensitivity analysis
+    if (allocated(Elem) .eqv. .false.) then
+        allocate (Elem(NumElems)) ! sm: initial orientation stored here
+    end if
+    call input_elem_span (NumElems,NumNodes,Elem, BeamSpanMass, BeamSpanStiffness)
+    ! conditional allocation
+    !!call array2_cond_alloc(     PosIni, NumNodes, 3, .true.)
 
+    if ( allocated(BoundConds) .eqv. .false. ) then
+        allocate(BoundConds (NumNodes));   BoundConds = 0
+    end if
 
- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
- !!! sm: moved in opt_main Read input data.
- !!!call input_setup (NumElems,OutFile,Options)
+    call input_node (NumNodes,Elem,BoundConds)
+    ! sm: in input_xxx.f90
+    ! input_node (NumNodes,Elem,BoundConds,Coords)
+    ! input_node (      in,  in,       out,   out)
+    if ( allocated(OutGrids) .eqv. .false. ) then
+        allocate(OutGrids(NumNodes))
+    end if
 
- ! if required for optimisation/sensitivity analysis
- if (allocated(Elem) .eqv. .false.) then
-    allocate (Elem(NumElems)) ! sm: initial orientation stored here
- end if
- call input_elem_span (NumElems,NumNodes,Elem, BeamSpanMass, BeamSpanStiffness)
+    OutGrids          = .false.
+    OutGrids(NumNodes)= .true.
 
- ! conditional allocation
- !!call array2_cond_alloc(     PosIni, NumNodes, 3, .true.)
-
- if ( allocated(BoundConds) .eqv. .false. ) then
-    allocate(BoundConds (NumNodes));   BoundConds = 0
- end if
-
- call input_node (NumNodes,Elem,BoundConds)
- ! sm: in input_xxx.f90
- !    input_node (NumNodes,Elem,BoundConds,Coords)
- !    input_node (      in,  in,       out,   out)
-
- if ( allocated(OutGrids) .eqv. .false. ) then
-     allocate(OutGrids(NumNodes))
- end if
-
- OutGrids          = .false.
- OutGrids(NumNodes)= .true.
-
-end subroutine fwd_static_input
+ end subroutine fwd_static_input
 
 
 
