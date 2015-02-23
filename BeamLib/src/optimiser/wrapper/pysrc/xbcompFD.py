@@ -1,8 +1,8 @@
 '''
 
-Salvatore Maraniello 8 Aug 2014
+Salvatore Maraniello 19 Feb 2015
 
-OpenMDAO component for Beam solver
+OpenMDAO component for Beam solver with FD parallel gradient
 
 - Remarks:
    _Solution_List possible values:
@@ -19,6 +19,7 @@ OpenMDAO component for Beam solver
 import sys, os
 import numpy as np
 import ctypes as ct
+import multiprocessing as mpr
 
 sys.path.append('..')
 import shared
@@ -39,7 +40,7 @@ wrapso = ct.cdll.LoadLibrary(shared.wrapso_abspath)
 
 
 
-class XBeamSolver(Component):
+class XBeamSolver(ComponentWithDerivatives):
  
     #-------------------------------------------------------- OpenMDAO Interface
 
@@ -186,11 +187,17 @@ class XBeamSolver(Component):
     NNode     =    Int(-1,iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')    
      
  
+     
+ 
     def __init__(self):
         
        
         # not to overwrite Component __init__
         super(XBeamSolver, self).__init__()
+        
+        self.missing_deriv_policy = 'error' 
+        #self.missing_deriv_policy = 'assume_zero' 
+        #self.missing_deriv_policy = 'fd' #NOTE: This will be developed later        
         
         # extract main routine
         ### method below fails inside a class but runs from main
@@ -249,8 +256,6 @@ class XBeamSolver(Component):
         self.PsiDotDef0 = np.zeros( (1,3,3), dtype='float', order='F' ) # the 2nd index is the max nodes per element
         
         
-        
-        
         #------------------------------------------------------------- Utilities
         # save directory
         self._savedir = '.'
@@ -266,6 +271,10 @@ class XBeamSolver(Component):
         # append code version
         self._version = shared.CodeVersion()    
         
+        
+        # Parallel FDs
+        self.PROCESSORS = 1       # number of processors
+        self.parallelFDs = False # FLAG to set parallel calculations
         
         #------------------------------------------------------------------ Cost
         # dummy arguments for generic cost function
@@ -295,7 +304,7 @@ class XBeamSolver(Component):
     def pre_solve(self):
         
         # ------------------------------------------------ run custom operations
-        self.run_custom()        
+        self.run_custom()
         
         
         # ------------------------------------------------ Determine Arrays Size
@@ -675,6 +684,8 @@ class XBeamSolver(Component):
 
 
 
+
+
 #------------------------------------------------------------------------------ 
         
 
@@ -836,6 +847,187 @@ class XBeamSolver(Component):
             print 'dis constr:', self.gdisval
         
         return
+
+
+    def list_deriv_vars(self):
+        """specified the inputs and outputs where derivatives are defined"""
+        Design = ('')
+        Functionals = ('')
+        return Design, Functionals
+
+
+    def provideJ(self):
+        '''Note that the function will fail if the variables are not 1d arrays or
+        scalar'''
+        
+        # get list of variables/functionals
+        DesignList ,FunctionalsList = self.list_deriv_vars()
+
+        # extract length of each element
+        def get_variables_size(VarList):
+            '''
+            Given a list/tuple of N variables, scalar or 1d arrays, the 
+            function returns a N length array containing the length of each 
+            variable
+            
+            Reminder: the method doesn't work with 2D arrays!
+            '''
+            
+            Nv = len(VarList)
+            VarLen=np.ones(Nv,dtype=np.int64)
+            
+            for vv in range(Nv):
+                # get the variable
+                var = getattr(self,VarList[vv]) 
+                if np.isscalar(var) is False:
+                    if len(var.shape)>1:
+                        raise NameError('FD Jacobian can only handle 1D arrays!')
+                    else:
+                        VarLen[vv]=len(var)        
+        
+            return VarLen
+        
+        DesLen = get_variables_size(DesignList)
+        FunLen = get_variables_size(FunctionalsList)
+        ND = len(DesLen)
+        
+        # allocate jacobian
+        Nx = np.sum(DesLen)
+        Nf = np.sum(FunLen)
+        J = np.zeros((Nf,Nx))
+        
+        # check if fd_steps have been added
+        if hasattr(self,'fd_steps') is False:
+            raise NameError('self.fd_steps not found! Add it in the input file using self.get_fd_steps()!')
+        else:
+            dx = self.fd_steps
+        
+        # -------------------------------------------------------- start looping  
+        
+        # get global index for design variables: Svec[dd] contains starting 
+        # index for the dd-th variable (if dd-th variable is an array, this is
+        # the index of the first element 
+        Svec = np.zeros((ND,),dtype=np.int64) 
+        for dd in range(ND):
+            Svec[dd]=np.sum(DesLen[:dd])
+
+  
+        if self.parallelFDs is False:
+            # ------------------------------------------------------serial code:
+            for dd in range(ND):
+                for ii in range(DesLen[dd]):
+                    jvii = self.perturb(self.copy(),dx,dd,ii,DesignList,FunctionalsList,DesLen,FunLen)
+                    J[:,Svec[dd]+ii]=jvii
+        
+        else:
+            # ---------------------------------------------------- parallel code:
+            
+            # create pool
+            self.fwd_run=None
+            self.del_ctypes(printinfo=False)
+            pool = mpr.Pool(processes=self.PROCESSORS) 
+            # send the jobs
+            results=[]
+            for dd in range(ND):
+                for ii in range(DesLen[dd]):        
+                    results.append( pool.apply_async(self.perturb,args=( self.copy(),dx,dd,ii,DesignList,FunctionalsList,DesLen,FunLen ) ))              
+            # and retrieve the results!
+            jvList = [p.get() for p in results]
+            if len(jvList)!=Nx:
+                raise NameError('Debugging: Number of jacobian vectors computed with Parallel FDs wrongly equal to %d!' %(len(jvList)))
+            for jj in range(Nx):
+                J[:,jj]=jvList[jj]
+            # reset the ctypes for future executions
+            self.fwd_run=getattr(wrapso, "__opt_routine_MOD_opt_main") 
+            self.set_ctypes()            
+            
+            
+        # --------------------- save jacobian data in the next forward execution
+        self.Jacobian = J
+        self.DesignList = DesignList
+        self.FunctionalsList = FunctionalsList
+        # resave the whole run 
+        counter_string =  '%.3d' % (self._counter-1)
+        savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
+        lib.save.h5comp( self, savename)
+
+
+        return J
+        
+
+    def perturb(self,xbpert,dx,dd,ii,DesignList,FunctionalsList,DesLen,FunLen):
+        ''' Computes (dfdx_ii, dgdx_ii) '''
+        
+        # rebuild link to Fortran library
+        if xbpert.parallelFDs: 
+            xbpert.fwd_run=getattr(wrapso, "__opt_routine_MOD_opt_main") 
+            xbpert.set_ctypes()
+        
+        # get unperturbed functionalsallocate unperturbed functionals
+        def put_functionals_in_array(xbpert,FunctionalsList,FunLen):
+            
+            Nlist = len(FunctionalsList)
+            Nf = np.sum(FunLen)
+            jv = np.zeros((Nf,))
+                
+            for ll in range(Nlist):
+                # functional value
+                varname=FunctionalsList[ll]
+                f0 = getattr(xbpert,varname)
+                #get starting index
+                gg = np.sum(FunLen[:ll])
+                if np.isscalar(f0):
+                    jv[gg]=f0
+                else:
+                    jv[gg:gg+FunLen[ll]]=f0
+                        
+            return jv
+            
+        jv0 = put_functionals_in_array(xbpert,FunctionalsList,FunLen)        
+  
+        # get variable and starting index in global ordering
+        varname = DesignList[dd]
+        x0 = getattr(xbpert,varname)  # array or scalar   
+            
+        ss = np.sum(DesLen[:dd])
+            
+        if np.isscalar(x0):
+            if ii != 0:
+                raise NameError('For scalar, dimension should be 1')
+            setattr(xbpert,varname,x0 + dx[ss+ii]) # or dx[ss], is the same
+        else:
+            xpert=x0
+            xpert[ii]=x0[ii]+dx[ss+ii]
+            setattr(xbpert,varname,xpert)
+        
+        # reallocate fwd_method - not copied with pool, overwritten for serial
+        xbpert.fwd_run=getattr(wrapso, "__opt_routine_MOD_opt_main")  
+        xbpert.TestCase=xbpert.TestCase+'_FD%.3d' %(ss+ii)   
+        xbpert._counter=xbpert._counter-1                  
+        xbpert.execute()
+            
+        # Finite Difference
+        jv = ( put_functionals_in_array(xbpert,FunctionalsList,FunLen) - jv0 )/dx[ss+ii]
+            
+        return jv
+
+
+
+
+
+    def get_fd_steps(self,AssemblyObj):
+        '''This method can only be used once the XBeamSolver is added to a
+        driver workflow. The Assembly class needs to be passed in input.
+        The method has to be called in the input setup
+        '''
+        
+        self.fd_steps=AssemblyObj.driver.get_fd_steps()
+        
+        return self
+                
+                
+                
+                
 
 ''' ------------------------------------------------------------------------ ''' 
     

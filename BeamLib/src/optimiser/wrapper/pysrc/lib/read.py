@@ -221,7 +221,13 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'gdisname') 
     XBinst = conditional_reading(hdfile,XBinst,'gdisargs') 
 
-    
+    # -------------------------------------------- manually implemented gradient
+    XBinst = conditional_reading(hdfile,XBinst,'Jacobian')  
+    XBinst = conditional_reading(hdfile,XBinst,'DesignList')  
+    XBinst = conditional_reading(hdfile,XBinst,'FunctionalsList')
+    XBinst = conditional_reading(hdfile,XBinst,'fd_steps')  
+
+
     '''
     setattr(XBinst,'',hdfile[''].value)
     XBinst = conditional_reading(hdfile,XBinst,'')

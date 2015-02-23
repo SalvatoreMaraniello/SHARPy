@@ -238,6 +238,13 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'gdisname')  
     hdfile = conditional_saving(hdfile,XBinst,'gdisargs')   
     
+    # -------------------------------------------- manually implemented gradient
+    hdfile = conditional_saving(hdfile,XBinst,'Jacobian')  
+    hdfile = conditional_saving(hdfile,XBinst,'DesignList')  
+    hdfile = conditional_saving(hdfile,XBinst,'FunctionalsList')
+    hdfile = conditional_saving(hdfile,XBinst,'fd_steps')  
+
+    
     '''
     # to add future fields...
     hdfile['']=XBinst.
