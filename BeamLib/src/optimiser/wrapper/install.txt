@@ -1,30 +1,80 @@
 
 Installation:
+-----------------------------------------------------
 
-Salvatore Maraniello
-7th Aug 2014
+Author: Salvatore Maraniello
+Created: 07th Aug 2014 (notes on installation on linux machine)
+Updated: 24th Feb 2015 (notes on installation on Archer)
 
-------------------------------------------------
+Reference:
+ref.1: http://openmdao.org
+ref.2: http://www.h5py.org/
+ref.3: http://docs.h5py.org/
+ref.4: http://www.archer.ac.uk/documentation/
+ref.5: https://docs.python.org/2/install/index.html#install-index 
+ 
+
+Comments:
+----------------------------------------------------
+
+- The first set of instruction is not fully explainatory as it was written when the code was still in development.
+- The notes on the Archer installation are more useful and should work for the installation on any machine.
 
 
-Requirements: 
-Python 2.7
-OpenMDAO v0.10.0 (or back-compatibles)
+Requirements:
+----------------------------------------------------
+
+Note: nearby each package/library required, a recap of the version for which the code has been proved to work is listed. 
+
+- gfortran: required to compile dynamic library for beam solver. In Archer, load GNU compilers loading the module PrgEnv-gnu
+
+- python 2.7: the code has been running on a Linux machine (ubuntu) using python 2.7.3. On Archer, python 2.7.6 was in use. 
+    - scipy: ver. 0.13.3 on Linux PC & Archer
+    - numpy: ver. 1.8.1 on Linux PC, ver. 1.8.0 Archer
+    - matplotlib: ver 1.1.1rc on Linux PC, ver. 1.3.1 on Archer
+    - h5py: ver. 2.0.1 on Linux PC & Archer
+        - libhdf5-dev: 
+- OpenMDAO: ver. 0.10.0 on Linux PC and Archer. 
+    
 
 
-Install OpenMDAO:
-- download go-openmdao-0.10.0.py from http://openmdao.org/downloads/recent/
-- go to the folder where you want to install the libraries and run the script from terminal.
-- optional:
-	- to install the pyOpt/ipopt plugin, activate Openmdao environment and type:
-		- plugin install --github pyopt_driver/ipoptdriver
-		- for further details, refer to:
-			- http://openmdao.org/docs/tutorials/optimization/optimizers.html
-			- http://openmdao.org/docs/getting-started/using_plugins.html
-		
-	
+Installation:
+--------------------------------------------------- 
 
-Setup Optimiser:
+- Compiler: on Linux machine, gfortran is reccomanded. In Archer, the GNU compilers can be loaded typing:
+    module swap PrgEnv-cray PrgEnv-gnu
+this setting has been proven to work for the compilations required in the OpenMDAO installation (slsqp optimiser)
+
+- Python pachages: 
+    - numpy, scipy, matplotlib:
+        - refer to the officiat documentations. Ubuntu shipped versions of these packages are may be too old. This may cause errors, particularly for numpy and scipy.
+        - In Archer these packages are already available and can be loaded with the 'module add' command.
+            module add numpy
+            module add scipy
+            module add matplotlib
+        - to ensure that the modules are available in each section, copy these commands in the ~/.profile file (create one if not exist).
+    - h5py:
+        - Download from ref.3 and extract
+        - you can install the package going into the running:
+            - Linux: python setup.py install
+            - Archer: to install the package in a local path you can type (see ref.5):
+                - python setup.py install --home=~ 
+
+
+                module load cray-hdf5-parallel   -   notworking
+
+
+- OpenMDAO: 
+    - download go-openmdao-0.10.0.py from http://openmdao.org/downloads/recent/
+    - go to the folder where you want to install the libraries and run the script from terminal.
+    - optional:
+	    - to install the pyOpt/ipopt plugin, activate Openmdao environment and type:
+		    - plugin install --github pyopt_driver/ipoptdriver
+		    - for further details, refer to:
+			    - http://openmdao.org/docs/tutorials/optimization/optimizers.html
+			    - http://openmdao.org/docs/getting-started/using_plugins.html
+
+- Setup Optimiser:
 - in shared.py, set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
 - because during the installation openmdao makes a local copy of the packages installed on your machine, it is likely that all the paths to the egg files may need to be changed manually.
 
