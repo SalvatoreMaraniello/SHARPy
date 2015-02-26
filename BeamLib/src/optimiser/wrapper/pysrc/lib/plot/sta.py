@@ -25,8 +25,8 @@ from warnings import warn
 import scipy.interpolate
 
 #---------------------------------------------------------------- Common setting
-mpl.axes.set_default_color_cycle(['k', 'b', 'r', 'g', 'y', 'c'])
-color_cycle_list=['k', 'b', 'r', 'g', 'y', 'c']
+#mpl.axes.set_default_color_cycle(['k', 'b', 'r', 'g', 'y', 'c'])
+#color_cycle_list=['k', 'b', 'r', 'g', 'y', 'c']
 grayshade='0.6'
 grayshade_minor='0.4'    
 font = {'family' : 'serif',

@@ -20,8 +20,9 @@ import scipy.interpolate
 
 #---------------------------------------------------------------- Common setting
 
-color_cycle_list=['k', 'b', 'r', 'g', 'y', 'c']
-mpl.axes.set_default_color_cycle(color_cycle_list)
+### incompatible with matplotlib versions higher then 1.1.1
+#color_cycle_list=['k', 'b', 'r', 'g', 'y', 'c']
+#mpl.axes.set_default_color_cycle(color_cycle_list)
 
 grayshade='0.6'
 grayshade_minor='0.4'    

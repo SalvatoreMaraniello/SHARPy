@@ -82,12 +82,6 @@ this setting has been proven to work for the compilations required in the OpenMD
 
 
 
-
-
-
-
-
-
 - OpenMDAO: 
     - download go-openmdao-0.10.0.py from http://openmdao.org/downloads/recent/
     - go to the folder where you want to install the libraries and run the script from terminal.
@@ -101,7 +95,7 @@ this setting has been proven to work for the compilations required in the OpenMD
 
 
 - SHARPY with optimiser:
-    - clone from git repository in ref.0 (current branch: wrap)
+    - clone from git repository in ref.0
         git checkout -b wrap
     - compile Beamsolver:
         - move into: PATH_TO_SHARPY/SHARPy/BeamLib/src/optimiser
@@ -119,10 +113,11 @@ this setting has been proven to work for the compilations required in the OpenMD
         
 
 
-
 - Setup Optimiser:
-- in shared.py, set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
-- because during the installation openmdao makes a local copy of the packages installed on your machine, it is likely that all the paths to the egg files may need to be changed manually.
+    - create your copy of shared.py (do not rename, unless you intend to rename all the import in all the modules of the wrapper). 
+    - in shared.py set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
+    - because during the installation openmdao makes a local copy of the packages installed on your machine, it is likely that all the paths to the egg files may need to be changed manually.
+
 
 
 
