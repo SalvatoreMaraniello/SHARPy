@@ -6,6 +6,11 @@
 @date       22/11/2012
 @pre        None
 @warning    None
+
+@Modified: 25 Feb 2015 by S. Maraniello
+@Change list: change method to get home folder
+
+
 '''
 import getpass
 import sys
@@ -14,7 +19,9 @@ import sys
 # Directories.
 userid = getpass.getuser()
 
-SharPyProjectDir = '/home/' + userid + '/git/SHARPy/'
+#sm
+#SharPyProjectDir = '/home/' + userid + '/git/SHARPy/'
+SharPyProjectDir = os.path.expanduser('~') + '/git/SHARPy/'
 
 BeamLibDir = SharPyProjectDir + 'BeamLib/bin/'
 BeamLibName = './BeamLib.so'

@@ -7,6 +7,7 @@ Created: 07th Aug 2014 (notes on installation on linux machine)
 Updated: 24th Feb 2015 (notes on installation on Archer)
 
 Reference:
+ref.0: https://github.com/SalvatoreMaraniello/SHARPy
 ref.1: http://openmdao.org
 ref.2: http://www.h5py.org/
 ref.3: http://docs.h5py.org/
@@ -27,7 +28,8 @@ Requirements:
 Note: nearby each package/library required, a recap of the version for which the code has been proved to work is listed. 
 
 - gfortran: required to compile dynamic library for beam solver. In Archer, load GNU compilers loading the module PrgEnv-gnu
-
+- SHARPy with optimiser: clone from git repository in ref.0
+    - LAPACK, BLAS libraries are required
 - python 2.7: the code has been running on a Linux machine (ubuntu) using python 2.7.3. On Archer, python 2.7.6 was in use. 
     - scipy: ver. 0.13.3 on Linux PC & Archer
     - numpy: ver. 1.8.1 on Linux PC, ver. 1.8.0 Archer
@@ -54,14 +56,36 @@ this setting has been proven to work for the compilations required in the OpenMD
             module add matplotlib
         - to ensure that the modules are available in each section, copy these commands in the ~/.profile file (create one if not exist).
     - h5py:
-        - Download from ref.3 and extract
-        - you can install the package going into the running:
+        - Download from ref.3, extract and enter the hdf5 folder:
+            $ tar xzf h5py-X.Y.Z.tar.gz
+            $ cd h5py
+        - you can install the package running:
             - Linux: python setup.py install
-            - Archer: to install the package in a local path you can type (see ref.5):
-                - python setup.py install --home=~ 
+            - Archer: to install the package:
+                - Load one of these two modules
+                    module load cray-hdf5-parallel   -   notworking
+                    module load cray-hdf5   -   ?
+                - configure hdf5 version as follows (custom version is HDF5 1.8.4 - though not present in Archer, it could work by the way. Not tested):
+                    python setup.py configure --hdf5-version=1.8.3
+                - check the following settings:
+                    Path to HDF5: '/opt/cray/hdf5/1.8.13/GNU/49'
+                    HDF5 Version: '1.8.3'
+                    MPI Enabled: False
+                    Rebuild Required: True
+                and note that the path to the HDF5 libraries should be automatically detected if the cray-hdf5 module has been loaded. Otherwise, specify manually (good luck with finding it!)
+                - Build and install:
+                    - python setup.py build
+                    - python setup.py install --home=~ 
+                - note: if there are issue, other possible options to try can include forcing the compiler:
+                    python setup.py build --compiler=xxx
 
 
-                module load cray-hdf5-parallel   -   notworking
+
+
+
+
+
+
 
 
 - OpenMDAO: 
@@ -73,6 +97,28 @@ this setting has been proven to work for the compilations required in the OpenMD
 		    - for further details, refer to:
 			    - http://openmdao.org/docs/tutorials/optimization/optimizers.html
 			    - http://openmdao.org/docs/getting-started/using_plugins.html
+
+
+
+- SHARPY with optimiser:
+    - clone from git repository in ref.0 (current branch: wrap)
+        git checkout -b wrap
+    - compile Beamsolver:
+        - move into: PATH_TO_SHARPY/SHARPy/BeamLib/src/optimiser
+        - create the following two directories: bin, obj
+        - in the Makefile, update the LIBS variable to point to the LAPACK and BLAS libraries on your system. 
+            - For Ubuntu/Linux machine, the default setting:
+                LIBS= -llapack -lblas
+              should work just fine. 
+            - in Archer, -llapack and -lblas are automatically loaded with the  
+                - In Makefile, set the LIBS variable to be empty:
+                LIBS= 
+            - Code compiled on archer should use the provided wrapper script 'ftn'. It is, therefore, reccomanded (but not necessary) to change also the F90COMP= gfortran to:
+                F90COMP= ftn
+        - type 'make wrapso'
+        
+
+
 
 - Setup Optimiser:
 - in shared.py, set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
