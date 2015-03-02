@@ -20,6 +20,7 @@ import sys, os
 import numpy as np
 import ctypes as ct
 import multiprocessing as mpr
+#from warnings import warn
 
 sys.path.append('..')
 import shared
@@ -32,11 +33,9 @@ import input.load.modal, input.load.fourier, input.load.spline, input.forcedvel
 import beamvar
 import cost, constr.common
 import lib.save
-
-        
+      
 # Load Dynamic Library
 wrapso = ct.cdll.LoadLibrary(shared.wrapso_abspath)
-        
 
 
 
@@ -850,10 +849,18 @@ class XBeamSolver(ComponentWithDerivatives):
 
 
     def list_deriv_vars(self):
-        """specified the inputs and outputs where derivatives are defined"""
-        Design = ('')
-        Functionals = ('')
-        return Design, Functionals
+        """
+        Specified the inputs and outputs where derivatives are defined
+        
+        Best practice: define as list and convert to tuple to aovid cases where
+        t = ('one_variable') is a string, not a tuple.
+        
+        """
+        
+        Design = ['']
+        Functionals = ['']
+        
+        return tuple(Design), tuple(Functionals)
 
 
     def provideJ(self):
@@ -873,6 +880,11 @@ class XBeamSolver(ComponentWithDerivatives):
             Reminder: the method doesn't work with 2D arrays!
             '''
             
+            # check: if VarList=('anystring'), varList will be saved as string.
+            # the code will crash unless this is redifined as tuple
+            if isinstance(VarList,str) is True:
+                raise NameError('VarList detected as a string, not a tuple: check list_deriv_vars!')
+                
             Nv = len(VarList)
             VarLen=np.ones(Nv,dtype=np.int64)
             
