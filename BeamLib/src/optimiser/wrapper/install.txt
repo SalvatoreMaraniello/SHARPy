@@ -60,7 +60,7 @@ this setting has been proven to work for the compilations required in the OpenMD
     - h5py:
         - Download from ref.3, extract and enter the hdf5 folder:
             $ tar xzf h5py-X.Y.Z.tar.gz
-            $ cd h5py
+            $ cd h5py-X.Y.Z
         - you can install the package running:
             - Linux: python setup.py install
             - Archer: to install the package:
@@ -77,7 +77,8 @@ this setting has been proven to work for the compilations required in the OpenMD
                 and note that the path to the HDF5 libraries should be automatically detected if the cray-hdf5 module has been loaded. Otherwise, specify manually (good luck with finding it!)
                 - Build and install:
                     - python setup.py build
-                    - python setup.py install --home=~ 
+                    - python setup.py install --home= working_area 
+                    - note that running 'python setup.py install --home=~' will install the libraries in the HOME filesystem, which is not accessible from the work file system
                 - note: if there are issue, other possible options to try can include forcing the compiler:
                     python setup.py build --compiler=xxx
 
@@ -95,7 +96,10 @@ this setting has been proven to work for the compilations required in the OpenMD
 
 - SHARPY with optimiser:
     - clone from git repository in ref.0
-        git checkout -b wrap
+        git clone url_of_repository
+      and checkout on the branch you want
+        git checkout -b xxx
+      where xxx is the name of the branch you want to clone. 
     - compile Beamsolver:
         - move into: PATH_TO_SHARPY/SHARPy/BeamLib/src/optimiser
         - create the following two directories: bin, obj
@@ -113,8 +117,13 @@ this setting has been proven to work for the compilations required in the OpenMD
 
 - Setup Optimiser:
     - create your copy of shared.py (do not rename, unless you intend to rename all the import in all the modules of the wrapper). 
+    - make sure that when you update your repository, shared.py does not get changed. Add it to your .gitignore file
+        /work/e391/e391/sm6110/git/SHARPy/BeamLib/src/optimiser/wrapper/shared.py
     - in shared.py set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
     - because during the installation openmdao makes a local copy of the packages installed on your machine, it is likely that all the paths to the egg files may need to be changed manually.
+    - it is also likely you will have to hardcode the path to the main SHARPy folder into:
+        SHARPy/src/Main/SharPySettings.py
+        
 
 
 
