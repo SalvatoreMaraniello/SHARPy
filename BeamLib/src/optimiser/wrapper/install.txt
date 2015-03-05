@@ -17,15 +17,13 @@ ref.5: https://docs.python.org/2/install/index.html#install-index
 
 Comments:
 ----------------------------------------------------
+- The notes below refer to both the installation on a server (Archer case) and on a personal computes (Ubuntu case).
 
-- The first set of instruction is not fully explainatory as it was written when the code was still in development.
-- The notes on the Archer installation are more useful and should work for the installation on any machine.
 
 
 Requirements:
 ----------------------------------------------------
-
-Note: nearby each package/library required, a recap of the version for which the code has been proved to work is listed. 
+The list below shows packages required and version numbers tested.
 
 - gfortran: required to compile dynamic library for beam solver. In Archer, load GNU compilers loading the module PrgEnv-gnu
 - SHARPy with optimiser: clone from git repository in ref.0
@@ -43,18 +41,22 @@ Note: nearby each package/library required, a recap of the version for which the
 Installation:
 --------------------------------------------------- 
 
-- Compiler: on Linux machine, gfortran is reccomanded. In Archer, the GNU compilers can be loaded typing:
-    module swap PrgEnv-cray PrgEnv-gnu
-this setting has been proven to work for the compilations required in the OpenMDAO installation (slsqp optimiser)
 
-- Python pachages: 
+- Compiler: on Linux machine, gfortran is recommended. In Archer, the GNU compilers can be loaded typing:
+    module swap PrgEnv-cray PrgEnv-gnu
+this setting has been proven to work for the compilations required in the OpenMDAO (slsqp optimiser), xbeam solver and hdf5 installation 
+
+
+- Python packages: 
     - numpy, scipy, matplotlib:
-        - refer to the officiat documentations. Ubuntu shipped versions of these packages are may be too old. This may cause errors, particularly for numpy and scipy.
+        - refer to the official documentations. Ubuntu shipped versions of these packages may be too old (particularly numpy and scipy). In general, the reccomanded way is to download the package and install it using the setup.py script (see installation of h5py below). 
         - In Archer these packages are already available and can be loaded with the 'module add' command.
             module add numpy
-            module add scipy
+            module add scipy/0.13.3-libsci
             module add matplotlib
-        - to ensure that the modules are available in each section, copy these commands in the ~/.profile file (create one if not exist).
+        - to ensure that the modules are available in each section:
+        	- create a  ~/.profile file if it does not exist.
+        	- add the commands inside
     - h5py:
         - Download from ref.3, extract and enter the hdf5 folder:
             $ tar xzf h5py-X.Y.Z.tar.gz
@@ -63,8 +65,8 @@ this setting has been proven to work for the compilations required in the OpenMD
             - Linux: python setup.py install
             - Archer: to install the package:
                 - Load one of these two modules
-                    module load cray-hdf5-parallel   -   notworking
-                    module load cray-hdf5   -   ?
+                    module load cray-hdf5-parallel   # should work but not tested
+                    module load cray-hdf5            # works - tested
                 - configure hdf5 version as follows (custom version is HDF5 1.8.4 - though not present in Archer, it could work by the way. Not tested):
                     python setup.py configure --hdf5-version=1.8.3
                 - check the following settings:
@@ -80,8 +82,6 @@ this setting has been proven to work for the compilations required in the OpenMD
                     python setup.py build --compiler=xxx
 
 
-
-
 - OpenMDAO: 
     - download go-openmdao-0.10.0.py from http://openmdao.org/downloads/recent/
     - go to the folder where you want to install the libraries and run the script from terminal.
@@ -91,7 +91,6 @@ this setting has been proven to work for the compilations required in the OpenMD
 		    - for further details, refer to:
 			    - http://openmdao.org/docs/tutorials/optimization/optimizers.html
 			    - http://openmdao.org/docs/getting-started/using_plugins.html
-
 
 
 - SHARPY with optimiser:
@@ -110,8 +109,7 @@ this setting has been proven to work for the compilations required in the OpenMD
             - Code compiled on archer should use the provided wrapper script 'ftn'. It is, therefore, reccomanded (but not necessary) to change also the F90COMP= gfortran to:
                 F90COMP= ftn
         - type 'make wrapso'
-        
-
+   
 
 - Setup Optimiser:
     - create your copy of shared.py (do not rename, unless you intend to rename all the import in all the modules of the wrapper). 

@@ -14,7 +14,7 @@ Ref.:
 '''
 
 import numpy as np
-import scipy.integrate
+#import scipy.integrate
 
 from warnings import warn
 
@@ -214,7 +214,8 @@ def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a',xi0=np.array([1,0,0,0])):
     return THPosDefGlobal
         
     
- 
+
+
   
 
 ''' ------------------------------------------------------------------------ '''
