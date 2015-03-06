@@ -121,7 +121,10 @@ this setting has been proven to work for the compilations required in the OpenMD
         /work/e391/e391/sm6110/git/SHARPy/BeamLib/src/optimiser/wrapper/shared.py
     - in shared.py set openmdao_abspath to point at the directory where the openmdao libraries where installed. 
     - because during the installation openmdao makes a local copy of the packages installed on your machine, it is likely that all the paths to the egg files may need to be changed manually.
-    - it is also likely you will have to hardcode the path to the main SHARPy folder into:
+    - Create an environmental variable with the sharpy path: to do this add the following lines to your .profile file
+        # SHARPy installation directory
+        export SHARPYDIR="/home/sm6110/git/SHARPy"
+      alternatively, hardcode the path to the main SHARPy folder into:
         SHARPy/src/Main/SharPySettings.py
         
 

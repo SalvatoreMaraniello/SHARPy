@@ -24,7 +24,7 @@ import multiprocessing as mpr
 
 sys.path.append('..')
 import shared
-from openmdao.main.api import Component, ComponentWithDerivatives
+from openmdao.main.api import ComponentWithDerivatives
 from openmdao.main.datatypes.api import Float, Array, Enum, Int, Str, Bool
 
 
@@ -1035,98 +1035,19 @@ class XBeamSolver(ComponentWithDerivatives):
         
         self.fd_steps=AssemblyObj.driver.get_fd_steps()
         
+        # check fd step
+        if any(self.fd_steps==0):
+            print 'FD array:'
+            print self.fd_steps
+            raise NameError('Detected 0 FDs step! Remind to define the FD step inside the input file!')
+        if any(np.isnan(self.fd_steps)):
+            print 'FD array:'
+            print self.fd_steps
+            raise NameError('Detected NaN in FDs step! Remind to define the FD step inside the input file!')
+ 
+        
         return self
                 
                 
                 
                 
-
-''' ------------------------------------------------------------------------ ''' 
-    
-if __name__=='__main__':
-    
-    from lib.plot.sta import sta_unif
-    
-    xbsolver=XBeamSolver()
-    
-    xbsolver.TestCase='NCB1'
-    ElemType="DISP"
-    xbsolver.BConds='CF'
-    
-    xbsolver.NumElems = 10
-    xbsolver.NumNodesElem = 3
-    
-    # Design
-    xbsolver.beam_shape = 'constant'
-    xbsolver.material ='alumA'
-    xbsolver.cross_section_type ='isorect'  
-    xbsolver.BeamLength1 = 5.0   
-    xbsolver.cs_l2 = 0.1135
-    xbsolver.cs_l3 = 0.2417
-
-    # Loading
-    xbsolver.AppStaLoadType='uniform'
-    xbsolver.ExtForce[2]=6e5
-    
-
-    # Options - NCB1 case:
-    xbsolver.FollowerForce=False
-    xbsolver.PrintInfo=False              
-    xbsolver.MaxIterations=30    
-    xbsolver.NumLoadSteps=20
-    xbsolver.Solution=112
-    xbsolver.MinDelta= 1.e-5
-
-
-    
-    xbsolver.FollowerForceRig= True
-    xbsolver.OutInBframe = True
-    xbsolver.OutInaframe = False
-
-    
-    lib.save.h5comp(xbsolver, './component_before.h5')
-
-    ## cost
-    xbsolver.NNode = -1 # tip displacement
-
-    xbsolver.execute() 
-    print 'External force', xbsolver.ExtForce
-    print 'Cost Functions:'
-    print 'Total Mass', xbsolver.TotalMass, xbsolver.ct_TotalMass.value
-    print 'Node Abs Displacement', xbsolver.NodeDisp, xbsolver.ct_NodeDisp.value 
-    print 'Node z displacement', xbsolver.ZDisp
-    
-    # II run test
-    xbsolver._use_previous_solution=True
-    xbsolver.NumLoadSteps=1
-    xbsolver.execute() 
-    print 'External force', xbsolver.ExtForce
-    print 'Cost Functions:'
-    print 'Total Mass', xbsolver.TotalMass, xbsolver.ct_TotalMass.value
-    print 'Node Abs Displacement', xbsolver.NodeDisp, xbsolver.ct_NodeDisp.value 
-    print 'Node z displacement', xbsolver.ZDisp    
-    
-    # Make a nice plot
-    # sta_unif(xbsolver.PosIni,xbsolver.PosDef,equal=True)
-    sta_unif(xbsolver.PosIni,xbsolver.PosDef)
-    
-    # save:
-    lib.save.h5comp(xbsolver, './component_after.h5')
-    
-    #### read test
-    ##XBread=lib.read.h5comp('./component_after.h5')
-    ##for tt in XBread.items():
-    ##    print tt
-        
-    # check version
-    print xbsolver._version.number
-    print xbsolver._version.description
-    
-    
-    
-    
-    
-    
-
-        
-    
