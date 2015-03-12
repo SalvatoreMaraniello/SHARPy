@@ -70,7 +70,10 @@ contains
                  & ForceTime, ForceDynAmp, ForceDynamic,& ! input_dynforce
                  & ForcedVel, ForcedVelDot,          & ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
-                 & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
+                 & RefVel, RefVelDot, Quat,  &       ! to be allocated in fwd_pre_coupled_solver
+                 & SUCCESS  ) ! optional, for error ecceptions
+
+
 
 
  ! Input added for the optimisaiton
@@ -99,6 +102,9 @@ contains
     real(8), intent(inout) :: PosPsiTime (:,:)   ! Position vector/rotation history at beam tip.
     real(8), intent(inout) :: VelocTime  (:,:)   ! History of velocities.
     real(8), intent(inout) :: DynOut     (:,:)   ! Position of all nodes wrt to global frame a for each time step
+
+    logical, intent(inout), optional :: SUCCESS  ! Variable to allow python wrapper to handle ecceptions.
+                                                 ! If the solution does not converge, the variable is set to .false.
 
 
     character(len=25)        :: OutFile           ! Output file.
@@ -153,7 +159,8 @@ contains
                  & ForceTime, ForceDynAmp, ForceDynamic,   & ! input_dynforce
                  & ForcedVel, ForcedVelDot,          & ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
-                 & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
+                 & RefVel, RefVelDot, Quat,   &      ! to be allocated in fwd_pre_coupled_solver
+                 & SUCCESS ) ! optional, for error ecceptions
 
  end subroutine fwd_problem_prealloc
 
@@ -179,7 +186,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                  & ForceTime, ForceDynAmp, ForceDynamic, & ! input_dynforce
                  & ForcedVel, ForcedVelDot,        &   ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! output from sol 202, 212, 302, 312, 322
-                 & RefVel, RefVelDot, Quat)         ! to be allocated in fwd_pre_coupled_solver
+                 & RefVel, RefVelDot, Quat,        &   ! to be allocated in fwd_pre_coupled_solver
+                 & SUCCESS  ) ! optional, for error ecceptions
 
     ! The following variables appear as allocatable in fwd_main
     real(8) :: ForceStatic (:,:) ! Applied static nodal forces.
@@ -190,7 +198,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     real(8) :: PsiDef (:,:,:)    ! Current element orientation vectors.
     real(8) :: PhiNodes (:)      ! Initial twist at grid points.
 
- ! Dynamic Input/Output
+    ! Dynamic Input/Output
     real(8), intent(inout) :: Time(:)           ! Discrete time vector in the dynamic simulation.
     real(8), intent(inout) :: ForceDynamic (:,:,:) ! sm: applied dynamic force
     real(8), intent(inout) :: ForceDynAmp (:,:) ! Amplitude of the applied dynamic nodal forces.
@@ -203,6 +211,9 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     real(8), intent(inout) :: PosPsiTime(:,:)   ! Position vector/rotation history at beam tip.
     real(8), intent(inout) :: VelocTime(:,:)    ! History of velocities.
     real(8), intent(inout) :: DynOut   (:,:)    ! Position of all nodes wrt to global frame a for each time step
+
+    logical, intent(inout), optional :: SUCCESS  ! Variable to allow python wrapper to handle ecceptions.
+                                                 ! If the solution does not converge, the variable is set to .false.
 
     integer:: i,j                                 ! Counter.
     integer:: NumElems,NumNodes                   ! Number of elements/nodes in the model.
@@ -221,6 +232,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
     real(8), intent(inout) :: RefVel   (:,:)    ! Velocities of reference frame at the support (rigid body).
     real(8), intent(inout) :: RefVelDot(:,:)    ! Derivatives of the velocities of reference frame a.
     real(8), intent(inout) :: Quat     (:)      ! Quaternions to describe propagation of reference frame a.
+
 
 
 
@@ -341,7 +353,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                 ! a static solution does not apply)
                     call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
                                                   & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
-                                                  & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
+                                                  & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options,SUCCESS)
 
 
 

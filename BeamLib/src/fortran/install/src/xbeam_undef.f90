@@ -180,10 +180,10 @@ module xbeam_undef
 
   deallocate (ListIn,ListFr,ListSflag)
 
-  print *, 'NumDof: ', NumDof
-  print *, 'Node%Vdof: ', Node%Vdof
-  print *, 'Node%Fdof: ', Node%Fdof
-  print *, 'Node%Sflag:', Node%Sflag
+  !print *, 'NumDof: ', NumDof
+  !print *, 'Node%Vdof: ', Node%Vdof
+  !print *, 'Node%Fdof: ', Node%Fdof
+  !print *, 'Node%Sflag:', Node%Sflag
 
   return
  end subroutine xbeam_undef_dofs

@@ -29,7 +29,7 @@ class CodeVersion():
 
 # ----------------------------------------------------------------- Define Paths
 # openMDAO main folder
-openmdao_abspath='/home/e391/e391/sm6110/libs/openmdao-0.10.0'
+openmdao_abspath='/work/e391/e391/sm6110/lib/openmdao-0.10.0'
 
 #optimiser_abspath='/home/sm6110/git/SHARPy/BeamLib/src/optimiser'
 wrapper_abspath=os.path.dirname(os.path.realpath(__file__))

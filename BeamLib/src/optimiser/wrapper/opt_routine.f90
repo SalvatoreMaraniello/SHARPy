@@ -73,8 +73,8 @@ subroutine opt_main( NumElems, NumNodes,                                       &
                    & ForceTime, ForceDynAmp, ForceDynamic,                     & ! input_dynforce
                    & ForcedVel, ForcedVelDot,                                  & ! input_forcedvel
                    & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut,      & ! output from sol 202, 212, 302, 312, 322
-                   & RefVel, RefVelDot, Quat)                                    ! rigid body dynamics
-
+                   & RefVel, RefVelDot, Quat,                                  & ! rigid body dynamics
+                   & SUCCESS                                                   ) ! python error handlying
 
     ! ------------------------------------------------------------ Removed Input
     ! these variables have been removed from the input interface as they are
@@ -120,6 +120,9 @@ subroutine opt_main( NumElems, NumNodes,                                       &
     real(8) ,intent(in), optional :: DeltaCurved
     real(8) ,intent(in), optional :: MinDelta
     real(8) ,intent(in), optional :: NewmarkDamp
+
+    ! Handlying exceptions in python (sol 932 only)
+    logical, intent(inout), optional :: SUCCESS  ! If the solution does not converge, the variable is set to .false.
 
     ! Problem Setup
     ! remark: NumNodes is recomputed inside input_elem (input module). It is
@@ -174,6 +177,9 @@ subroutine opt_main( NumElems, NumNodes,                                       &
     real(8), intent(inout) :: Quat     (4)            ! Quaternions to describe propagation of reference frame a.
 
 
+
+
+
     ! ----------------------------------------------------------- Other Variable
     integer:: i,j
     integer:: NumDof  ! Number of independent dofs (2nd-order formulation).
@@ -216,7 +222,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 
  call tic
 
- ! ---------------------------------------------------------------- pack Options
+   ! -------------------------------------------------------------- pack Options
     if (present( FollowerForce )) then
         Options%FollowerForce = FollowerForce
     end if
@@ -256,6 +262,14 @@ subroutine opt_main( NumElems, NumNodes,                                       &
     if (present( NewmarkDamp )) then
         Options%NewmarkDamp = NewmarkDamp
     end if
+
+    print *, 'present(success)=', present(SUCCESS)
+    ! ---------------------------------------------------------- Error handlying
+    if (.false. .eqv. present(SUCCESS)) then
+        SUCCESS=.false.
+        print *, 'success set to: ', SUCCESS
+    end if
+
 
     ! ----------------------------------------------------------- Solver options
     ! this ckeck is inconsistent with the input setup - as both ElemType and
@@ -321,7 +335,6 @@ subroutine opt_main( NumElems, NumNodes,                                       &
 
     ! --------------------------------------------------------- Optimise/Fwd Run
     do NOPT=0,NOPTMAX
-
         call fwd_problem_prealloc( NumElems,OutFile,Options,&   ! from input_setup
                  &                        Elem,     &  ! from opt_main_xxx
                  &                    NumNodes,     &  ! from input_elem
@@ -335,7 +348,7 @@ subroutine opt_main( NumElems, NumNodes,                                       &
                  &  ForceTime,ForceDynAmp,ForceDynamic,     &   ! input_dynforce
                  &      ForcedVel,ForcedVelDot,    &   ! input_forcedvel
                  & PosDotDef, PsiDotDef, PosPsiTime, VelocTime, DynOut, & ! ! output from sol 202, 212, 302, 312, 322
-                 & RefVel, RefVelDot, Quat)
+                 & RefVel, RefVelDot, Quat, SUCCESS)
 
         ! Compute Design Output
         DensityVector   = Elem(:)%Mass(1,1)

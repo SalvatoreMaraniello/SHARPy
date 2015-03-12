@@ -19,6 +19,7 @@ OpenMDAO component for Beam solver with FD parallel gradient
 import sys, os
 import numpy as np
 import ctypes as ct
+import h5py 
 import multiprocessing as mpr
 #from warnings import warn
 
@@ -202,7 +203,7 @@ class XBeamSolver(ComponentWithDerivatives):
         ### method below fails inside a class but runs from main
         ###fwd_run=xbso.__opt_routine_MOD_opt_main 
         self.fwd_run = getattr(wrapso, "__opt_routine_MOD_opt_main")       
-        
+        self.SUCCESS=True # handling exceptions (sol 932 only)
 
         #--------------------------------------------------------- Input Related  
         self.BeamSpanStiffness = np.zeros( (self.NumElems,6,6), dtype=float, order='F' )
@@ -434,31 +435,111 @@ class XBeamSolver(ComponentWithDerivatives):
 
         # set ctypes for Fortran interface
         self.set_ctypes()
-        
-        #--------------------------------------------------------------- Testing
-        #print self.Time
-        #print self.ForceTime
-        
-        #self.Time = np.array(self.Time, dtype=float, order='F')
-        #self.ForceTime = np.array(self.ForceTime, dtype=float, order='F')
-        #self.ForceDynAmp = np.array(self.ForceDynAmp, dtype=float, order='F')
-        #self.Time = np.zeros((5), dtype=float, order='F')
-        
-        #-----------------------------------------------------------------------
-        
-        ###print 'Starting Solution:'
-        ###print 'Initial Tip Displacements:'
-        ###if self._counter>1:
-        ###    self.PosIni=self.PosDef.copy(order='F')
-        ###print self.PosIni[-1,:]
-        
+             
         # save before run (in case of crash)
         counter_string =  '%.3d' % (self._counter)
         savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
+        
+        try:  
+            lib.save.h5comp( self, savename)
+            self.call_fwd_run()
+        except NameError:
+            if self._counter<1:
+                # optimiser repeats twice the initial conditions, under runs 0 and 1.
+                # However, as the IC is identical, an error will be raised for counter=0
+                raise NameError('xbeam solver did not converge for the IC set!')
+            else:
+                print 'xbeam solver crashed: solution will be restarted after decreasing the step size'
+                
+                # update design variables values
+                red_fact=np.array([0.5,0.25,0.125])
+                
+                # get value of design variables set by the optimiser
+                DesignValCrash = self.get_DesignVal()
+                Ndes=len(self.DesignValOld)
+                
+                # and step size set by the optimiser
+                DesignStepCrash = [(DesignValCrash[ii] - self.DesignValOld[ii]) for ii in range(Ndes)]
+                
+                # update design variable values
+                for rr in range(len(red_fact)):
+                    print 'Restart with factor %1.4f' %(red_fact[rr])
+                    DesignStepNew = [red_fact[rr]*DesignStepCrash[ii] for ii in range(Ndes)]
+                    DesignValNew=[(self.DesignValOld[ii]+DesignStepNew[ii]) for ii in range(Ndes)]
+                    
+                    self.set_DesignVal(DesignValNew)
+                    try:
+                        # reset all the variables
+                        self.pre_solve()
+                        self.del_ctypes()
+                        self.set_ctypes()
+                        lib.save.h5comp( self, savename)
+                        # rerun the problem
+                        self.call_fwd_run()
+                        break
+                    except NameError:
+                        if rr==len(red_fact)-1:
+                            raise NameError('Even with reduction factor of %1.4f, the run has crashed at iteration %d!' %(red_fact))
+                    finally:
+                        # saves. Overrides previous reduction steps if more then one is executed
+                        saverep = self._savedir + '/' + self.TestCase + '_' +counter_string + '_REDUCEDSTEPREPORT' + '.h5'
+                        hdfile = h5py.File(saverep ,'w')
+                        
+                        DesignTpl ,FunctionalsTpl = self.list_deriv_vars()
+                        DesignNames=list(DesignTpl)
+                        
+                        for dd in range(Ndes):
+                            hdfile[DesignNames[dd]+'_old']  =self.DesignValOld[dd]
+                            hdfile[DesignNames[dd]+'_crash']=DesignValCrash[dd]
+                            hdfile[DesignNames[dd]+'_step_crash']=DesignStepCrash[dd]
+                            hdfile[DesignNames[dd]+'_new']=DesignValNew[dd]
+                            hdfile[DesignNames[dd]+'_step_new']=DesignStepNew[dd]
+                            
+                        hdfile['red_fact']=red_fact[rr]
+                        hdfile.close()               
+                        
+
+        
+        # output checks
+        self.check()
+        
+        # compute cost from Fortran functions [superceeded]
+        cost.f_total_mass( self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumElems), ct.byref(self.ct_TotalMass) )
+        cost.f_node_disp( self.PosIni.ctypes.data_as(ct.c_void_p), self.PosDef.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumNodes), ct.byref(self.ct_NodeDisp), ct.byref(self.ct_NNode) )
+        
+        # update values
+        self.update_variables()
+        
+        # compute cost from Python functions [superceeded]
+        self.ZDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='z',NNode=self.NNode-1)
+        self.YDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='y',NNode=self.NNode-1)
+        self.XDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='x',NNode=self.NNode-1)
+        
+        
+        # evaluate cost, constraints and design
+        self.eval_functionals()      
+        self.DesignValOld = self.get_DesignVal()
+                        
+        # sm: savename etc moved before solver started
+        ### save
+        #counter_string =  '%.3d' % (self._counter)
+        #savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
         lib.save.h5comp( self, savename)
+        
+        # counter: for multiple executions
+        self._counter = self._counter+1
+        
 
-
-        # call xbeam solver
+    def call_fwd_run(self):
+        '''
+        Simple wrap function to store the full call of the fortran code.
+        
+        IMPORTANT:
+        though most of the variables in input to self.fwd_run are defined
+        in the Fortran original code as optional, not passing them will generate
+        memory errors.
+        
+        '''
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
                      ct.byref(self.ct_NumNodesElem), self.ct_ElemType, self.ct_TestCase, self.ct_BConds,
                      self.BeamSpanStiffness.ctypes.data_as(ct.c_void_p),        # Properties along the span
@@ -480,39 +561,20 @@ class XBeamSolver(ComponentWithDerivatives):
                      self.PosPsiTime.ctypes.data_as(ct.c_void_p), self.VelocTime.ctypes.data_as(ct.c_void_p),
                      self.DynOut.ctypes.data_as(ct.c_void_p)  ,                                              # output from sol 202, 212, 302, 312, 322
                      self.RefVel.ctypes.data_as(ct.c_void_p), self.RefVelDot.ctypes.data_as(ct.c_void_p), 
-                     self.Quat.ctypes.data_as(ct.c_void_p)   )                # output rigid-body + dynamics
+                     self.Quat.ctypes.data_as(ct.c_void_p)   ,                # output rigid-body + dynamics
+                     ct.byref(self.ct_SUCCESS) ) # handlying exceptions for sol 932
         
-        print 'Out of Fortran!!!'
-        
-        # output checks
-        self.check()
-        
-        # compute cost from Fortran functions [superceeded]
-        cost.f_total_mass( self.DensityVector.ctypes.data_as(ct.c_void_p), self.LengthVector.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumElems), ct.byref(self.ct_TotalMass) )
-        cost.f_node_disp( self.PosIni.ctypes.data_as(ct.c_void_p), self.PosDef.ctypes.data_as(ct.c_void_p), ct.byref(self.ct_NumNodes), ct.byref(self.ct_NodeDisp), ct.byref(self.ct_NNode) )
-        
-        # update values
-        self.update_variables()
-        
-        # compute cost from Python functions [superceeded]
-        self.ZDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='z',NNode=self.NNode-1) # python indices starts from 0
-        self.YDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='y',NNode=self.NNode-1)
-        self.XDisp = cost.f_xyz_disp(self.PosIni, self.PosDef, dir='x',NNode=self.NNode-1)
-        
-        
-        # evaluate cost and constraints
-        self.eval_functionals()      
-                        
-                        
-        # sm: savename etc moved before solver started
-        ### save
-        #counter_string =  '%.3d' % (self._counter)
-        #savename = self._savedir + '/' + self.TestCase + '_' + counter_string + '.h5'
-        lib.save.h5comp( self, savename)
-        
-        # counter: for multiple executions
-        self._counter = self._counter+1
-        
+        '''
+        class FwdNotConverged(Exception):
+            def __init__(self, value):
+                self.SUCCESS = True
+            def __str__(self):
+                return repr(self.value)
+        '''
+        if self.ct_SUCCESS.value is False:
+            #raise  FwdNotConverged(self.ct_SUCCESS.value)
+            raise NameError('Sol 932 did not converge')
+
                           
     def set_ctypes(self):
         
@@ -554,6 +616,9 @@ class XBeamSolver(ComponentWithDerivatives):
         self.ct_TotalMass = ct.c_double( self.TotalMass ) 
         self.ct_NodeDisp  = ct.c_double( self.NodeDisp )
         self.ct_NNode     = ct.c_int(self.NNode)
+        
+        #------------------------------------ handling exceptions (sol 932 only)
+        self.ct_SUCCESS = ct.c_bool(self.SUCCESS)
 
 
     def del_ctypes(self,printinfo=False):
@@ -605,6 +670,10 @@ class XBeamSolver(ComponentWithDerivatives):
         self.ct_TotalMass = None
         self.ct_NodeDisp  = None
         self.ct_NNode     = None
+        
+        #------------------------------------ handling exceptions (sol 932 only)
+        self.ct_SUCCESS = None    
+        
         '''
 
         
@@ -821,7 +890,7 @@ class XBeamSolver(ComponentWithDerivatives):
                         geqval_list.append( gelem )                
                 self.geqname.append( ggeqfun.func_name )
             self.geqval=np.array(geqval_list)
-            print 'eq constr: ', self.geqval
+            #print 'eq constr: ', self.geqval
         
         # compute disequality constraints
         if hasattr(self, 'gdisfun'):
@@ -843,7 +912,7 @@ class XBeamSolver(ComponentWithDerivatives):
                         gdisval_list.append( gelem )                         
                 self.gdisname.append( ggdisfun.func_name ) 
             self.gdisval = np.array(gdisval_list)       
-            print 'dis constr:', self.gdisval
+            #print 'dis constr:', self.gdisval
         
         return
 
@@ -949,6 +1018,10 @@ class XBeamSolver(ComponentWithDerivatives):
                 raise NameError('Debugging: Number of jacobian vectors computed with Parallel FDs wrongly equal to %d!' %(len(jvList)))
             for jj in range(Nx):
                 J[:,jj]=jvList[jj]
+            # - 1. close the pool (memory in workers goes to zero) 
+            # - 2. exit the worker processes (processes are killed)
+            pool.close()
+            pool.join() 
             # reset the ctypes for future executions
             self.fwd_run=getattr(wrapso, "__opt_routine_MOD_opt_main") 
             self.set_ctypes()            
@@ -1024,9 +1097,6 @@ class XBeamSolver(ComponentWithDerivatives):
         return jv
 
 
-
-
-
     def get_fd_steps(self,AssemblyObj):
         '''This method can only be used once the XBeamSolver is added to a
         driver workflow. The Assembly class needs to be passed in input.
@@ -1049,5 +1119,52 @@ class XBeamSolver(ComponentWithDerivatives):
         return self
                 
                 
+    def get_DesignVal(self):
+        '''
+        Gets current value of design vector. These are not stored as an array
+        but as a list, whose ii-th element is related to the ii-th design variable
+        (being this a float or array) defined using self.list_deriv_vars()
+       
+        The choice of storing the results in list format is due to the fact that
+        this method is not used for computing the jacobian, but just for resetting
+        the optimiser step in case of crash during the optimisation
+        
+        Remark:
+        the method is analoguous to SLSQPdriver.eval_parameters
+        
+        ''' 
+        
+        # get tuples of variables/functionals
+        DesignTpl ,FunctionalsTpl = self.list_deriv_vars()
+        DesignList=list(DesignTpl)
+        
+        # extract values
+        DesignVal=[ getattr(self,dd) for dd in DesignList ]
+            
+        return DesignVal
+    
+    
+    def set_DesignVal(self,DesignValNew):
+        ''' 
+        Complementary method for get_DesignVal. In this case, the values of the
+        Design variables can be reset given the values specified into DesignValNew
+        
+        The ii-the element of DesignValNew is related to the ii-th design variable 
+        (being it float or array) returned by the self.list_deriv_vars() method.
+        
+        Warning:
+        the method does not check if the design variables are still in the design 
+        space.
+        '''
+        # get tuples of variables/functionals
+        DesignTpl ,FunctionalsTpl = self.list_deriv_vars()
+        DesignList=list(DesignTpl)
+        
+        for ii in range(len(DesignList)):
+            setattr(self, DesignList[ii], DesignValNew[ii])    
+        
+        return self    
+        
+        
                 
-                
+        

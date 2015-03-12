@@ -355,7 +355,7 @@ module xbeam_solv
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine xbeam_solv_couplednlndyn (iOut,NumDof,Time,Elem,Node,F0,Fdyn,               &
 &                                     Vrel,VrelDot,Quat,Coords,Psi0,PosDefor,PsiDefor,  &
-&                                     PosDotDefor,PsiDotDefor,DynOut,Options)
+&                                     PosDotDefor,PsiDotDefor,DynOut,Options,SUCCESS)
   use lib_fem
   use lib_rot
   use lib_rotvect
@@ -388,6 +388,10 @@ module xbeam_solv
   real(8),      intent(inout):: PsiDotDefor(:,:,:)! Current time derivatives of the CRV of the nodes in the elements.
   real(8),      intent(out)  :: DynOut    (:,:)   ! Time-history of displacement of all nodes.
   type(xbopts), intent(in)   :: Options           ! Solver parameters.
+
+ logical, intent(inout), optional :: SUCCESS  ! Variable to allow python wrapper to handle ecceptions.
+                                              ! If the solution does not converge, the variable is set to .false.
+
 
 ! Local variables.
   real(8):: beta,gamma                     ! Newmark coefficients.
@@ -446,8 +450,8 @@ module xbeam_solv
   integer :: sph_rows(3) ! rows to be modified to include a spherical joint BC
 
   ! Parameters to Check Convergence
-  logical :: converged = .false.
-  logical :: passed_delta = .false.! true if the subiteration (newton) converged according to delta check
+  logical :: converged       = .false.
+  logical :: passed_delta    = .false.! true if the subiteration (newton) converged according to delta check
   logical :: passed_res      = .false.! true if the subiteration (newton) converged according to residual check
   logical :: passed_resfrc   = .false.! true if the subiteration (newton) converged according to residual check (forces only)
   logical :: passed_resmmt   = .false.! true if the subiteration (newton) converged according to residual check (Moments only)
@@ -473,7 +477,7 @@ module xbeam_solv
   real(8)   :: DPsi_now, DPsi_old   ! Norm of rotational dofs of DeltaX at current and old iteration
   real(8)   :: TaX, TaPos, TaPsi    ! Absolute tolerance for DeltaX, DeltaPos and DeltaPsi
 
- ! Determine scaling factors for convergence test (absolute tolerances)
+  ! Determine scaling factors for convergence test (absolute tolerances)
   Psisc = 1.0_8 ! used for quaternion scaling as well
   Possc = maxval(abs(Coords))
   Fsc = 1.0_8; Msc = 1.0_8;
@@ -481,18 +485,18 @@ module xbeam_solv
     Fsc = max( maxval(abs( F0(:,1:3)+Fdyn(:,1:3,iStep+1) )), Fsc);
     Msc = max( maxval(abs( F0(:,4:6)+Fdyn(:,4:6,iStep+1) )), Msc);
   end do
-  print*, 'xbeam_solv_couplednlndyn:'
-  print*, 'scaling factor for simulation:'
-  print*, 'Fsc=', Fsc, 'Msc=', Msc
+  !print*, 'xbeam_solv_couplednlndyn:'
+  !print*, 'scaling factor for simulation:'
+  !print*, 'Fsc=', Fsc, 'Msc=', Msc
 
-! Initialize (sperical joint) sm
+  ! Initialize (sperical joint) sm
   SphFlag=.false.
   if (Node(1)%Sflag == 1) then
     SphFlag=.true.
   end if
   sph_rows = (/1,2,3/)+NumDof
 
-! Initialise
+  ! Initialise
   NumN=size(Node)
   allocate (ListIN (NumN));
   do k=1,NumN
@@ -546,6 +550,12 @@ module xbeam_solv
 ! Compute system information at initial condition.
   allocate (Veloc(NumN,6)); Veloc=0.d0
   allocate (Displ(NumN,6)); Displ=0.d0
+
+  ! sm exceptions handling for python wrapper
+  if (present(SUCCESS)) then
+      SUCCESS=.true.
+  end if
+
 
   ! -------------------------- sm start: give initial values to rigid body frame
   dQdt(NumDof+7:NumDof+10)=Quat
@@ -658,7 +668,10 @@ module xbeam_solv
   do iStep=1,size(Time)-1
     dt= Time(iStep+1)-Time(iStep)
     call out_time(iStep,Time(iStep+1),Text)
-    write (*,'(5X,A,$)') trim(Text)
+    if (Options%PrintInfo) then
+      write (*,'(X)')
+      write (*,'(5X,A,$)') trim(Text)
+    end if
 
 ! Predictor step.
     Q    = Q + dt*dQdt + (0.5d0-beta)*dt*dt*dQddt
@@ -680,7 +693,7 @@ module xbeam_solv
       !Spherical Joint - sm
       ! reminder of possible issues
       if (Iter.gt.Options%MaxIterations) then
-        print *, ' '
+        print *, '\N success=', SUCCESS
         print *, 'Reminders:'
         print *, '1. Old convergence criteria still used. Consider upgrading as per static solver.'
         print *, '2. Spherical Joint, not hinge!'
@@ -688,7 +701,20 @@ module xbeam_solv
         print *, '   However, the corrector part not. This should not affect the other dofs as columns are deleted.'
         print *, '   is also better if a moving hinge/spherical joint is implemented.'
         print *, '4. If moving hinge/spherical joint is implemented, the columns cannot be set to zero'
-        STOP 'Solution did not converge (18235)'
+        !!! sm: stop commented to allow python wrapper to handle exceptions
+        if (present(SUCCESS)) then
+            SUCCESS=.false.
+            ! always print last iteration delta if crash occurrs
+            if (.not.(Options%PrintInfo)) then
+              write (*,'(5X,A,$)') trim(Text)
+              write (*,'(5X,A,I4,A,1PE12.3)') 'Subiteration',Iter, '  Delta=', maxval(abs(Qtotal))
+            end if
+            print *, 'Solution did not converge (18235)'
+            exit
+            ! stop the iterations
+        else
+            STOP 'Solution did not converge (18235)'
+        end if
       end if
 
 ! Update nodal positions and velocities .
@@ -767,23 +793,28 @@ module xbeam_solv
 
       Qtotal= Qtotal + sparse_matvmul(mtot,Mtotal,NumDof+6+4,dQddt)
 
-! ----------------------------------------------------------- Check convergence.
+      ! ------------------------------------------------------ Check convergence.
 
-      ! delta check (original code)
-      write (*,'(2X,1PE10.3,$)') maxval(abs(Qtotal))
-      if (maxval(abs(Qtotal)).lt.MinDelta) then
-        write (*,'(5X,A,I4,A,1PE12.3)') 'Subiteration',Iter, '  Delta=', maxval(abs(Qtotal))
-        converged=.true. ! sm
+      if (Options%PrintInfo) then
+        ! delta check (original code)
+        !write (*,'(2X,1PE10.3,$)') maxval(abs(Qtotal))
+        write (*,'(5X,A,I4,A,1PE12.3,$)') 'Subiteration',Iter, '  Delta=', maxval(abs(Qtotal))
       end if
 
-      ! exit do loop
+      if (maxval(abs(Qtotal)).lt.MinDelta) then
+          converged=.true. ! sm
+      end if
+
+      ! exit do loop: kept outside in case of other criteria will be introduced
       if (converged.eqv..true.) then
         exit
       end if
 
-
-
 ! ----------------------------------------------------- end check of convergence
+
+
+
+
 
 ! Compute total damping and stiffness matrices linear system
       call sparse_addsparse (0,0,cs,CSS,ctot,Ctotal)
@@ -867,6 +898,17 @@ module xbeam_solv
     do k=1,NumN
         DynOut(iStep*NumN+k,:) = PosDefor(k,:)
     end do
+
+
+
+ ! check crash - error handlying in python
+    if (present(SUCCESS)) then
+       if (SUCCESS .eqv. .false.) then
+         print *, 'Returning to wrapper with SUCCESS=.false.'
+         exit
+       end if
+     end if
+
 
   end do
 
