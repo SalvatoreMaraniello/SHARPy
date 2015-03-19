@@ -18,6 +18,20 @@ from warnings import warn
 import scipy.interpolate
 
 
+
+
+
+# -------------------------------------------- set plots/legend/axis parameters
+params = {'legend.fontsize': 14,
+          'legend.linewidth': 2,
+          'font.size': 16,       # for all, e.g. the ticks
+          'legend.numpoints': 1} # for plotting the marker only once
+fontlabel = 18 # if you want it different
+
+
+
+
+
 #---------------------------------------------------------------- Common setting
 
 ### incompatible with matplotlib versions higher then 1.1.1

@@ -452,7 +452,7 @@ class XBeamSolver(ComponentWithDerivatives):
                 print 'xbeam solver crashed: solution will be restarted after decreasing the step size'
                 
                 # update design variables values
-                red_fact=np.array([0.5,0.25,0.125])
+                red_fact=np.array([0.5,0.25,0.125,0.0625])
                 
                 # get value of design variables set by the optimiser
                 DesignValCrash = self.get_DesignVal()
