@@ -33,7 +33,7 @@ import design.beamelem, design.beamnodes, design.beamgeom
 import input.load.modal, input.load.fourier, input.load.spline, input.forcedvel
 import beamvar
 import cost, constr.common
-import lib.save
+import lib.save, lib.read
       
 # Load Dynamic Library
 wrapso = ct.cdll.LoadLibrary(shared.wrapso_abspath)
@@ -456,18 +456,41 @@ class XBeamSolver(ComponentWithDerivatives):
                 
                 # get value of design variables set by the optimiser
                 DesignValCrash = self.get_DesignVal()
-                Ndes=len(self.DesignValOld)
+                Ndes=len(self.DesignVal)
                 
+                # with auto FD self.DesignValOld is not retained correctly
+                # it must be re-read
+                old_filename = self._savedir + '/' + self.TestCase + '_%.3d.h5'%(self._counter-1)
+                hdfile = h5py.File(old_filename,'r')
+                DesignValOld = hdfile['DesignVal'].value
+                #val = hdfile['DesignVal'].value
+                #setattr(self,'DesignValOld',val)    #<--- 
+                hdfile.close()
+
                 # and step size set by the optimiser
-                DesignStepCrash = [(DesignValCrash[ii] - self.DesignValOld[ii]) for ii in range(Ndes)]
+                #DesignStepCrash = [(DesignValCrash[ii] - self.DesignValOld[ii]) for ii in range(Ndes)]
+                DesignStepCrash = [(DesignValCrash[ii] - DesignValOld[ii]) for ii in range(Ndes)]
                 
                 # update design variable values
                 for rr in range(len(red_fact)):
                     print 'Restart with factor %1.4f' %(red_fact[rr])
                     DesignStepNew = [red_fact[rr]*DesignStepCrash[ii] for ii in range(Ndes)]
-                    DesignValNew=[(self.DesignValOld[ii]+DesignStepNew[ii]) for ii in range(Ndes)]
+                    #DesignValNew=[(self.DesignValOld[ii]+DesignStepNew[ii]) for ii in range(Ndes)]
+                    DesignValNew=[(DesignValOld[ii]+DesignStepNew[ii]) for ii in range(Ndes)]
+                    
+                    # --- debug
+                    #print 'Old Design:', self.DesignValOld
+                    #print 'Crash Design', DesignValCrash
+                    #print 'Step Detected:', DesignStepNew
+                    #print 'New Design:', DesignValNew
+                    # --- debug
                     
                     self.set_DesignVal(DesignValNew)
+                    
+                    # --- debug
+                    print 'Design Updated (check)', self.get_DesignVal()
+                    # --- debug
+                    
                     try:
                         # reset all the variables
                         self.pre_solve()
@@ -489,7 +512,7 @@ class XBeamSolver(ComponentWithDerivatives):
                         DesignNames=list(DesignTpl)
                         
                         for dd in range(Ndes):
-                            hdfile[DesignNames[dd]+'_old']  =self.DesignValOld[dd]
+                            hdfile[DesignNames[dd]+'_old']  =DesignValOld[dd] #self.DesignValOld[dd]
                             hdfile[DesignNames[dd]+'_crash']=DesignValCrash[dd]
                             hdfile[DesignNames[dd]+'_step_crash']=DesignStepCrash[dd]
                             hdfile[DesignNames[dd]+'_new']=DesignValNew[dd]
@@ -498,8 +521,6 @@ class XBeamSolver(ComponentWithDerivatives):
                         hdfile['red_fact']=red_fact[rr]
                         hdfile.close()               
                         
-
-        
         # output checks
         self.check()
         
@@ -518,7 +539,9 @@ class XBeamSolver(ComponentWithDerivatives):
         
         # evaluate cost, constraints and design
         self.eval_functionals()      
-        self.DesignValOld = self.get_DesignVal()
+        ####self.DesignValOld = self.get_DesignVal() # not retained with FD gradient
+        self.DesignVal = self.get_DesignVal()        # this will be saved in h5 file
+
                         
         # sm: savename etc moved before solver started
         ### save

@@ -227,7 +227,9 @@ def h5comp(filename):
     XBinst = conditional_reading(hdfile,XBinst,'FunctionalsList')
     XBinst = conditional_reading(hdfile,XBinst,'fd_steps')  
 
-
+    # ------------------------------------------------------------------ restart
+    XBinst = conditional_reading(hdfile,XBinst,'DesignVal') 
+    
     '''
     setattr(XBinst,'',hdfile[''].value)
     XBinst = conditional_reading(hdfile,XBinst,'')

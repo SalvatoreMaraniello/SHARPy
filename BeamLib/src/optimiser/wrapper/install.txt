@@ -80,23 +80,30 @@ this setting has been proven to work for the compilations required in the OpenMD
                     - note that running 'python setup.py install --home=~' will install the libraries in the HOME filesystem, which is not accessible from the work file system
                 - note: if there are issue, other possible options to try can include forcing the compiler:
                     python setup.py build --compiler=xxx
-    - matplotlib: this library is necessary for correctly load the openmdao classes and run the postprocessing. While in Ubuntu the matplotlib shipped with the OS has been used successfully, in Archer several problems may occur as when imported, the matplotlib package tries to look for/save default setting in the home area, not accessible from the Archer computer nodes. Some hacks are required...
-    	- using 
-    		module add matplotlib
-    	  leads to errors. 
-    	- As the __init__.py file needs to be changed, download and install matplotlib manually (as done for the h5py library). In Archer, version 1.3.1 has been installed successfully.
-    	- in ~/.profile, define the following environmental variables
-    	    export XDG_CONFIG_HOME="/work/e391/e391/sm6110/.config"
-            export PYTHON_EGG_CACHE="/work/e391/e391/sm6110/.python-eggs"
-        - in ~/.profile, import png library:
-            module add libpng   
-        - open the __init__.py file of the library, which should be located in:
-        	WORK_AREA/lib/python/matplotlib-1.3.1-py2.7-linux-x86_64.egg/matplotlib
-        - in the get_home method, substitute:        
-        	#path = os.path.expanduser("~")
-			path='/work/e391/e391/sm6110/' 
-		  i.e. set the home path to
-		    path=WORKING_AREA (where matplotlib, h5py etc. are installed). The original home path is, in fact, not accessible from the computer nodes.
+    - matplotlib: this library is necessary for correctly load the openmdao classes and run the postprocessing. 
+        - In Ubuntu the matplotlib shipped with the OS (1.1.1rc) has been used till commit 155 (archercomp branch). For animation tools, an upgrade to version 1.4.3 was preferred (not required, as animations are supported from 1.1.1). To this aim:
+            - uninstall python-matplotlib from ubuntu softwere centre
+            - uninstall pyparse if version older then 1.5.6
+            - download updated version of pyparsing (http://sourceforge.net/projects/pyparsing/files/pyparsing)
+            - install it as per h5py
+            - install matplotlib as per h5py
+        - In Archer several problems may occur as when imported, the matplotlib package tries to look for/save default setting in the home area, not accessible from the Archer computer nodes. Some hacks are required... note that the installation in Archer is never used for producing plots, so is not tested.
+    	    - using 
+    		    module add matplotlib
+    	    leads to errors. 
+    	    - As the __init__.py file needs to be changed, download and install matplotlib manually (as done for the h5py library). In Archer, version 1.3.1 has been installed successfully.
+    	    - in ~/.profile, define the following environmental variables
+    	        export XDG_CONFIG_HOME="/work/e391/e391/sm6110/.config"
+                export PYTHON_EGG_CACHE="/work/e391/e391/sm6110/.python-eggs"
+            - in ~/.profile, import png library:
+                module add libpng   
+            - open the __init__.py file of the library, which should be located in:
+        	    WORK_AREA/lib/python/matplotlib-1.3.1-py2.7-linux-x86_64.egg/matplotlib
+            - in the get_home method, substitute:        
+        	    #path = os.path.expanduser("~")
+			    path='/work/e391/e391/sm6110/' 
+		    i.e. set the home path to
+		        path=WORKING_AREA (where matplotlib, h5py etc. are installed). The original home path is, in fact, not accessible from the computer nodes.
         	
 
 

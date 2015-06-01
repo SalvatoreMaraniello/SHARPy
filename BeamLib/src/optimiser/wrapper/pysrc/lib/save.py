@@ -244,6 +244,8 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile = conditional_saving(hdfile,XBinst,'FunctionalsList')
     hdfile = conditional_saving(hdfile,XBinst,'fd_steps')  
 
+    # ------------------------------------------------------------------ restart
+    hdfile = conditional_saving(hdfile,XBinst,'DesignVal')    
     
     '''
     # to add future fields...
@@ -282,7 +284,12 @@ def conditional_saving(hdfile,obj,attrname):
     return hdfile
     
     
-    
+def change_step_report(XBinst,filename):
+    '''
+    when a crashes occurs during the optimisation and the step length is reduced,
+    the functions saves a file with the relevant information
+    '''
+    return 0  
      
  
  
