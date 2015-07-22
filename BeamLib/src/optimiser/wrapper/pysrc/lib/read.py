@@ -18,8 +18,8 @@ from warnings import warn
 import sys
 sys.path.append('..')
 sys.path.append('../..')
-from xbcomponent import XBeamSolver
-
+#from xbcomponent import XBeamSolver
+from xbcompFD import XBeamSolver
 
 
 def h5comp(filename):
@@ -277,6 +277,36 @@ def h5series(rootname,attrlist):
     
     return outlist
      
+
+
+def h5list(fileslist,attrlist):
+    ''' 
+    Equivalent to h5series but reads files from an user defined list (fileslist)
+    
+    All the attributes in 'attrlist' are read and stored in outlist.
+    '''
+    
+    outlist=[]
+    
+    for filename in fileslist:
+        
+
+        print 'Reading: %s' %(filename)
+        hdfile = h5py.File(filename,'r') 
+        inlist=[]
+        for attr in attrlist:
+            try:
+                inlist.append(hdfile[attr].value)
+            except:
+                warn('%s attribute not found!!!' %(attr)) 
+                inlist.append('not found!!!')      
+        outlist.append(inlist)
+        hdfile.close()
+
+    return outlist
+    
+
+
   
 def conditional_reading(hdfile,obj,attrname): 
     ''' 
@@ -301,6 +331,9 @@ if __name__=='__main__':
     
     import numpy as np
 
+    DSroot='/home/sm6110/git/SHARPy_studies/OPT/20141208_combined_opt/20150515_qiqi_np'
+    DS16res=DSroot+'/opt2red/l30.0316_NC16sol932NE10_dt0.00020_damp0.100_128.h5' # 4.0 Hz
+    filename=DS16res
     
     #--------------------------------------------------------------- h5comp test
     #filename = 'fwd_model.h5' 

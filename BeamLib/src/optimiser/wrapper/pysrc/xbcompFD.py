@@ -33,7 +33,7 @@ import design.beamelem, design.beamnodes, design.beamgeom
 import input.load.modal, input.load.fourier, input.load.spline, input.forcedvel
 import beamvar
 import cost, constr.common
-import lib.save, lib.read
+import lib.save
       
 # Load Dynamic Library
 wrapso = ct.cdll.LoadLibrary(shared.wrapso_abspath)
