@@ -93,6 +93,7 @@ def h5comp(filename):
  
     # dynamics loads
     setattr(XBinst,'NumSteps',hdfile['NumSteps'].value)
+    ###setattr(XBinst,'DynForceParam',hdfile['DynForceParam'].value)    ### removed for compatibility 
     setattr(XBinst,'AppDynLoadType',hdfile['AppDynLoadType'].value)
     setattr(XBinst,'AppDynLoadVariation',hdfile['AppDynLoadVariation'].value)
     setattr(XBinst,'NodeAppDynForce',hdfile['NodeAppDynForce'].value)
@@ -170,6 +171,7 @@ def h5comp(filename):
     
     #---------------------------------------------------------- Dynamics Related
     # input
+    XBinst = conditional_reading(hdfile,XBinst,'DynForceParam')    
     XBinst = conditional_reading(hdfile,XBinst,'Time')   
     XBinst = conditional_reading(hdfile,XBinst,'ForceDynAmp')   
     XBinst = conditional_reading(hdfile,XBinst,'ForceTime')   

@@ -106,11 +106,12 @@ def h5comp(XBinst,filename='./fwd_model.h5'):
     hdfile['material']=XBinst.material
 
     # static loads
-    hdfile['AppStaLoadType']=XBinst.AppDynLoadType
+    hdfile['AppStaLoadType']=XBinst.AppStaLoadType
     hdfile['NodeAppStaForce']=XBinst.NodeAppStaForce
 
     # dynamics loads
     hdfile['NumSteps']=XBinst.NumSteps
+    hdfile['DynForceParam']=XBinst.DynForceParam    
     hdfile['AppDynLoadType']=XBinst.AppDynLoadType
     hdfile['AppDynLoadVariation']=XBinst.AppDynLoadVariation
     hdfile['NodeAppDynForce']=XBinst.NodeAppDynForce
