@@ -21,7 +21,7 @@ import numpy as np
 import ctypes as ct
 import h5py 
 import multiprocessing as mpr
-#from warnings import warn
+from warnings import warn
 
 sys.path.append('..')
 import shared
@@ -539,9 +539,12 @@ class XBeamSolver(ComponentWithDerivatives):
         
         # evaluate cost, constraints and design
         self.eval_functionals()      
-        ####self.DesignValOld = self.get_DesignVal() # not retained with FD gradient
-        self.DesignVal = self.get_DesignVal()        # this will be saved in h5 file
-
+        try:
+            ####self.DesignValOld = self.get_DesignVal() # not retained with FD gradient
+            self.DesignVal = self.get_DesignVal()        # this will be saved in h5 file
+        except AttributeError:
+            warn('One or more design variables not found!!!')
+            self.DesignVal=[]
                         
         # sm: savename etc moved before solver started
         ### save
@@ -1163,7 +1166,8 @@ class XBeamSolver(ComponentWithDerivatives):
         
         # extract values
         DesignVal=[ getattr(self,dd) for dd in DesignList ]
-            
+
+                    
         return DesignVal
     
     

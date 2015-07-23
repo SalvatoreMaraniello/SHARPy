@@ -73,7 +73,7 @@ References:
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+from warnings import warn
 
 
 def nodal_force(NumNodes, Time, NodeForce, TCint, Scf, p ):
@@ -140,8 +140,6 @@ def change_series_base(tcint, p, tcint_old, Scf_old, p_old, tc_uniform_flag=True
     tv=np.concatenate((tv,tvextra))
     '''
     
-    print tv
-    
     # evaluate old spline on the new domain
     fv = spline_series_vec(tv, tcint_old, Scf_old, p_old, tc_uniform_flag)
     
@@ -149,7 +147,6 @@ def change_series_base(tcint, p, tcint_old, Scf_old, p_old, tc_uniform_flag=True
     tc = extended_knots_vector(tcint,p,tv)
     Smat=p_basis(tv,tc,p)
     Smat = normalise_uniform_base(p,Smat,tc_uniform_flag)
-    
     
     # solve liner system:
     Scf=np.linalg.solve(Smat.transpose(), fv)
@@ -218,6 +215,7 @@ def zero_base(tv,tc,s):
     
     # check domain
     if tc[0]!=tv[0] or tc[-1]!=tv[-1]:
+        print 'tc[0]=%f, tc[-1]=%f, tv[0]=%f, tv[-1]=%f' %(tc[0],tc[-1],tv[0],tv[-1])
         raise NameError('tc[0] and tc[-1] must be equal to tv[0] and tv[-1]')
     
     # check base number
@@ -250,6 +248,7 @@ def p_basis(tv,tc,p):
 
     # check domain
     if tc[p]!=tv[0] or tc[-(1+p)]!=tv[-1]:
+        print 'tc[p]=%f, tc[-(1+p)]=%f, tv[0]=%f, tv[-1]=%f' %(tc[p],tc[-(1+p)],tv[0],tv[-1])
         raise NameError('tc[p] and tc[-p] must be equal to tv[0] and tv[-1]')
     
     # check base number and spline order
@@ -363,6 +362,7 @@ def extended_knots_vector(tcint,p,tv):
      
     # check
     if tcint[0]!=tv[0] or tcint[-1]!=tv[-1]:
+        print 'tc[0]=%f, tc[-1]=%f, tv[0]=%f, tv[-1]=%f' %(tcint[0],tcint[-1],tv[0],tv[-1])
         raise NameError('tcint[0] and tcint[-1] must be equal to tv[0] and tv[-1]')
     
     if p==0:
@@ -383,6 +383,101 @@ def extended_knots_vector(tcint,p,tv):
     return tcext
         
         
+def reconstruct(tcint,tv,fv,p=3):
+    '''
+    Given a function (tv,fv) and a set of control points tcint, such that
+        tcint[0]=tv[0]
+        tcint[-1]=tv[-1]
+    the function returns a spline basis and coefficients of order p that 
+    reconstruct the sought signal tv,fv
+    
+    The method is very accurate if the tcint set is included in the tv set.
+    Otherwise the accuracy will depend on the interpolation error. A linear 
+    interpolation was used under the assumption that len(tv)>>len(tcint) 
+    '''
+    
+    if p!=3:
+        raise NameError('function only developed for p=3!!!')
+    Nc=len(tcint)
+    Nv=len(tv)
+    if Nv<5*Nc:
+        warn('Reconstruction may be inaccurate if interpolation is used !!!')
+    
+    # get control points value of f
+    fc=0.0*tcint
+    for ii in range(Nc):
+        tt=tcint[ii]
+        try:
+            iivec=tt==tv
+            fc[ii]=fv[iivec]
+        except:
+            print "tcint[%1.2d]=%f couldn't be found exactly in tv!"%(ii,tcint[ii])
+            warn("The value will be found by linear interpolation:")
+            fc[ii]=np.interp(tcint[ii],tv,fv)
+            '''
+            # find by minimum tolerance
+            tol=1e-6*tv[-1]
+            er=(tv-tcint[ii])**2
+            minerror=er.min()
+            if minerror<tol**2:
+                mm=er.argmin()
+                fc[ii]=fv[mm]
+            '''
+    
+    method='zero'
+    # get the set of basis functions over the tcint domain plus extra points:
+    if method=='zero':
+        tcrec=np.zeros((Nc+(p-1)))
+        fcrec=np.zeros((Nc+(p-1)))
+        tcrec[0],fcrec[0]   = tcint[0],fc[0]
+        tcrec[2:-2],fcrec[2:-2]= tcint[1:-1],fc[1:-1]
+        tcrec[-1],fcrec[-1]=tcint[-1],fc[-1]
+        
+        # ---------------------------------------------------------------------
+        # determine remaining points from tv,fv to be intermediate between:
+        # tcint[ 0] and tcint[ 1]
+        # tcint[-2] and tcint[-1]
+            #
+        # Inportant: this part tries hard to avoid interpolation (as we can 
+        # are free to choose any extra node. Nodes shouldn't even be at the 
+        # extrema. 
+        # As the algorythm may fail for small discretisations, in this case
+        # the extra points are hard-coded
+         
+        if Nv<5*Nc:
+            tcrec[1],fcrec[1]=tv[1],fv[1]
+            tcrec[-2],fcrec[-2]=tv[-2],fv[-2]
+        else:                                                
+            iivec=tv<tcint[1]
+            iiextra=np.round(.5*np.sum(iivec)) 
+            tcrec[1],fcrec[1]=tv[iiextra],fv[iiextra]
+            
+            iivec=tv<tcint[-2]
+            iiextra=np.round(0.5*(Nv+np.sum(iivec))) - 1 # cause we start counting from zero
+            tcrec[-2],fcrec[-2]=tv[iiextra],fv[iiextra]
+        # ---------------------------------------------------------------------
+    
+    # get the set of basis functions over the final domain
+    tc=extended_knots_vector(tcint,p,tcrec)
+    Srec = p_basis(tcrec,tc,p)
+    Srec = normalise_uniform_base(p,Srec,tc_uniform_flag=True)
+    
+    # solve for basis coefficients
+    scfv = np.linalg.solve(Srec.transpose(),fcrec)
+    
+    # beuild higher definition basis function
+    S = p_basis(tv,tc,p)
+    S = normalise_uniform_base(p,S,tc_uniform_flag=True)    
+    
+    # build function
+    fspline = np.sum( S.transpose()*scfv ,1)    
+
+    return fspline, scfv, S
+    
+    
+    
+
+
 
    
 
