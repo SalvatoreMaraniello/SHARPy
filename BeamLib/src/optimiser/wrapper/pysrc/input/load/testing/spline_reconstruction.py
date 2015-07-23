@@ -41,19 +41,26 @@ Nc=25
 ErList=[]
 Nv=[50,100,1000,10000]
 p=3
-Nv=[48,240,2400,24000]
+#Nv=[48,240,2400,24000]
+
+
 
 scfv0=np.random.rand(Nc+(p-1))
 tc=np.linspace(0,2,Nc)
 
+# to test spectral method
+scfv0[:3]=np.zeros(3)
+scfv0[-3:]=np.zeros(3)
+
+
 for nn in Nv:
     tv=np.linspace(0,2,nn+1)
     
-    print tv
-    print tc
+    #print tv
+    #print tc
 
     fv=sp.spline_series_vec(tv, tc, scfv0, p, tc_uniform_flag=True)
-    fspline, scfvrec, S =sp.reconstruct(tc,tv,fv)
+    fspline, scfvrec, S =sp.reconstruct(tc,tv,fv,method='spectral')
 
     print 'Original:', scfv0
     print 'Reconstructed:', scfvrec

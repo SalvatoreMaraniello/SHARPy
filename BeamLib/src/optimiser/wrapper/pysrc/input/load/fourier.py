@@ -84,6 +84,62 @@ def reshape_cfs(A):
     return A
 
 
+def myfft(t,f,fcut=np.infty):
+    '''
+    Returns frequency spectrum of a function f. To work properly, the inputs t 
+    and f must be such that:
+        f[0]=f[-1]
+        t[-1]=T
+    where T is the period of simulation. The function returns the complex 
+    coefficients of the complex Fourier series associated to the function f 
+    multiplied by 2, such that:
+        cf = ( B - A i)
+    where A and B are the coeff.s associted to the sines and cosines. The 
+    vector of output frequencies is also given.
+
+    Note:
+    if fcut is not specified:
+        Nout = Nin/2 + 1 (both if Nin is even or odd)
+    otherwise, the output size changes according to the cut frequency
+    
+    '''
+    
+    N = len(t)  # signal length
+    T=t[-1]-t[0]
+    fo = 1./T
+    if N !=len(f):
+        raise NameError('t and f must have same length')
+ 
+    ## find complex coefficients
+    cfs = 2.0*np.fft.rfft(f[:-1],N)/N 
+
+    # and related frequencies...
+    fr = fo*np.arange(0,len(cfs)) 
+    # nb: this is equivalent to:
+    # fr = fs * linspace(0,1,len(cfs))
+    # as: fr[nn]=fs*nn/Nout=Nout/T*nn/Nout=nn/T
+    # where Nout=len(cfs)
+    
+    ## cut freq:
+    iivec = fr <= fcut
+
+    return fr[iivec], cfs[iivec]
+
+
+
+def get_dss(tv,yv,fcut):
+    # create yv signal for FFT (with only sines in output)
+    yvext = np.concatenate( (yv[:-1] ,-yv[-1::-1]) )  
+    tvext   = np.concatenate( (tv[:-1]   , tv+tv[-1] ) )  
+    # FFT the extended signal
+    fr,cf=myfft(tvext,yvext,fcut)   
+    # sine series coefficients    
+    acf=-np.imag(cf)
+    return fr,cf,acf
+
+
+
+
 if __name__=='__main__':
     
     import matplotlib.pyplot as plt

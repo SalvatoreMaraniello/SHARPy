@@ -383,7 +383,7 @@ def extended_knots_vector(tcint,p,tv):
     return tcext
         
         
-def reconstruct(tcint,tv,fv,p=3):
+def reconstruct(tcint,tv,fv,p=3,method='zero'):
     '''
     Given a function (tv,fv) and a set of control points tcint, such that
         tcint[0]=tv[0]
@@ -399,6 +399,8 @@ def reconstruct(tcint,tv,fv,p=3):
     if p!=3:
         raise NameError('function only developed for p=3!!!')
     Nc=len(tcint)
+    Ns=Nc+p-1
+    
     Nv=len(tv)
     if Nv<5*Nc:
         warn('Reconstruction may be inaccurate if interpolation is used !!!')
@@ -424,7 +426,7 @@ def reconstruct(tcint,tv,fv,p=3):
                 fc[ii]=fv[mm]
             '''
     
-    method='zero'
+
     # get the set of basis functions over the tcint domain plus extra points:
     if method=='zero':
         tcrec=np.zeros((Nc+(p-1)))
@@ -457,18 +459,55 @@ def reconstruct(tcint,tv,fv,p=3):
             tcrec[-2],fcrec[-2]=tv[iiextra],fv[iiextra]
         # ---------------------------------------------------------------------
     
-    # get the set of basis functions over the final domain
-    tc=extended_knots_vector(tcint,p,tcrec)
-    Srec = p_basis(tcrec,tc,p)
-    Srec = normalise_uniform_base(p,Srec,tc_uniform_flag=True)
+        # get the set of basis functions over the final domain
+        tc=extended_knots_vector(tcint,p,tcrec)
+        Srec = p_basis(tcrec,tc,p)
+        Srec = normalise_uniform_base(p,Srec,tc_uniform_flag=True)
+        
+        # solve for basis coefficients
+        scfv = np.linalg.solve(Srec.transpose(),fcrec)
+
+        # build higher definition basis function
+        S = p_basis(tv,tc,p)
+        S = normalise_uniform_base(p,S,tc_uniform_flag=True)       
     
-    # solve for basis coefficients
-    scfv = np.linalg.solve(Srec.transpose(),fcrec)
     
+    
+    if method=='spectral':
+        import input.load.fourier as fourier
+        
+        if fv[0]!=fv[-1] and fv[0]!=0.0:
+            raise NameError('Function has to be symmetric')
+        
+        #------------------------------------ # get dss representation of signal
+        dtc=tcint[1]-tcint[0]
+        fmax=1.0/(2.0*dtc)
+        frv,cfv,acfv=fourier.get_dss(tv, fv, fcut=1.20*fmax)
+        # adjust length of frv
+        frv,acfv=frv[1:Ns+1],acfv[1:Ns+1] # no sine at 0 Hz
+        fcut=frv[-1]+np.finfo(frv[-1]).eps 
+        
+        #------------------------------------ # compute FFT of each spline basis
+        # build higher definition basis function
+        tc=extended_knots_vector(tcint,p,tv)
+        S = p_basis(tv,tc,p)
+        S = normalise_uniform_base(p,S,tc_uniform_flag=True)             
+        #print S.shape
+    
+        AcfMat=np.zeros((Nc+p-1,len(frv)))
+        for ii in range(Nc+p-1):
+            frv,cfv,acfsp=fourier.get_dss(tv, S[ii,:], fcut=fcut)
+            AcfMat[ii,:]=acfsp[1:]
+
+        # solve!
+        scfv = np.linalg.solve(AcfMat.transpose(),acfv)
+        
+    '''
     # beuild higher definition basis function
     S = p_basis(tv,tc,p)
     S = normalise_uniform_base(p,S,tc_uniform_flag=True)    
-    
+    '''
+        
     # build function
     fspline = np.sum( S.transpose()*scfv ,1)    
 
