@@ -150,3 +150,4 @@ cmpc/
 /.metadata/.plugins/org.eclipse.ui.workbench/workbench.xml
 /.metadata/.plugins/org.eclipse.ui.workbench/workingsets.xml
 /.metadata/version.ini
+/BeamLib/src/optimiser/wrapper/pysrc/lib/openmdao_log.txt
