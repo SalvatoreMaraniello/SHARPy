@@ -477,19 +477,7 @@ class XBeamSolver(ComponentWithDerivatives):
                     DesignStepNew = [red_fact[rr]*DesignStepCrash[ii] for ii in range(Ndes)]
                     #DesignValNew=[(self.DesignValOld[ii]+DesignStepNew[ii]) for ii in range(Ndes)]
                     DesignValNew=[(DesignValOld[ii]+DesignStepNew[ii]) for ii in range(Ndes)]
-                    
-                    # --- debug
-                    #print 'Old Design:', self.DesignValOld
-                    #print 'Crash Design', DesignValCrash
-                    #print 'Step Detected:', DesignStepNew
-                    #print 'New Design:', DesignValNew
-                    # --- debug
-                    
                     self.set_DesignVal(DesignValNew)
-                    
-                    # --- debug
-                    print 'Design Updated (check)', self.get_DesignVal()
-                    # --- debug
                     
                     try:
                         # reset all the variables

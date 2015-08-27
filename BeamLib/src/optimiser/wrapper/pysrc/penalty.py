@@ -85,7 +85,7 @@ if __name__=='__main__':
     
     alpha = 1.0
     pmax=6.0
-    plim=6.5
+    plim=7.0
     
     pushv = np.array([ quad_push(ff,pmax,plim,alpha) for ff in fv])
     dpv = np.diff(pushv)/(fv[1]-fv[0])
