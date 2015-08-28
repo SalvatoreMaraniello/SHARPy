@@ -50,7 +50,7 @@ module xbeam_shared
                                    ! For clamped node, this signifies weak enforcement of BCs.
   integer:: Fdof                   ! Number of node in the force vector for which all the forces/moments need to be computed
                                    ! (clamped BC, internal nodes)
-  integer:: Sflag                  ! Flag for spherical joint at the node (1: hinged, 0: no hinge)
+  integer:: Sflag=0                ! Flag for spherical joint at the node (1: hinged, 0: no hinge)
                                    ! This will imply weak enforcement of BCs.
                                    ! Only working for static solver and solution 912
 

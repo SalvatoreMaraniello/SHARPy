@@ -62,6 +62,7 @@ Debug/
 cmpc/
 
 
+
 /BeamLib/src/optimiser/res/*
 /BeamLib/src/optimiser/tex/*.aux
 /BeamLib/src/optimiser/tex/*.pdf
@@ -69,8 +70,6 @@ cmpc/
 /BeamLib/src/optimiser/tex/*.gz
 /.gitignore~
 /BeamLib/src/optimiser/wrapper/launch_prototype_file.py
-
-
 
 
 # OpenMDAO related
@@ -85,12 +84,6 @@ cmpc/
 /BeamLib/src/optimiser/.metadata/*/*
 /BeamLib/src/optimiser/.metadata/*/*/*
 /BeamLib/src/optimiser/wrapper/.metadata/*
-
-
-
-
-
-
 
 
 /BeamLib/src/optimiser/wrapper/openmdao_log.txt
@@ -151,3 +144,10 @@ cmpc/
 /.metadata/.plugins/org.eclipse.ui.workbench/workingsets.xml
 /.metadata/version.ini
 /BeamLib/src/optimiser/wrapper/pysrc/lib/openmdao_log.txt
+/BeamLib/src/optimiser/wrapper/test/output/fig/THpart1.png
+/BeamLib/src/optimiser/wrapper/test/output/fig/THpart2.png
+/BeamLib/src/optimiser/wrapper/test/output/fig/THpart3.png
+/BeamLib/src/optimiser/wrapper/test/output/fig/tippos.png
+/BeamLib/src/optimiser/wrapper/test/output/fig/Trq.png
+/BeamLib/src/optimiser/wrapper/test/output/flex_pendulum_new_000.h5
+/BeamLib/src/optimiser/wrapper/test/test_cplnnl_rigflex_dyn.py~

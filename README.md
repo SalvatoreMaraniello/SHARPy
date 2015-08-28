@@ -45,3 +45,25 @@ Run
 The first thing you should do is run some python unittests
 which can be found in the test/ directory of PyAero, PyBeam and PyCoupled
 solver scripts.
+
+
+### Installation Troubleshot ###
+
+- ensure paths to all python files are set-up correctly. This is achieved adding this path:
+    ./SHARPy/src/Main/
+  to sys.path list.
+
+- The BeamLib.so can be compiled manually:
+    1. go to:
+        /home/sm6110/git/SHARPy/BeamLib/src/wrapper
+    2. type:
+        make all
+
+- Run the shell script:
+    /home/sm6110/git/SHARPy/BeamLib/src/wrapper/f2py/runf2py.sh
+  The script relies on the F2PY executable f2py3. This is shipped with numpy but may require a manual installation. On
+  Ubuntu the executable comes with the standard numpy package from the Ubuntu disctribution. If a manual installation is 
+  required:
+    - find location where numpy is installed
+    - go to the f2py directory
+    - python3 setup.py install 

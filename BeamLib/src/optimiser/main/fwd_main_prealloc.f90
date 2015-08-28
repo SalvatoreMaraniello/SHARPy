@@ -300,7 +300,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                 !                        & ForceTime,ForcedVel,ForcedVelDot,PosIni,PsiIni,                &
                 !                        & PosDef,PsiDef,PosDotDef,PsiDotDef,PosPsiTime,VelocTime,DynOut, &
                 !                        & OutGrids,Options)
-                call cbeam3_solv_nlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic,             &
+                call cbeam3_solv_nlndyn_opt_control ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
                                         & ForcedVel,ForcedVelDot,PosIni,PsiIni,                          &
                                         & PosDef,PsiDef,PosDotDef,PsiDotDef,PosPsiTime,VelocTime,DynOut, &
                                         & OutGrids,Options)
@@ -342,8 +342,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
 
                 case (912)
                 ! coupled nonlinear rigid body dynamics and nonlinear structural dynamics
-                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic*0.d0,ForceDynamic, &
-                                                  & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
+                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic*0.d0,ForceDynAmp, &
+                                                  & ForceTime,RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
 
                 case (932)
@@ -351,7 +351,7 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                 ! coupled nonlinear rigid body dynamics and nonlinear structural dynamics with capability
                 ! of static load. The static solution is not run first (e.g. case of shperical joint, where
                 ! a static solution does not apply)
-                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
+                    call xbeam_solv_couplednlndyn_opt_control ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
                                                   & RefVel,RefVelDot,Quat,PosIni,PsiIni,         &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options,SUCCESS)
 
@@ -362,8 +362,8 @@ subroutine fwd_solver(NumElems,OutFile,Options,    &   ! from input_setup
                     call cbeam3_solv_nlnstatic (NumDof,Elem,Node,ForceStatic,PosIni,PsiIni,PosDef,PsiDef,Options)
                     PosIni = PosDef
                     PsiIni = PsiDef
-                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynamic, &
-                                                  & RefVel,RefVelDot,Quat,PosIni,PsiIni,    &
+                    call xbeam_solv_couplednlndyn ( 12,NumDof,Time,Elem,Node,ForceStatic,ForceDynAmp, &
+                                                  & ForceTime,RefVel,RefVelDot,Quat,PosIni,PsiIni,    &
                                                   & PosDef,PsiDef,PosDotDef,PsiDotDef,DynOut,Options)
 
                 case (952)

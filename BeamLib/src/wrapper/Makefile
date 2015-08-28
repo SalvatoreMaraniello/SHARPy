@@ -25,6 +25,7 @@ PATHLIB=../lib
 
 # Define source files
 F90SRC=$(PATHFOR)/install/src/xbeam_shared.f90 \
+       $(PATHLIB)/src/lib_solv.f90 \
        $(PATHLIB)/src/lib_sparse.f90 \
        $(PATHLIB)/src/lib_lu.f90 \
        $(PATHLIB)/src/lib_rot.f90 \
