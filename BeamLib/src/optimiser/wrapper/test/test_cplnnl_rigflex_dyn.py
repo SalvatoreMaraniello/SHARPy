@@ -46,7 +46,11 @@ xb.fargs=['DynOut','RefVel','Time','ForceDynamic']
 xb.ffun=vx_cost
 
 # run solver
+import time
+start=time.clock()
 xb.execute()
+elapsed=time.clock()-start
+print 'Done in %f sec!!!' %elapsed
 
 
 

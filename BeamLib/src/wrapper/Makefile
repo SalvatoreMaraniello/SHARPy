@@ -16,8 +16,8 @@
 DYNLIB=../../bin/BeamLib.so
 
 # Define flags
-F90FLAG=-fPIC -Wextra -cpp -DNOLAPACK -g
-LIBFLAG=-fPIC -shared -ffree-form -g
+F90FLAG=-fPIC -Wextra -cpp -DNOLAPACK -g -O3
+LIBFLAG=-fPIC -shared -ffree-form -g -O3
 
 # Define path relative to cwd
 PATHFOR=../fortran

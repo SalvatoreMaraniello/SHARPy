@@ -133,8 +133,8 @@ py: pywrap
 # f95, f2003: low level error (interface_lapack_v3.f90)
 
 F90COMP= gfortran
-F90OPTS= -std=gnu -m64 -cpp -J $(OBJDIR) -fPIC -ffree-form -g
-LIBFLAG=-fPIC -ffree-form -m64 -cpp -shared -g
+F90OPTS= -std=gnu -m64 -cpp -J $(OBJDIR) -fPIC -ffree-form -g -O3
+LIBFLAG=-fPIC -ffree-form -m64 -cpp -shared -g -O3
 LIBS= -llapack -lblas
 XBEAMLIB= -lxbeam
 

@@ -64,7 +64,7 @@ class Test_CantHALE_v_Murua2012_Smith2001(unittest.TestCase):
         
         
         # Aero solver options.
-        VMOPTS = DerivedTypesAero.VMopts(M = 1,\
+        VMOPTS = DerivedTypesAero.VMopts(M = 10,\
                                          N = XBINPUT.NumNodesTot - 1 ,\
                                          ImageMethod = True,\
                                          Steady = True,\

@@ -61,9 +61,13 @@ solver scripts.
 
 - Run the shell script:
     /home/sm6110/git/SHARPy/BeamLib/src/wrapper/f2py/runf2py.sh
-  The script relies on the F2PY executable f2py3. This is shipped with numpy but may require a manual installation. On
-  Ubuntu the executable comes with the standard numpy package from the Ubuntu disctribution. If a manual installation is 
-  required:
-    - find location where numpy is installed
-    - go to the f2py directory
-    - python3 setup.py install 
+  The script relies on the F2PY, which is installed with numpy. If multiple python installations are icluded, ensure 
+  that the correct script is called by modifying the call to 'f2py3.2' to 'f2py3' or the full path of the script.
+
+- Eigen and boost installation:
+    1. You can try to download from: 
+        http://eigen.tuxfamily.org/index.php?title=Main_Page#Download 
+        http://sourceforge.net/projects/boost/?source=typ_redirect
+    and follow the instructions. Usually no compilation is required.
+    2. In the eclipse project/makefile include the path to X, where X is the folder containing Eigen/Dense. If no 
+    compilation was required, these are the folders you extracted

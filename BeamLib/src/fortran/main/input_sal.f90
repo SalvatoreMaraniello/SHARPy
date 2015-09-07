@@ -99,7 +99,7 @@ module input
   real(8) :: sigma
 
 ! INPUT START
-  TestCase='PTW2'! 'BEND'!'NCB1'
+  TestCase='TPY0'!'PTW2'! 'BEND'!'NCB1'
   Options%Solution=112
 
 ! Default values.

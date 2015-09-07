@@ -16,6 +16,7 @@
 #include <vector>
 #include <assert.h>
 #include "omp.h"
+#include <iostream> //sm fix(?)
 
 void KJMethodForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 		const double* ZetaStar_Vec, const double* GammaStar_Vec,\
