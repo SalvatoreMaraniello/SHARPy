@@ -3,6 +3,12 @@ Created on 25 Feb 2013
 
 @author: rjs10
 '''
+
+import os
+import sys
+sys.path.append( os.environ["SHARPYDIR"]+'/src' )
+sys.path.append( os.environ["SHARPYDIR"]+'/src/Main' )
+
 import unittest
 import SharPySettings as Settings
 import numpy as np
@@ -152,7 +158,6 @@ class Test_GolandFlutter(unittest.TestCase):
                                                                U_mag = U_mag,\
                                                                alpha = 2.0*np.pi/180.0,\
                                                                theta = 0.0,\
-                                                               ZetaDotTest = 0.0,\
                                                                WakeLength = WakeLength)
                             
                             "aeroelastic opts"

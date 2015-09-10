@@ -26,6 +26,8 @@
 !								function that had previously assumed fortran-...
 !								 declared defaults
 ! 20130111 1.1     R. Simpson  Added wrapper for cbeam3_solv_nlndyn_accel
+!
+! 20150908 ?       S.Maraniello Adapt for hinge BCs
 ! 
 !-------------------------------------------------------------------------------
 ! 
@@ -100,13 +102,15 @@ module test
     ! Collect separate variables into xbnode fields
     ! Memory allocation is done before the call
     !---------------------------------------------------------------------------
-    subroutine pack_xbnode(NumNodes,Node,Master,Vdof,Fdof)
+    subroutine pack_xbnode(NumNodes,Node,Master,Vdof,Fdof,Sflag)
         
         integer     ,intent(in) :: NumNodes
         type(xbnode),intent(out):: Node(NumNodes)
         integer     ,intent(in) :: Master(2*NumNodes)
         integer     ,intent(in) :: Vdof(NumNodes)
         integer     ,intent(in) :: Fdof(NumNodes)
+
+        integer     ,intent(in), optional :: Sflag(NumNodes)
         
         integer:: i,i2
         
@@ -117,6 +121,13 @@ module test
             Node(i)%Vdof = Vdof(i)
             Node(i)%Fdof = Fdof(i)
         end do
+
+        ! Opional - Sflag
+        if (present(Sflag)) then
+            do i=1,NumNodes
+                Node(i)%Sflag = Sflag(i)
+            end do
+        end if
         
         return
         
@@ -238,13 +249,15 @@ module test
     ! Extract xbnode fields to separate variables
     ! Memory allocation is done before the call
     !---------------------------------------------------------------------------
-    subroutine unpack_xbnode(NumNodes,Node,Master,Vdof,Fdof)
+    subroutine unpack_xbnode(NumNodes,Node,Master,Vdof,Fdof, Sflag)
         
         integer     ,intent(in) :: NumNodes
         type(xbnode),intent(in) :: Node(NumNodes)
         integer     ,intent(out):: Master(2*NumNodes)
         integer     ,intent(out):: Vdof(NumNodes)
         integer     ,intent(out):: Fdof(NumNodes)
+
+        integer     ,intent(out), optional :: Sflag(NumNodes)
         
         integer:: i,i2
         
@@ -255,6 +268,13 @@ module test
             Fdof(i) = Node(i)%Fdof
         end do
         
+        ! Optional - Sflag
+        if (present(Sflag)) then
+            do i=1,NumNodes
+                Sflag(i) = Node(i)%Sflag
+            end do
+        end if
+
         return
         
     end subroutine unpack_xbnode
@@ -901,7 +921,8 @@ module test
     subroutine wrap_xbeam_undef_dofs(NumElems,NumNodes_tot,NumNodes,MemNo,&
     &           Conn,Master_Array,Length,PreCurv,Psi,Vector,Mass_Array,&
     &           Stiff_Array,InvStiff_Array,RBMass_Array,BoundConds,&
-    &           Nod_Master,Nod_Vdof,Nod_Fdof,NumDof)
+    &           Nod_Master,Nod_Vdof,Nod_Fdof,NumDof,&
+    &           Nod_Sflag                                                  ) ! optional variables
         
         integer,intent(in)   :: NumElems
         integer,intent(in)   :: NumNodes_tot
@@ -922,26 +943,37 @@ module test
         integer,intent(inout):: Nod_Vdof(NumNodes_tot)
         integer,intent(inout):: Nod_Fdof(NumNodes_tot)
         integer,intent(inout):: NumDof
-        
+
+        !integer,intent(inout),optional:: Nod_Sflag(NumNodes_tot)
+        integer,intent(inout):: Nod_Sflag(NumNodes_tot)        
+
         type(xbelem),allocatable:: Elem(:)
         type(xbnode),allocatable:: Node(:)
         
         allocate(Elem(NumElems))
         allocate(Node(NumNodes_tot))
-        
+
         ! Convert PY data to F90 data
         call do_xbelem_var(NumElems,Elem,NumNodes,MemNo,Conn,Master_Array,&
         &       Length,PreCurv,Psi,Vector,Mass_Array,Stiff_Array,&
         &       InvStiff_Array,RBMass_Array)
         
-        call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
-        
+        !if(present(Nod_Sflag)) then
+            call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof,Nod_Sflag)
+        !else
+        !    call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
+        !end if
+
         ! Identify nodal degrees of freedom
         call xbeam_undef_dofs(Elem,BoundConds,Node,NumDof)
         
         ! Convert F90 data to PY data
-        call unpack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
-        
+        !if(present(Nod_Sflag)) then
+            call unpack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof,Nod_Sflag)
+        !else
+        !    call unpack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
+        !end if                
+
         deallocate(Elem)
         deallocate(Node)
         

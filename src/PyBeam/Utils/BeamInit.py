@@ -105,7 +105,8 @@ def Static(XBINPUT,XBOPTS,moduleName = None):
         XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)), 
         XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)), 
         XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)), 
-        ct.byref(NumDof) )
+        ct.byref(NumDof),
+        XBNODE.Sflag.ctypes.data_as(ct.POINTER(ct.c_int)) )
     if XBOPTS.PrintInfo==True:
         sys.stdout.write('done\n')
     

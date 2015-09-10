@@ -34,7 +34,7 @@ import re
 from math import pow
 from PyBeam.Utils.XbeamLib import Skew
 from PyAero.UVLM.Utils.DerivedTypesAero import Gust
-import PyMPC.MPC as MPC
+###import PyMPC.MPC as MPC    sm out: moved to __main__
 from PyCoupled.Utils.CoupledIO import OpenOutFile, WriteToOutFile
 
 def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
@@ -581,6 +581,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # For interactive analysis at end of simulation set breakpoint.
     pass
 
+    return DynOut
+
 def panellingFromFreq(freq,c=1.0,Umag=1.0):
     """@brief Calculate adequate spatial/temporal resolution on UVLM grid
     based on a frequency of interest.
@@ -630,6 +632,10 @@ def getState(Gamma,GammaStar,GammaDot,X,dXdt):
     return x
 
 if __name__ == '__main__':
+    
+    # sm: moved here, so import does not affect installations without MPC
+    import PyMPC.MPC as MPC
+    
     # Beam options.
     XBOPTS = DerivedTypes.Xbopts(FollowerForce = ct.c_bool(False),
                                  MaxIterations = ct.c_int(50),

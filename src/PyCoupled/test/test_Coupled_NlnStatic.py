@@ -3,6 +3,12 @@ Created on 15 Feb 2013
 
 @author: rjs10
 '''
+
+import os
+import sys
+sys.path.append( os.environ["SHARPYDIR"]+'/src' )
+sys.path.append( os.environ["SHARPYDIR"]+'/src/Main' )
+
 import unittest
 import SharPySettings as Settings
 import numpy as np

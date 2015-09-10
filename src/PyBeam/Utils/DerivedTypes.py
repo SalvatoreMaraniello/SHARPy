@@ -7,7 +7,12 @@ xbeam_shared.f90 plus extras.
 @version    2.0
 @date       14/11/2012
 @pre        None
-@warning    Stiffness parameter Sigma not implemented.'''
+@warning    Stiffness parameter Sigma not implemented.
+
+@modified   S.Maraniello
+@date       08/09/2015
+@comment    Sflag for spherical BCs added
+'''
 
 import sys
 import numpy as np #http://docs.scipy.org/doc/numpy/reference/
@@ -195,11 +200,15 @@ class Xbnode:
     @param Master Master node info for each node:
      (master elem, node within master elem).
     @param Vdof Degree of freedom in velocity vector.
-    @param Fdof Degree of freedom in force vector."""
+    @param Fdof Degree of freedom in force vector.
+    @param Sflag Spherical BC
+    
+    """
     def __init__(self, NumNodesTot):
         self.Master = np.zeros(2*NumNodesTot,dtype=ct.c_int,order='F')       
         self.Vdof = np.zeros(NumNodesTot,dtype=ct.c_int,order='F') 
         self.Fdof = np.zeros(NumNodesTot,dtype=ct.c_int,order='F')
+        self.Sflag= np.zeros(NumNodesTot,dtype=ct.c_int,order='F')
 
 if(__name__ == '__main__'):
     print('Batch run of PyAsblyStruct.py...')
