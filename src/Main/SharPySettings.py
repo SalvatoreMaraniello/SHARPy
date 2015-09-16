@@ -23,7 +23,10 @@ userid = getpass.getuser()
 #sm
 #SharPyProjectDir = '/home/' + userid + '/git/SHARPy/' # works on ubuntu
 #SharPyProjectDir = os.path.expanduser('~') + '/git/SHARPy/' # works if installed in home
-SharPyProjectDir = os.environ["SHARPYDIR"]+'/' # works if you setup an environmental variable during the install process
+try:
+    SharPyProjectDir = os.environ["SHARPYDIR"]+'/' # works if you setup an environmental variable during the install process
+except:
+    SharPyProjectDir = os.path.expanduser('~') + '/git/SHARPy/'    
 
 BeamLibDir = SharPyProjectDir + 'BeamLib/bin/'
 BeamLibName = './BeamLib.so'

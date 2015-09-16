@@ -187,6 +187,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     # Initial Accel.
     dXddt[:] = np.dot(np.linalg.inv(MglobalFull), -Qglobal)
+    ###dXddt[:] = np.linalg.solve(MglobalFull, -Qglobal) # sm: does not speed up
     
     # Record position of all grid points in global FoR at initial time step.
     DynOut[0:NumNodes_tot.value,:] = PosDefor
@@ -490,7 +491,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             # Solve for update.
             DX[:] = np.dot(np.linalg.inv(Asys), -Qglobal)
-            
+            #DX[:] = np.linalg.solve(Asys, -Qglobal) # sm: does not speed up
+                        
+
             # Corrector step.
             X = X + DX
             dXdt = dXdt + DX*gamma/(beta*dt)

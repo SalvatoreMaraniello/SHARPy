@@ -8,7 +8,7 @@ This module defines the beam geometry
 
 import numpy as np
 
-def straight( PosIni, BeamLength=1.0, axis_vector=np.array([1,0,0]) ):
+def straight( PosIni, BeamLength=1.0, axis_vector=np.array([1,0,0]), shift=0.0 ):
     ''' 
     Defines the geometry of a straight beam.
     
@@ -17,6 +17,13 @@ def straight( PosIni, BeamLength=1.0, axis_vector=np.array([1,0,0]) ):
     
     PosIni contains the initial nodes coordinates and can be initialised 
     using beamvar.fwd_static
+    
+    WARNING: SHIFT NOT WORKING! The shift was introduced when attempting to
+    move the spherical joint position by simply defining a beam that started
+    from a negative position. [9 sep 2015] 
+    Issues arise in the fortran code, as matrices allocated as sparse do not
+    have enough memory to store negative numbers (arising from the negative)
+    positions
     '''
     
     # check No. of nodes
@@ -25,10 +32,18 @@ def straight( PosIni, BeamLength=1.0, axis_vector=np.array([1,0,0]) ):
     # normalise unit vector
     axis_vector = BeamLength*axis_vector/np.linalg.norm(axis_vector)
     
-    # allocate coordinates
-    PosIni[:,0]=np.linspace(0,axis_vector[0],NumNodes)
-    PosIni[:,1]=np.linspace(0,axis_vector[1],NumNodes)
-    PosIni[:,2]=np.linspace(0,axis_vector[2],NumNodes)
+    ### sm 9 sep 2015: shift introduced to allow for hinge to be placed at
+    ### half beam without changing the solver.
+    ### Fortran issues as the sparse matrices do not have enough memory when
+    ### numers become negative!!!
+
+    shift=0.0#0.5*BeamLength
+    #PosIni[:,0]=np.linspace(0,axis_vector[0],NumNodes)
+    #PosIni[:,1]=np.linspace(0,axis_vector[1],NumNodes)
+    #PosIni[:,2]=np.linspace(0,axis_vector[2],NumNodes)
+    PosIni[:,0]=np.linspace(-shift,axis_vector[0]-shift,NumNodes)
+    PosIni[:,1]=np.linspace(-shift,axis_vector[1]-shift,NumNodes)
+    PosIni[:,2]=np.linspace(-shift,axis_vector[2]-shift,NumNodes)
     
     return PosIni
 

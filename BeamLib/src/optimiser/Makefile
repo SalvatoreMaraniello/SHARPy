@@ -134,6 +134,7 @@ py: pywrap
 
 F90COMP= gfortran
 F90OPTS= -std=gnu -m64 -cpp -J $(OBJDIR) -fPIC -ffree-form -g -O3
+F90OPTSFAST= -std=gnu -m64 -cpp -J $(OBJDIR) -fPIC -ffree-form -g
 LIBFLAG=-fPIC -ffree-form -m64 -cpp -shared -g -O3
 LIBS= -llapack -lblas
 XBEAMLIB= -lxbeam
@@ -295,8 +296,8 @@ wrapsharedlib: $(OBJOPTWRAP)
 xbeamopt_test: $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o
 	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/xbeamopt_test.exe $(OBJLIB) $(OBJDIR)/xbeam_shared.o $(OBJOPTLIB) $(OBJOPTSRC) $(OPTOBJDIR)/opt_test.o $(LIBS) $(LIBSDIR)	
 	
-optlib_test: $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o
-	$(F90COMP) $(F90OPTS) -o $(OPTBINDIR)/optlib_test.exe $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o $(LIBS) $(LIBSDIR)	
+optlib_test: $(OBJLIB) $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o
+	$(F90COMP) $(F90OPTSFAST) -o $(OPTBINDIR)/optlib_test.exe $(OBJOPTLIB) $(OPTOBJDIR)/lib_test.o $(OBJLIB) $(LIBS) $(LIBSDIR)	
 	
 	
 #--------------------------------------------------------------- Forward Problem

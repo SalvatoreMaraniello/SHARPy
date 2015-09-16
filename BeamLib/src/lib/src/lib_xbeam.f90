@@ -36,6 +36,8 @@
 !
 !-> Modifications.-
 ! 20120317 A.Da Ronch Conditional compilation added (NOLAPACK)
+! 201509xx S. Maraniello - Added terms for spherical joints
+!                        - Added testing module
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module lib_xbeam
@@ -1698,6 +1700,256 @@ module lib_xbeam
   return
  end function xbeam_QuadSkew
 
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!->Function XBEAM_DROT_DQ
+!
+!->Description.-
+!
+!   Given the rotation operator in Euler quaternions provided by XBEAM_ROT, Rga,
+!   (See Aircraft Control and Simulation by Stevens, Lewis or Cesnik 2007),
+!   computes the 3rd order tensor C:
+!
+!   Cijk = dR_ij/dq_k
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+function xbeam_dRot_dq (q)
+
+    ! I/O Variables.
+    real(8),  intent(inout):: q(:)           ! Quaternion
+    real(8)                :: xbeam_dRot_dq(3,3,4)
+    real(8)                :: C(3,3,4)
+
+    C=0.d0
+
+    !dCdq1
+    ![  2*q(1),  2*q(4), -2*q(3)],
+    ![ -2*q(4),  2*q(1),  2*q(2)],
+    ![  2*q(3), -2*q(2),  2*q(1)]
+    C(1,:,1) = [  2*q(1),  2*q(4), -2*q(3)]
+    C(2,:,1) = [ -2*q(4),  2*q(1),  2*q(2)]
+    C(3,:,1) = [  2*q(3), -2*q(2),  2*q(1)]
+
+    !dCdq2
+    ![ 2*q(2),  2*q(3),  2*q(4)],
+    ![ 2*q(3), -2*q(2),  2*q(1)],
+    ![ 2*q(4), -2*q(1), -2*q(2)]
+    C(1,:,2) = [ 2*q(2),  2*q(3),  2*q(4)]
+    C(2,:,2) = [ 2*q(3), -2*q(2),  2*q(1)]
+    C(3,:,2) = [ 2*q(4), -2*q(1), -2*q(2)]
+
+    !dCdq3
+    ![ -2*q(3), 2*q(2), -2*q(1)],
+    ![  2*q(2), 2*q(3),  2*q(4)],
+    ![  2*q(1), 2*q(4), -2*q(3)]
+    C(1,:,3)=[ -2*q(3), 2*q(2), -2*q(1)]
+    C(2,:,3)=[  2*q(2), 2*q(3),  2*q(4)]
+    C(3,:,3)=[  2*q(1), 2*q(4), -2*q(3)]
+
+    !dCdq4
+    ![ -2*q4,  2*q1, 2*q2],
+    ![ -2*q1, -2*q4, 2*q3],
+    ![  2*q2,  2*q3, 2*q4]])
+    C(1,:,4)=[ -2*q(4),  2*q(1), 2*q(2)]
+    C(2,:,4)=[ -2*q(1), -2*q(4), 2*q(3)]
+    C(3,:,4)=[  2*q(2),  2*q(3), 2*q(4)]
+
+
+    xbeam_dRot_dq=C
+
+    return
+
+end function xbeam_dRot_dq
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!->Function XBEAM_D2ROT_DQ2
+!
+!->Description.-
+!
+!   Given the rotation operator in Euler quaternions provided by XBEAM_ROT, Rga,
+!   (See Aircraft Control and Simulation by Stevens, Lewis or Cesnik 2007),
+!   computes the 4rd order tensor C:
+!
+!   Cijkl = ddR_ij/dqk_ql = constant
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+subroutine xbeam_d2Rot_dq2 (C)
+
+    ! I/O Variables.
+    real(8)                :: q(4)      ! Quaternion
+    real(8), intent(inout) :: C(3,3,4,4)
+    real(8)                :: dCxq1(3,3,4),dCxq2(3,3,4),dCxq3(3,3,4),dCxq4(3,3,4)
+
+    C=0.d0
+
+    ! utility matrices
+    q=0.d0
+    q(1)=1.d0
+    dCxq1 = xbeam_dRot_dq(q)
+    q=0.d0
+    q(2)=1.d0
+    dCxq2 = xbeam_dRot_dq(q)
+    q=0.d0
+    q(3)=1.d0
+    dCxq3 = xbeam_dRot_dq(q)
+    q=0.d0
+    q(4)=1.d0
+    dCxq4 = xbeam_dRot_dq(q)
+
+    !C_dqi_dq1
+    C(:,:,1,1)=dCxq1(:,:,1)
+    C(:,:,2,1)=dCxq1(:,:,2)
+    C(:,:,3,1)=dCxq1(:,:,3)
+    C(:,:,4,1)=dCxq1(:,:,4)
+
+    !C_dqi_dq2
+    C(:,:,1,2)=dCxq2(:,:,1)
+    C(:,:,2,2)=dCxq2(:,:,2)
+    C(:,:,3,2)=dCxq2(:,:,3)
+    C(:,:,4,2)=dCxq2(:,:,4)
+
+    !C_dqi_dq3
+    C(:,:,1,3)=dCxq3(:,:,1)
+    C(:,:,2,3)=dCxq3(:,:,2)
+    C(:,:,3,3)=dCxq3(:,:,3)
+    C(:,:,4,3)=dCxq3(:,:,4)
+
+    !C_dqi_dq4
+    C(:,:,1,4)=dCxq4(:,:,1)
+    C(:,:,2,4)=dCxq4(:,:,2)
+    C(:,:,3,4)=dCxq4(:,:,3)
+    C(:,:,4,4)=dCxq4(:,:,4)
+
+    ! dC1x
+    !C(:,:,1,1) = [ [2, 0, 0], [0, 2, 0], [0, 0, 2]  ]
+    !C(:,:,1,2) = [ [0, 0, 0], [0, 0, 2], [0, -2, 0] ]
+    !C(:,:,1,3) = [ [0, 0, -2],[0, 0,  0],[2, 0,  0] ]
+    !C(:,:,1,4) = [ [0, 2, 0], [-2, 0, 0],[ 0, 0, 0] ]
+
+    ! dC2x
+    !C(:,:,2,1) = [ [0,  0, 0], [0,  0, 2], [0, -2, 0]]
+    !C(:,:,2,2) = [ [2,  0,  0], [0, -2,  0], [0,  0, -2]]
+    !C(:,:,2,3) = [ [0, 2, 0], [2, 0, 0], [0, 0, 0] ]
+    !C(:,:,2,4) = [ [0, 0, 2], [0, 0, 0], [2, 0, 0]]
+
+    return
+
+end subroutine xbeam_d2Rot_dq2
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+!->Function XBEAM_SPH_origin
+!
+!->Description.-
+!
+! For given orientation (q) and angular velocities/accelerations, the routine
+! returns the position, velocity and acceleration of the FoR A origin
+! such that the node where the spherical joint is applied has zero displacement,
+! velocity and acceleration.
+!
+! Note that the routine assumes that for q=(1,0,0,0) the FoR A and G are parallel!
+! Also, q s the defined by the rotation that transofrms G into A (or, conversely,
+! the rotation that bring A from its initial configuration to its current one).
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+subroutine xbeam_sph_origin (q,w,dw,possph0,Rsph0,posA,velA,accA)
+
+    ! I/O Variables.
+    real(8), intent(inout):: q(4)          ! Quaternion
+    real(8), intent(in)   :: w(3), dw(3)   ! FoR A angular velocity/acceleration
+    real(8), intent(inout):: Rsph0(3), possph0(3)      ! position of spherical joint in FoR A (constant) and G (for q=(1,0,0,0))
+    real(8), intent(out)  :: posA(3), velA(3), accA(3) ! pos/vel/acc of FoR A origin when having spherical joints
+
+    ! Internal
+    real(8)   :: dq(4), ddq(4)     ! Quaternion I and II time derivatives
+    real(8)   :: Om(4,4), dOm(4,4) ! Omega matrix for quaternion time derivative
+                                   ! and its time derivative
+
+    real(8)   :: dC(3,3,4), ddC(3,3,4,4) ! Tensors of rotational operator
+    real(8)   :: Ctot(3,3)               ! matrix for sums
+    integer   :: ii,jj
+
+    ! skew symmetric matrices for quaterion
+    Om =xbeam_QuadSkew(w)
+    dOm=xbeam_QuadSkew(dw)
+
+    ! compute quaternion derivatives
+    dq  = -0.5_8 * matmul(Om,q)
+    ddq = -0.5_8 * ( matmul(dOm,q) + matmul(Om,dq) )
+
+    ! compute tensors
+    call xbeam_d2Rot_dq2 (ddC)
+    dC=xbeam_dRot_dq(q)
+
+
+    ! quaternion acceleration term
+    Ctot=0.d0
+    do ii=1,4
+        Ctot = Ctot + dC(:,:,ii)*ddq(ii)
+    end do
+
+    ! quaternion velocities term
+    do ii=1,4
+        do jj=1,4
+            Ctot = Ctot + ddC(:,:,ii,jj)*dq(ii)*dq(jj)
+        end do
+    end do
+
+
+    ! compute acceleration
+    accA=0.d0
+    accA = -matmul(transpose(Ctot),Rsph0)
+
+    ! compute velocity
+    Ctot=0.d0
+     do ii=1,4
+        Ctot = Ctot + dC(:,:,ii)*dq(ii)
+    end do
+    velA=-matmul(transpose(Ctot),Rsph0)
+
+    ! compute position
+    posA = possph0 - matmul(transpose(xbeam_Rot(q)),Rsph0)
+
+    return
+
+end subroutine xbeam_sph_origin
+
+
+
+    ! -------------------------------------------------------------------------
+    !
+    ! Build quaternion using definition
+    !
+    !--------------------------------------------------------------------------
+    subroutine build_quat(a,nvec,qvec)
+
+        real(8), intent(out) :: qvec(4)  ! Quaternion
+        real(8), intent(in)  :: nvec(3)  ! normal vector
+        real(8)  :: a        ! angle of rotation
+
+        qvec=0.d0
+        qvec(1)  =cos(0.5_8*a)
+        qvec(2:4)=sin(0.5_8*a)*nvec
+
+    end subroutine build_quat
+
+
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
 !->Subroutines XBEAM_LAPACK_INV and XBEAM_2NORM
@@ -1758,3 +2010,286 @@ module lib_xbeam
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 end module lib_xbeam
+
+
+
+
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!
+! S. Maraniello 15 Sep 2015
+!
+! Testing module
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+module lib_xbeam_test
+
+
+ use lib_xbeam
+ implicit none
+
+
+    real(8),parameter:: pi=3.14159265358979
+
+    real(8)  :: q(4)          ! Quaternion
+    real(8)  :: w(3), dw(3)   ! FoR A angular velocity/acceleration
+    real(8)  :: Rsph0(3), possph0(3)      ! position of spherical joint in FoR A (constant) and G (at t=0 or for q=(1,0,0,0))
+    real(8)  :: posA(3), velA(3), accA(3) ! pos/vel/acc of FoR A origin when having spherical joints
+    real(8)  :: nv(3) ! normal veoctor to help defining quaternions
+    real(8)  :: alpha, alpha02 ! angle of rotation
+
+    integer   :: ii,jj
+
+
+ contains
+
+
+    ! --------------------------------------------------------------------------
+    ! Test build quaternion
+    subroutine build_quat_test
+
+        print *, '--------------------------------------------- Test build_quat'
+        alpha=pi/3.d0
+        print *, 'alpha=', alpha
+
+        do ii=1,3
+            nv=0.d0
+            nv(ii)=1.d0
+            call build_quat(alpha,nv,q)
+            print*, 'nv=', nv
+            print*, 'quat=', q
+        end do
+
+    end subroutine build_quat_test
+
+
+    ! --------------------------------------------------------------------------
+    subroutine xbeam_sph_origin_test
+
+        print *, '--------------------------------------- Test xbeam_sph_origin'
+
+        Rsph0=0.d0; w=0.d0; dw=0.d0
+        possph0=0.d0; Rsph0=0.d0;
+        posA=0.d0; velA=0.d0; accA=0.d0;
+
+        ! -------------------------------------------------------------- case 01
+        print *, '--- case 01'
+        Rsph0(1)=2.0
+        alpha=pi/6.d0
+        nv=0.d0;
+        nv(2)=1.d0
+        call build_quat(alpha,nv,q)
+        ! get initial position in FoR G
+
+        ! get FoR A origin position
+        call xbeam_sph_origin(q,w,dw,Rsph0,Rsph0,posA,velA,accA)
+
+        print *, 'posA', posA
+        print *, 'posA expected=(0.26794,0,1)'
+
+        ! -------------------------------------------------------------- case 02
+        print *, '--- case 02'
+        Rsph0(1)=2.d0;
+        alpha= pi/2.d0
+        print *, 'alpha=', alpha, 'Rsph0=', Rsph0
+
+        do ii=1,3
+            ! define rotation (build quaternion)
+            nv=0.d0
+            nv(ii)=1.d0
+            call build_quat(alpha,nv,q)
+            ! get initial position in FoR G
+
+            ! get FoR A origin position
+            call xbeam_sph_origin(q,w,dw,Rsph0,Rsph0,posA,velA,accA)
+            print *, 'posA', posA
+        end do
+
+        ! -------------------------------------------------------------- case 03
+        print *, '--- case 03'
+        Rsph0(1:2)=2.d0;
+        print *, 'Rsph0=', Rsph0
+        !alpha02= pi/6.d0
+        !print *, 'alpha IC=', alpha02, 'Rsph0=', Rsph0
+
+        nv=0.d0; nv(2)=1.d0;
+        call build_quat(alpha02,nv,q)
+        ! get initial position in FoR G
+
+
+        alpha=pi/2.d0
+        print *, 'alpha rotation = ', alpha
+        do ii=1,3
+            ! define rotation (build quaternion)
+            nv=0.d0
+            nv(ii)=1.d0
+            call build_quat(alpha,nv,q)
+            ! get FoR A origin position
+            call xbeam_sph_origin(q,w,dw,Rsph0,Rsph0,posA,velA,accA)
+            print *, 'posA', posA
+        end do
+
+        ! -------------------------------------------------------------- case 04
+        print *, '--- case 04'
+        print *, 'Test posA when pospsh0 != Rsph0 (FoR A and G parallel but not coincident)'
+        Rsph0=0.d0; Rsph0(1:2)=2.d0;
+        possph0=0.d0; possph0(1)=5.d0; possph0(2)=3.d0;
+        alpha=pi/2.d0
+
+        print *, 'alpha rotation = ', alpha
+        print *, 'Rsph0= ', Rsph0
+        print *, 'posph0=', possph0
+
+        do ii=1,3
+            ! define rotation (build quaternion)
+            nv=0.d0
+            nv(ii)=1.d0
+            call build_quat(alpha,nv,q)
+             ! get FoR A origin position
+            call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+            print *, 'posA', posA
+        end do
+
+        ! -------------------------------------------------------------- case 05
+        print *, '--- case 05'
+        print *, 'Test acceleration due to angular velocities only!'
+
+        ! assign a random initial position (last of case 04)
+        Rsph0=0.d0; Rsph0(1)=1.d0; Rsph0(2)=2.d0;!Rsph0(1:2)=2.d0;
+        possph0=0.d0; possph0(1)=5.d0; possph0(2)=3.d0;
+        alpha=pi/2.d0
+        call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+
+        print *, 'alpha rotation = ', alpha
+        print *, 'Rsph0= ', Rsph0
+        print *, 'posph0=', possph0
+        print *, 'posA', posA
+
+        do ii=1,3
+            ! define angular velocity
+            w=0.d0; w(ii)=5.d0
+            ! check posA is always the same
+            call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+            print *, 'w   ', w
+            print *, 'velA', velA
+            print *, 'accA', accA
+        end do
+        ! neutral axis case
+        w=0.d0; w(1)=5.d0; w(2)=10.d0;
+        call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+        print *, 'w   ', w
+        print *, 'velA', velA
+        print *, 'accA', accA
+
+        ! -------------------------------------------------------------- case 06
+        print *, '--- case 06'
+        print *, 'Test acceleration due to angular velocities and accelerations'
+        print *, '(when acting in the same direction)'
+
+        ! assign a random initial position (last of case 04)
+        Rsph0=0.d0; Rsph0(1)=1.d0; Rsph0(2)=2.d0;!Rsph0(1:2)=2.d0;
+        possph0=0.d0; possph0(1)=5.d0; possph0(2)=3.d0;
+        alpha=pi/2.d0
+        call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+
+        print *, 'alpha rotation = ', alpha
+        print *, 'Rsph0= ', Rsph0
+        print *, 'posph0=', possph0
+        print *, 'posA', posA
+
+        do ii=1,3
+            ! define angular velocity/accelerations
+            w=0.d0; w(ii)=5.d0
+            dw=0.d0; dw(ii)=3.d0
+            ! check posA is always the same
+            call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+            print *, 'w   ', w
+            print *, 'dw   ', dw
+            print *, 'velA', velA
+            print *, 'accA', accA
+        end do
+        ! neutral axis case
+        w=0.d0; w(1)=5.d0; w(2)=10.d0;
+        dw=0.d0; dw(1)=5.d0; dw(2)=10.d0;
+        call xbeam_sph_origin(q,w,dw,possph0,Rsph0,posA,velA,accA)
+        print *, 'w   ', w
+        print *, 'dw   ', dw
+        print *, 'velA', velA
+        print *, 'accA', accA
+
+         ! --- case 01
+         ! posA  0.26794920700158609        0.0000000000000000        1.0000000252367827
+         ! posA expected=(0.26794,0,1)
+         ! --- case 02
+         ! alpha=   1.5707963705062866      Rsph0=   2.0000000000000000        0.0000000000000000        0.0000000000000000
+         ! posA   0.0000000000000000        0.0000000000000000        0.0000000000000000
+         ! posA   2.0000000874227801        0.0000000000000000        1.9999999999999980
+         ! posA   2.0000000874227801       -1.9999999999999980        0.0000000000000000
+         ! --- case 03
+         ! Rsph0=   2.0000000000000000        2.0000000000000000        0.0000000000000000
+         ! alpha rotation =    1.5707963705062866
+         ! posA   0.0000000000000000        2.0000000874227801       -1.9999999999999980
+         ! posA   2.0000000874227801        0.0000000000000000        1.9999999999999980
+         ! posA   4.0000000874227783       8.74227821245909809E-008   0.0000000000000000
+         ! --- case 04
+         !alpha rotation =    1.5707963705062866
+         !Rsph0=    2.0000000000000000        2.0000000000000000        0.0000000000000000
+         !posph0=   5.0000000000000000        3.0000000000000000        0.0000000000000000
+         !posA   3.0000000000000000        3.0000000874227801       -1.9999999999999980
+         !posA   5.0000000874227801        1.0000000000000000        1.9999999999999980
+         !posA   7.0000000874227783        1.0000000874227821        0.0000000000000000
+         !--- case 05
+         !Test velocity!
+         !alpha rotation =    1.5707963705062866
+         !Rsph0=    1.0000000000000000        2.0000000000000000        0.0000000000000000
+         !posph0=   5.0000000000000000        3.0000000000000000        0.0000000000000000
+         !posA   7.0000000437113883        2.0000000874227810        0.0000000000000000
+         !w      5.0000000000000000        0.0000000000000000        0.0000000000000000
+         !velA  -0.0000000000000000       -0.0000000000000000       -10.000000000000000
+         !accA  -49.999999999999957      -2.18556950493109525E-006  -0.0000000000000000
+         !w      0.0000000000000000        5.0000000000000000        0.0000000000000000
+         !velA  -0.0000000000000000       -0.0000000000000000        5.0000000000000000
+         !accA -1.09278475246554763E-006   24.999999999999979       -0.0000000000000000
+         !w      0.0000000000000000        0.0000000000000000        5.0000000000000000
+         !velA   4.9999995628860949        10.000000218556941       -0.0000000000000000
+         !accA  -50.000001092784707        24.999997814430472       -0.0000000000000000
+         !w      5.0000000000000000        10.000000000000000        0.0000000000000000
+         !velA  -0.0000000000000000       -0.0000000000000000       1.77635683940025046E-015
+         !accA  7.10542735760100186E-015  -0.0000000000000000       -0.0000000000000000
+         !--- case 06
+         !Test acceleration due to angular velocities and accelerations
+         !(when acting in the same direction)
+         !alpha rotation =    1.5707963705062866
+         !Rsph0=    1.0000000000000000        2.0000000000000000        0.0000000000000000
+         !posph0=   5.0000000000000000        3.0000000000000000        0.0000000000000000
+         !posA   7.0000000437113883        2.0000000874227810        0.0000000000000000
+         !w      5.0000000000000000        0.0000000000000000        0.0000000000000000
+         !dw      3.0000000000000000        0.0000000000000000        0.0000000000000000
+         !velA  -0.0000000000000000       -0.0000000000000000       -10.000000000000000
+         !accA  -49.999999999999957      -2.18556950493109525E-006  -6.0000000000000000
+         !w      0.0000000000000000        5.0000000000000000        0.0000000000000000
+         !dw      0.0000000000000000        3.0000000000000000        0.0000000000000000
+         !velA  -0.0000000000000000       -0.0000000000000000        5.0000000000000000
+         !accA -1.09278475246554763E-006   24.999999999999979        3.0000000000000000
+         !w      0.0000000000000000        0.0000000000000000        5.0000000000000000
+         !dw      0.0000000000000000        0.0000000000000000        3.0000000000000000
+         !velA   4.9999995628860949        10.000000218556941       -0.0000000000000000
+         !accA  -47.000001355053044        30.999997945564630       -0.0000000000000000
+         !w      5.0000000000000000        10.000000000000000        0.0000000000000000
+         !dw      5.0000000000000000        10.000000000000000        0.0000000000000000
+         !velA  -0.0000000000000000       -0.0000000000000000       1.77635683940025046E-015
+         !accA  7.10542735760100186E-015  -0.0000000000000000       1.77635683940025046E-015
+
+    end subroutine xbeam_sph_origin_test
+
+
+
+ end module lib_xbeam_test
+
+
+
+
+
+
+
