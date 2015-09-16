@@ -1042,6 +1042,11 @@ module xbeam_solv
   logical :: SphFlag
   integer :: sph_rows(3) ! rows to be modified to include a spherical joint BC
 
+  ! hinge in arbitrary position:
+  real(8) :: possph0(3)  ! Initial Position of sperical joint in global FoR
+  real(8) :: Rsph0(3)   ! Position of sperical joint in FoR A. Constant in time
+  real(8) :: posA(3),velA(3),accA(3) ! Position, velocity, accelerations of origin of FoR A when spherical joint is applied
+
   ! Parameters to Check Convergence
   logical :: converged       = .false.
   logical :: passed_delta    = .false.! true if the subiteration (newton) converged according to delta check
@@ -1078,15 +1083,21 @@ module xbeam_solv
     Fsc = max( maxval(abs( F0(:,1:3)+Fdyn(:,1:3,iStep+1) )), Fsc);
     Msc = max( maxval(abs( F0(:,4:6)+Fdyn(:,4:6,iStep+1) )), Msc);
   end do
-  !print*, 'xbeam_solv_couplednlndyn:'
-  !print*, 'scaling factor for simulation:'
-  !print*, 'Fsc=', Fsc, 'Msc=', Msc
 
   ! Initialize (sperical joint) sm
+  print *, 'sm hinge - opt_control_solver!'
+  NumN=size(Node)
   SphFlag=.false.
-  if (Node(1)%Sflag == 1) then
-    SphFlag=.true.
-  end if
+  do k=1,NumN
+      if (Node(k)%Sflag == 1) then
+        SphFlag=.true.
+        Rsph0=Coords(k,:) ! Local position of spherical joint
+        possph0=Rsph0     ! assume FoRs A and G are coincident at t=0
+        print *, 'Local  SPH joint position: ', Rsph0
+        print *, 'Global SPH joint position: ', possph0
+      end if
+  end do
+
   sph_rows = (/1,2,3/)+NumDof
 
   ! Initialise
@@ -1152,7 +1163,7 @@ module xbeam_solv
 
   ! -------------------------- sm start: give initial values to rigid body frame
   dQdt(NumDof+7:NumDof+10)=Quat
-  ! dQddt(NumDof+1:NumDof+6)=VrelDot(1,:) ! acceleration is not a valid IC for a II order system
+  ! dQddt(NumDof+1:NumDof+6)=VrelDot(1,:) ! acceleration can be found solving M(dq0,q0) dqq0 = - Q(dq0,q0)
   Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
   ACoa(1:3,1:3) = Cao ! ACoa is inappropriate. Should be ACao in this case
   ACoa(4:6,4:6) = Cao ! ACoa is inappropriate. Should be ACao in this case
