@@ -301,4 +301,23 @@ module lib_solv
 
 
 
+! subroutine print_mat
+! ------------------------------------------------------------------------------
+  ! Print entried of rank 2 array (for debugging).
+  !-----------------------------------------------------------------------------
+
+ subroutine print_mat(mat,Imax,Jmax)
+  real(8), intent(in) :: mat(:,:)
+  integer :: ii, jj, Imax, Jmax
+
+  do ii=1,Imax
+    do jj=1,Jmax
+      write (*,'(2X,F5.2,$)') mat(ii,jj)
+    end do
+    print *, ' '
+  end do
+
+ end subroutine print_mat
+
+
 end module lib_solv

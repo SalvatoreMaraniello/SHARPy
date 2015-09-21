@@ -677,7 +677,10 @@ TaPsi =           Psisc *Options%MinDelta
 
 ! Iteration until convergence.
     do Iter=1,Options%MaxIterations+1
-      if (Iter.gt.Options%MaxIterations) STOP 'Solution did not converge (18235)'
+      if (Iter.gt.Options%MaxIterations) then 
+        write (*,'(5X,A,I4,A,1PE12.3)') 'Subiteration',Iter, '  Delta=', maxval(abs(Qglobal))
+        STOP 'Solution did not converge (18235)'
+      end if
 
 ! Update nodal positions and velocities .
       call cbeam3_solv_state2disp (Elem,Node,Coords,Psi0,X,dXdt,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor)
@@ -957,7 +960,10 @@ TaPsi =           Psisc *Options%MinDelta
 
 ! Iteration until convergence.
     do Iter=1,Options%MaxIterations+1
-      if (Iter.gt.Options%MaxIterations) STOP 'Solution did not converge (18235)'
+      if (Iter.gt.Options%MaxIterations) then 
+        write (*,'(5X,A,I4,A,1PE12.3)') 'Subiteration',Iter, '  Delta=', maxval(abs(Qglobal))
+        STOP 'Solution did not converge (18235)'
+      end if
 
 ! Update nodal positions and velocities .
       call cbeam3_solv_state2disp (Elem,Node,Coords,Psi0,X,dXdt,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor)

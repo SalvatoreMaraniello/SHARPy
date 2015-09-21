@@ -373,7 +373,14 @@ class XBeamSolver(ComponentWithDerivatives):
             # all others are empty arrays
             [self.PosIni, self.PosDef, self.PsiIni, self.PsiDef, self.InternalForces] = beamvar.fwd_static(self.NumNodes,self.NumElems) 
             # assign initial coordinates
-            self.PosIni = design.beamgeom.straight(self.PosIni,self.BeamLength1,self.BeamAxis)
+            shift=0.0  
+            if 'S' in self.BConds:
+                if self.BConds=='MS':
+                    shift=-0.5*self.BeamLength1
+                elif self.BConds=='FS':
+                    shift=-self.BeamLength1
+                
+            self.PosIni = design.beamgeom.straight(self.PosIni,self.BeamLength1,self.BeamAxis,shift)
 
 
 

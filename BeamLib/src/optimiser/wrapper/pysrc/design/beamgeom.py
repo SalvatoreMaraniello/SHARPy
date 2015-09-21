@@ -8,6 +8,10 @@ This module defines the beam geometry
 
 import numpy as np
 
+
+
+
+
 def straight( PosIni, BeamLength=1.0, axis_vector=np.array([1,0,0]), shift=0.0 ):
     ''' 
     Defines the geometry of a straight beam.
@@ -37,20 +41,23 @@ def straight( PosIni, BeamLength=1.0, axis_vector=np.array([1,0,0]), shift=0.0 )
     ### Fortran issues as the sparse matrices do not have enough memory when
     ### numers become negative!!!
 
-    shift=0.0#0.5*BeamLength
+    #shift=-0.5*BeamLength
+    shiftperc=shift/BeamLength
     #PosIni[:,0]=np.linspace(0,axis_vector[0],NumNodes)
     #PosIni[:,1]=np.linspace(0,axis_vector[1],NumNodes)
     #PosIni[:,2]=np.linspace(0,axis_vector[2],NumNodes)
-    PosIni[:,0]=np.linspace(-shift,axis_vector[0]-shift,NumNodes)
-    PosIni[:,1]=np.linspace(-shift,axis_vector[1]-shift,NumNodes)
-    PosIni[:,2]=np.linspace(-shift,axis_vector[2]-shift,NumNodes)
+    low=shiftperc*axis_vector
+    up=(1.0+shiftperc)*axis_vector
+    PosIni[:,0]=np.linspace(low[0],up[0],NumNodes)
+    PosIni[:,1]=np.linspace(low[1],up[1],NumNodes)
+    PosIni[:,2]=np.linspace(low[2],up[2],NumNodes)
     
     return PosIni
 
 
 if __name__=='__main__':
     
-    import lib.plot
+    #import lib.plot
     import matplotlib.pyplot as plt
     
     PosIni=np.zeros((21,3),dtype=float,order='F')
@@ -59,11 +66,11 @@ if __name__=='__main__':
     ##PosIni=straight(PosIni)
     
     # check general 
-    PosIni=straight(PosIni,10.0,np.array([0,1,1]))
+    PosIni=straight(PosIni,10.0,np.array([1,0,0]))
     
-    lib.plot.sta_unif(PosIni, PosIni,hold=True)
-    plt.xlabel('x')
-    plt.ylabel('y')
+    #lib.plot.sta_unif(PosIni, PosIni,hold=True)
 
-    
+    plt.plot(PosIni[:,0],PosIni[:,1])
+    plt.xlabel('x')
+    plt.ylabel('y')    
     plt.show()

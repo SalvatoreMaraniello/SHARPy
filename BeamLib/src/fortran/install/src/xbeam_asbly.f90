@@ -1,5 +1,6 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Module.- XBEAM_ASBLY Henrik Hesse. 07/01/2011 - Last Update 05/07/2011
+!                        S. Maraniello 21/09/2015
 !
 !-> Language: FORTRAN90, Free format.
 !
@@ -12,6 +13,7 @@
 !    -xbeam_asbly_dynamic:        Assembly rigid-body matrices for the dynamic problem.
 !
 !-> Remarks.-
+!   - bug fix in Frigid calculation never tested for linear case (xbeam_asbly_orient)
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module xbeam_asbly
@@ -22,6 +24,7 @@ module xbeam_asbly
  integer,private,parameter:: MaxNodCB3=3               ! Max number of nodes per element is 3.
 
  contains
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Subroutine XBEAM_ASBLY_DYNAMIC
@@ -164,7 +167,10 @@ subroutine xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDefor
 
     do i=1,NumNE
       i1=Node(Elem(iElem)%Conn(i))%Vdof
-      call sparse_addmat (0,6*(i1),Felem(:,6*(i-1)+1:6*i),fs,Frigid)
+      !!! sm change:
+      !!! the global ordering of the node has to be used
+      !!!call sparse_addmat (0,6*(i1),Felem(:,6*(i-1)+1:6*i),fs,Frigid)
+      call sparse_addmat (0,6*( Elem(iElem)%Conn(i)-1 ),Felem(:,6*(i-1)+1:6*i),fs,Frigid)
       if (i1.ne.0) then
         call sparse_addmat (0,6*(i1-1),MRSelem(:,6*(i-1)+1:6*i),ms,MRS)
         call sparse_addmat (0,6*(i1-1),CRSelem(:,6*(i-1)+1:6*i),cs,CRS)
@@ -251,8 +257,14 @@ subroutine xbeam_asbly_orient (Elem,Node,PosDefor,PsiDefor,Vrel,Quat,CQR,CQQ,fs,
 
     ! Add to global matrix. Remove columns and rows at clamped points.
     do i=1,NumNE
-      i1=Node(Elem(iElem)%Conn(i))%Vdof
-      call sparse_addmat (0,6*(i1),Felem(:,6*(i-1)+1:6*i),fs,Frigid)
+      !!! sm change:
+      !!! the global ordering of the node has to be used
+      !!!i1=Node(Elem(iElem)%Conn(i))%Vdof
+      !!!call sparse_addmat (0,6*(i1),Felem(:,6*(i-1)+1:6*i),fs,Frigid)
+      print *, 'WARNING: THIS MODIFICATION WAS NEVER TESTED OR LINEAR CASE (xbeam_asbly_orient)!'
+      call sparse_addmat (0,6*( Elem(iElem)%Conn(i)-1 ),Felem(:,6*(i-1)+1:6*i),fs,Frigid)
+
+
     end do
 
   end do

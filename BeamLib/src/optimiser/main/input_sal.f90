@@ -707,7 +707,7 @@ if (present(Forces)) then
     if (BConds(1:1).eq.'C') BoundConds(1)       = 1
     if (BConds(2:2).eq.'C') BoundConds(NumNodes)= 1
     if (BConds(2:2).eq.'F') BoundConds(NumNodes)=-1
-    if (BConds(1:1).eq.'F') BoundConds(NumNodes)=-1
+    if (BConds(1:1).eq.'F') BoundConds(1)       =-1
     if (BConds(1:1).eq.'S') BoundConds(1)       = 2
     if (BConds(2:2).eq.'S') BoundConds(NumNodes)= 2
     ! Sperical Joint applied in the middle (may fail if NumNodes is even)
@@ -722,11 +722,10 @@ if (present(Forces)) then
             print *, 'Mid Clamp'
             BoundConds(i) = 1
         else
-            !print *, 'Mid shpherical joint'
             BoundConds(i) = 2
         end if
-        !print *, BoundConds
     end if
+
   end select
 
   return
