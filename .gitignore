@@ -142,3 +142,7 @@ cmpc/
 
 
 
+/BeamLib/openmdao_log.txt
+/BeamLib/src/optimiser/wrapper/test/openmdao_log.txt
+/BeamLib/src/fortran/install/src/xbeam_solv_bkp.f90
+/BeamLib/src/fortran/install/src/xbeam_solv_sph_aborted.f90
