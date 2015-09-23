@@ -37,6 +37,14 @@ from PyAero.UVLM.Utils.DerivedTypesAero import Gust
 ###import PyMPC.MPC as MPC    sm out: moved to __main__
 from PyCoupled.Utils.CoupledIO import OpenOutFile, WriteToOutFile
 
+import h5py
+import PyLibs.io.save
+
+
+
+
+
+
 def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     """@brief Nonlinear dynamic solver using Python to solve aeroelastic
     equation.
@@ -53,6 +61,14 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     @param AELAOPTS Options relevant to coupled aeroelastic simulations.
     @param writeDict OrderedDict of 'name':tuple of outputs to write.
     """
+
+    # I/O management
+    if 'SaveDict' in kwords:
+        SaveDict=kwords['SaveDict']
+        Settings.OutputDir     =SaveDict['OutputDir']
+        Settings.OutputFileRoot=SaveDict['OutputFileRoot']
+        
+
         
     # Check correct solution code.
     assert XBOPTS.Solution.value == 312, ('NonlinearDynamic requested' +
@@ -234,6 +250,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
           
     # Define tecplot stuff
     if Settings.PlotTec==True:
+
         FileName = Settings.OutputDir + Settings.OutputFileRoot + 'AeroGrid.dat'
         Variables = ['X', 'Y', 'Z','Gamma']        
         FileObject = PostProcess.WriteAeroTecHeader(FileName, 
@@ -266,6 +283,13 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                        XBELEM,
                        ctrlSurf)
     # END if write
+    
+    # sm write class
+    XBOUT=DerivedTypes.Xboutput()
+    XBOUT.QuatList.append(Quat)
+    XBOUT.PosIni=PosIni
+    XBOUT.PsiIni=PsiIni
+    
 
     # Time loop.
     for iStep in range(NumSteps.value):
@@ -550,6 +574,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                            XBELEM,
                            ctrlSurf)
         # END if write.
+        XBOUT.QuatList.append(Quat)
+        
         
         # 'Rollup' due to external velocities. TODO: Must add gusts here!
         ZetaStar[:,:] = ZetaStar[:,:] + VMINPUT.U_infty*dt
@@ -584,7 +610,25 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # For interactive analysis at end of simulation set breakpoint.
     pass
 
-    return DynOut
+    # collect output for saving
+    XBOUT.DynOut=DynOut
+    
+    try:
+        h5filename=Settings.OutputDir + Settings.OutputFileRoot + '_sol312_dyn.h5'
+        hdfile=h5py.File(h5filename,'w')
+        print ('created %s'%h5filename)
+        PyLibs.io.save.add_class_as_grp(AELAOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(VMINPUT,hdfile)
+        PyLibs.io.save.add_class_as_grp(VMOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
+        hdfile.close()
+    except:
+        pass
+    
+    return XBOUT
+
 
 def panellingFromFreq(freq,c=1.0,Umag=1.0):
     """@brief Calculate adequate spatial/temporal resolution on UVLM grid
@@ -599,6 +643,7 @@ def panellingFromFreq(freq,c=1.0,Umag=1.0):
     M = int(50.0*k/np.pi) #get adequate panelling
     DelTime = c/(Umag*M) #get resulting DelTime
     return M, DelTime
+
 
 def getState(Gamma,GammaStar,GammaDot,X,dXdt):
     """@brief Get full (coupled aeroelastic) state vector.
@@ -633,6 +678,11 @@ def getState(Gamma,GammaStar,GammaDot,X,dXdt):
     x[nG+nGs+nGd:nG+nGs+nGd+nX] = X
     x[nG+nGs+nGd+nX:nG+nGs+nGd+nX+nXd] = dXdt
     return x
+
+
+
+
+
 
 if __name__ == '__main__':
     

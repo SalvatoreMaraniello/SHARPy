@@ -7,10 +7,20 @@
 @pre        None
 @warning    None
 
-@Modified: 25 Feb 2015 by S. Maraniello
-@Change list: change method to get home folder
 
+--------------------------------------------------------------------------------
+Modified: 25 Feb 2015 by S. Maraniello
 
+Change list: 
+    - new method to get home folder (use environmental variable)
+    
+    
+Change in Progress:
+    - use 
+          " OutputDir, OutputfileRoot, 
+          PlotTec, WriteOut, PlotOut, WriteUVLMdebug "    
+      only as default values. these should be set in input/output files.  
+        
 '''
 import getpass
 import sys
@@ -20,12 +30,10 @@ import os
 # Directories.
 userid = getpass.getuser()
 
-#sm
-#SharPyProjectDir = '/home/' + userid + '/git/SHARPy/' # works on ubuntu
-#SharPyProjectDir = os.path.expanduser('~') + '/git/SHARPy/' # works if installed in home
 try:
-    SharPyProjectDir = os.environ["SHARPYDIR"]+'/' # works if you setup an environmental variable during the install process
+    SharPyProjectDir = os.environ["SHARPYDIR"]+'/' # requires to setup an environmental variable
 except:
+    #SharPyProjectDir = '/home/' + userid + '/git/SHARPy/' # works on ubuntu
     SharPyProjectDir = os.path.expanduser('~') + '/git/SHARPy/'    
 
 BeamLibDir = SharPyProjectDir + 'BeamLib/bin/'

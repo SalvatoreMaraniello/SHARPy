@@ -155,6 +155,7 @@ def dump(obj):
     for attr in dir(obj):
         print("obj.%s = %s" % (attr, getattr(obj, attr)))
 
+
 class Xbelem:
     """@brief Pythonic version of fortran arrays containing derived type 'Elem'
     data, one set of arrays for each element, as defined in xbeam_shared.f90."""
@@ -193,6 +194,7 @@ class Xbelem:
         self.InvStiff = np.zeros((6*NumElems,6), dtype=ct.c_double, order='F')
         self.RBMass = np.zeros((MaxElNod*NumElems,6,6), dtype=ct.c_double, \
                                                                order='F')
+
         
 class Xbnode:
     """@brief Pythonic nodal information as defined in xbeam_shared.f90
@@ -209,6 +211,19 @@ class Xbnode:
         self.Vdof = np.zeros(NumNodesTot,dtype=ct.c_int,order='F') 
         self.Fdof = np.zeros(NumNodesTot,dtype=ct.c_int,order='F')
         self.Sflag= np.zeros(NumNodesTot,dtype=ct.c_int,order='F')
+
+
+class Xboutput:
+    '''
+    Class to store all structural related output of a simulation. Attributes can
+    be preallocated.
+    '''
+    
+    def __init__(self):
+        self.QuatList=[]
+    
+    
+
 
 if(__name__ == '__main__'):
     print('Batch run of PyAsblyStruct.py...')
