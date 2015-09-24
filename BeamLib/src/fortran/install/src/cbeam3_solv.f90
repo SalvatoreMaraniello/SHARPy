@@ -53,7 +53,7 @@ module cbeam3_solv
   use lib_fem
   use lib_sparse
 !<<<<<<< HEAD
-!  use lib_solv
+  use lib_solv
 !#ifdef NOLAPACK
   use lib_lu
   use cbeam3_asbly
@@ -213,13 +213,13 @@ TaPsi =           Psisc *Options%MinDelta
       call cbeam3_solv_update_static (Elem,Node,Psi0,DeltaX,PosDefor,PsiDefor)
 
 ! Convergence parameter delta (original):
-      call delta_check(Qglobal,DeltaX,Delta,passed_delta,Options%MinDelta,print_info=Options%PrintInfo)
+      call delta_check(Qglobal,DeltaX,Delta,passed_delta,Options%MinDelta,Options%PrintInfo)
 
  ! Check convergence using the residual:
       call separate_dofs(Qglobal,(/1,2,3/),(/4,5,6/),QglFrc,QglMmt)
 
       call residual_check(Iter,Qglobal,Res,Res0,passed_res,Options%MinDelta,&
-                         &TaRes,print_info=Options%PrintInfo  )
+                         &TaRes,Options%PrintInfo  )
 
 
       if ( (iLoadStep .eq. 1) .and. (Iter.eq.2) ) then
@@ -228,34 +228,34 @@ TaPsi =           Psisc *Options%MinDelta
           if (maxval(abs( AppForces(:,1:3))).eq. 0.0_8) then
               ! jump first iteration
               call residual_check(1,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
-                                 &TaResFrc,print_info=Options%PrintInfo)
+                                 &TaResFrc, Options%PrintInfo)
           else
               call residual_check(Iter  ,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
-                                 &TaResFrc,print_info=Options%PrintInfo)
+                                 &TaResFrc, Options%PrintInfo)
           end if
 
           if (maxval(abs( AppForces(:,4:6))).eq.0.0_8) then
               call residual_check(1,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
-                                 &TaResMmt,print_info=Options%PrintInfo)
+                                 &TaResMmt, Options%PrintInfo)
           else
               call residual_check(Iter,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
-                                 &TaResMmt,print_info=Options%PrintInfo)
+                                 &TaResMmt, Options%PrintInfo)
           end if
 
       else
           call residual_check(Iter  ,QglFrc,ResFrc,ResFrc0,passed_resfrc,Options%MinDelta,&
-                             &TaResFrc,print_info=Options%PrintInfo)
+                             &TaResFrc, Options%PrintInfo)
           call residual_check(Iter,QglMmt,ResMmt,ResMmt0,passed_resmmt,Options%MinDelta,&
-                             &TaResMmt,print_info=Options%PrintInfo)
+                             &TaResMmt, Options%PrintInfo)
       end if
 
 
  ! SuperLinear Convergence Test
       call separate_dofs(DeltaX,(/1,2,3/),(/4,5,6/),DeltaPos,DeltaPsi)
 
-      call error_check(Iter,DeltaX  ,DX_old  ,DX_now  ,ErrX  ,passed_err   ,TaX  ,print_info=Options%PrintInfo)
-      call error_check(Iter,DeltaPos,DPos_old,DPos_now,ErrPos,passed_errpos,TaPos,print_info=Options%PrintInfo)
-      call error_check(Iter,DeltaPsi,DPsi_old,DPsi_now,ErrPsi,passed_errpsi,TaPsi,print_info=Options%PrintInfo)
+      call error_check(Iter,DeltaX  ,DX_old  ,DX_now  ,ErrX  ,passed_err   ,TaX  , Options%PrintInfo)
+      call error_check(Iter,DeltaPos,DPos_old,DPos_now,ErrPos,passed_errpos,TaPos, Options%PrintInfo)
+      call error_check(Iter,DeltaPsi,DPsi_old,DPsi_now,ErrPsi,passed_errpsi,TaPsi, Options%PrintInfo)
 
       DX_old   = DX_now
       DPos_old = DPos_now
@@ -754,13 +754,14 @@ TaPsi =           Psisc *Options%MinDelta
   use lib_lu
   use lib_out
   use lib_sparse
-#ifdef NOLAPACK
+!#ifdef NOLAPACK
   use lib_lu
-#else
-  use interface_lapack
-#endif
+!#else
+!  use interface_lapack
+!#endif
   use cbeam3_asbly
   use lib_xbeam
+
 
 ! I/O Variables.
   integer,      intent(in)   :: iOut              ! Output file.
@@ -878,11 +879,11 @@ TaPsi =           Psisc *Options%MinDelta
 
 
   call sparse_addsparse(0,0,ms,Mglobal,as,Asys)
-#ifdef NOLAPACK
+!#ifdef NOLAPACK
   call lu_sparse(as,Asys,-Qglobal,dXddt)
-#else
-  call lapack_sparse (as,Asys,-Qglobal,dXddt)
-#endif
+!#else
+!  call lapack_sparse (as,Asys,-Qglobal,dXddt)
+!#endif
 
 ! Loop in the time steps.
   do iStep=1,size(Time)-1
@@ -952,11 +953,11 @@ TaPsi =           Psisc *Options%MinDelta
       call sparse_addsparse(0,0,ms,Mglobal,as,Asys,Factor=1.d0/(beta*dt*dt))
 
 ! Calculation of the correction.
-#ifdef NOLAPACK
+!#ifdef NOLAPACK
       call lu_sparse(as,Asys,-Qglobal,DX)
-#else
-      call lapack_sparse (as,Asys,-Qglobal,DX)
-#endif
+!#else
+!      call lapack_sparse (as,Asys,-Qglobal,DX)
+!#endif
       X    = X     + DX
       dXdt = dXdt  + gamma/(beta*dt)*DX
       dXddt= dXddt + 1.d0/(beta*dt*dt)*DX
@@ -964,37 +965,6 @@ TaPsi =           Psisc *Options%MinDelta
 
 ! Update nodal positions and velocities on the current converged time step.
     call cbeam3_solv_state2disp (Elem,Node,Coords,Psi0,X,dXdt,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor)
-
-
-!!! Postprocesing (for single cantilever beams) !!!
-! Store data in output variables (V_B, Omega_B).
-!    if (any(OutGrids)) then
-!      Veloc=0.d0
-!      Displ=0.d0
-!
-!      do k=1,NumN
-!        Displ(k,1:3)= PosDefor(k,1:3)-Coords(k,1:3)
-!      end do
-!
-!      Veloc(1,1:3)= PosDotDefor(1,:)+rot_cross(Vrel(iStep,4:6), PosDefor(1,:))+Vrel(iStep,1:3)
-!      do k=2,NumN
-!        Displ(k,4:6)=PsiDefor(k-1,2,:)
-!        CBa=rotvect_psi2mat(PsiDefor(k-1,2,:))
-!        Veloc(k,1:3)= matmul(CBa, PosDotDefor(k,:) + Vrel(iStep,1:3)      &
-!&                               + rot_cross(Vrel(iStep,4:6),PosDefor(k,:)))
-!        Veloc(k,4:6)= matmul(rotvect_psi2rot(PsiDefor(k-1,2,:)),PsiDotDefor(k-1,2,:)) &
-!&                   + matmul(CBa,Vrel(iStep,4:6))
-!      end do
-!
-!!  Write output information in output file.
-!      OutOptions%PrintDispl=.true.
-!      OutOptions%PrintVeloc=.true.
-!      call out_title   (iOut,trim(Text))
-!      call out_outgrid (iOut,'NODE',OutOptions,1,NumE,6,OutGrids,DISPL=Displ,VELOC=Veloc)
-!
-!! Write output to export to main program (obsolete!).
-!      VelocTime (iStep+1,:)= Veloc (1:NumN,3)
-!    end if
 
 ! Write output to export to main program (obsolete!).
     PosPsiTime(iStep+1,1:3)= PosDefor(NumN,:)

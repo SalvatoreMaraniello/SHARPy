@@ -501,9 +501,11 @@ module xbeam_solv
 
   ! Initialize (sperical joint) sm
   SphFlag=.false.
-  if (Node(1)%Sflag == 1) then
-    SphFlag=.true.
-  end if
+  do k=1,NumN
+      if (Node(k)%Sflag == 1) then
+        SphFlag=.true.
+      end if
+  end do
   sph_rows = (/1,2,3/)+NumDof
 
   ! Initialise
@@ -566,49 +568,30 @@ module xbeam_solv
       SUCCESS=.true.
   end if
 
-
-  ! -------------------------- sm start: give initial values to rigid body frame
-  dQdt(NumDof+7:NumDof+10)=Quat
-  ! dQddt(NumDof+1:NumDof+6)=VrelDot(1,:) ! acceleration is not a valid IC for a II order system
-  Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
-  ACoa(1:3,1:3) = Cao ! ACoa is inappropriate. Should be ACao in this case
-  ACoa(4:6,4:6) = Cao ! ACoa is inappropriate. Should be ACao in this case
-  ! Export velocities and accelerations in body frame
-  if (Options%OutInaframe) then
-      dQdt (NumDof+1:NumDof+6) = Vrel   (1,:)
-      dQddt(NumDof+1:NumDof+6) = VrelDot(1,:)
-  ! Export velocities and accelerations in inertial frame
-  else
-      dQdt (NumDof+1:NumDof+6) = matmul(ACoa,Vrel   (1,:)) ! ACoa is inappropriate here. Should be ACao
-      dQddt(NumDof+1:NumDof+6) = matmul(ACoa,VrelDot(1,:))
-  end if
-  ! --------------------------------------------------------------------- sm end
-
-
-! Extract initial displacements and velocities.
+  ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
-  ! sm: dXdt !=0 if the Pos/PsiDotDeform variables are non-zero
-  !     runs with the dynamic solver showed we always start from 0 in the Dot variables
+
   Q(1:NumDof)             = X(:)
   Q(NumDof+1:NumDof+6)    = 0
   dQdt(1:NumDof)          = dXdt(:)
+  dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
   dQdt(NumDof+7:NumDof+10)= Quat
 
-
   ! (spherical joint - sm)
-  !if (SphFlag) then
-  !  dQdt(NumDof+1:NumDof+6) = 0.d0
-  !else
-  !  dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
-  !end if
+  if (SphFlag) then
+    dQdt(NumDof+1:NumDof+3) = 0.d0
+  end if
 
   Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
+
   ACoa(1:3,1:3) = transpose(Cao)
   ACoa(4:6,4:6) = transpose(Cao)
+
 ! Export velocities and accelerations in body frame
   if (Options%OutInaframe) then
       Vrel   (1,:) = dQdt (NumDof+1:NumDof+6)
       VrelDot(1,:) = dQddt(NumDof+1:NumDof+6)
+
 ! Export velocities and accelerations in inertial frame
   else
       Vrel   (1,:) = matmul(ACoa,dQdt (NumDof+1:NumDof+6))
@@ -623,15 +606,15 @@ module xbeam_solv
 ! sm: why we are neglecting it? Let's set it to be on-zero
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
 &                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),            &
-&                            0.d0*dQddt(NumDof+1:NumDof+6),                     & ! sm old: 0.d0*dQddt(NumDof+1:NumDof+6),
+&                            0.d0*dQddt(NumDof+1:NumDof+6),                     &
 &                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
 
   Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Fdyn(:,:,1),NumDof,Filter=ListIN))
 
   call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,    &
 &                           dQdt(NumDof+1:NumDof+6),                            &
-&                           0.d0*dQddt(NumDof+1:NumDof+6),                      & ! sm old: 0.d0*dQddt(NumDof+1:NumDof+6),
-&                           dQdt(NumDof+7:NumDof+10),                                                                       &
+&                           0.d0*dQddt(NumDof+1:NumDof+6),                      &
+&                           dQdt(NumDof+7:NumDof+10),                           &
 &                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
   ! Sperical Joint - sm:
@@ -823,9 +806,6 @@ module xbeam_solv
 ! ----------------------------------------------------- end check of convergence
 
 
-
-
-
 ! Compute total damping and stiffness matrices linear system
       call sparse_addsparse (0,0,cs,CSS,ctot,Ctotal)
       call sparse_addmat    (0,NumDof,CSR,ctot,Ctotal)
@@ -839,7 +819,6 @@ module xbeam_solv
       call sparse_addmat    (NumDof+6,NumDof  ,CQR,ctot,Ctotal)
       call sparse_addmat    (NumDof+6,NumDof+6,CQQ,ctot,Ctotal)
 
-
       ! Spherical Joint - sm:
       ! set damping and stiffness terms columns and rows to zero. this can also
       ! be set to unit (won't change the nature of the equations at the joint).
@@ -848,13 +827,10 @@ module xbeam_solv
         call sparse_set_colrows_zero(sph_rows,ktot,Ktotal)
       end if
 
-
 ! Compute Jacobian
       ! Spherical Joint - note:
       ! here for the translational dofs of the hinge/spherical joint we will
       ! solve 1.d0/(beta*dt*dt*mass*acceleration = 0.0
-      ! the solution being zero, doens't matter the coefficient that premultiplies
-      ! the mass matrix.
       call sparse_zero (as,Asys)
       call sparse_addsparse(0,0,ktot,Ktotal,as,Asys,Factor=1.d0)
       call sparse_addsparse(0,0,ctot,Ctotal,as,Asys,Factor=gamma/(beta*dt))
@@ -872,9 +848,6 @@ module xbeam_solv
       ! Spherical Joint - sm
       ! unsure what's the beast approach. The code works with this part being
       ! commented out.
-      ! Without hardcoding the terms to zero, we make sure the system, durint the
-      ! iteration, will converge to the 0.0 solution. Also, non zero values will
-      ! not affect other dofs (columns zero in all matrices).
       !if (SphFlag) then
         !Q(NumDof+1:NumDof+3)=0.d0
         !dQdt(NumDof+1:NumDof+3)=0.d0
@@ -909,8 +882,6 @@ module xbeam_solv
         DynOut(iStep*NumN+k,:) = PosDefor(k,:)
     end do
 
-
-
  ! check crash - error handlying in python
     if (present(SUCCESS)) then
        if (SUCCESS .eqv. .false.) then
@@ -918,7 +889,6 @@ module xbeam_solv
          exit
        end if
      end if
-
 
   end do
 
@@ -957,7 +927,8 @@ module xbeam_solv
   use lib_out
   use lib_sparse
   use lib_xbeam
-  use interface_lapack
+  use lib_lu
+  !use interface_lapack
   use cbeam3_asbly
   use cbeam3_solv
   use xbeam_asbly
@@ -1044,10 +1015,10 @@ module xbeam_solv
   logical :: SphFlag
   integer :: sph_rows(3) ! rows to be modified to include a spherical joint BC
 
-  ! hinge in arbitrary position:
-  real(8) :: possph0(3)  ! Initial Position of sperical joint in global FoR
-  real(8) :: Rsph0(3)   ! Position of sperical joint in FoR A. Constant in time
-  real(8) :: posA(3),velA(3),accA(3) ! Position, velocity, accelerations of origin of FoR A when spherical joint is applied
+  !!!! hinge in arbitrary position:
+  !real(8) :: possph0(3)  ! Initial Position of sperical joint in global FoR
+  !real(8) :: Rsph0(3)   ! Position of sperical joint in FoR A. Constant in time
+  !real(8) :: posA(3),velA(3),accA(3) ! Position, velocity, accelerations of origin of FoR A when spherical joint is applied
 
   ! Parameters to Check Convergence
   logical :: converged       = .false.
@@ -1087,19 +1058,15 @@ module xbeam_solv
   end do
 
   ! Initialize (sperical joint) sm
-  print *, 'sm hinge - opt_control_solver!'
   NumN=size(Node)
   SphFlag=.false.
   do k=1,NumN
       if (Node(k)%Sflag == 1) then
         SphFlag=.true.
-        Rsph0=Coords(k,:) ! Local position of spherical joint
-        possph0=Rsph0     ! assume FoRs A and G are coincident at t=0
-        print *, 'Local  SPH joint position: ', Rsph0
-        print *, 'Global SPH joint position: ', possph0
+        !Rsph0=Coords(k,:) ! Local position of spherical joint
+        !possph0=Rsph0     ! assume FoRs A and G are coincident at t=0
       end if
   end do
-
   sph_rows = (/1,2,3/)+NumDof
 
   ! Initialise
@@ -1162,49 +1129,30 @@ module xbeam_solv
       SUCCESS=.true.
   end if
 
-
-  ! -------------------------- sm start: give initial values to rigid body frame
-  dQdt(NumDof+7:NumDof+10)=Quat
-  ! dQddt(NumDof+1:NumDof+6)=VrelDot(1,:) ! acceleration can be found solving M(dq0,q0) dqq0 = - Q(dq0,q0)
-  Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
-  ACoa(1:3,1:3) = Cao ! ACoa is inappropriate. Should be ACao in this case
-  ACoa(4:6,4:6) = Cao ! ACoa is inappropriate. Should be ACao in this case
-  ! Export velocities and accelerations in body frame
-  if (Options%OutInaframe) then
-      dQdt (NumDof+1:NumDof+6) = Vrel   (1,:)
-      dQddt(NumDof+1:NumDof+6) = VrelDot(1,:)
-  ! Export velocities and accelerations in inertial frame
-  else
-      dQdt (NumDof+1:NumDof+6) = matmul(ACoa,Vrel   (1,:)) ! ACoa is inappropriate here. Should be ACao
-      dQddt(NumDof+1:NumDof+6) = matmul(ACoa,VrelDot(1,:))
-  end if
-  ! --------------------------------------------------------------------- sm end
-
-
-! Extract initial displacements and velocities.
+  ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
-  ! sm: dXdt !=0 if the Pos/PsiDotDeform variables are non-zero
-  !     runs with the dynamic solver showed we always start from 0 in the Dot variables
+
   Q(1:NumDof)             = X(:)
   Q(NumDof+1:NumDof+6)    = 0
   dQdt(1:NumDof)          = dXdt(:)
+  dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
   dQdt(NumDof+7:NumDof+10)= Quat
 
-
   ! (spherical joint - sm)
-  !if (SphFlag) then
-  !  dQdt(NumDof+1:NumDof+6) = 0.d0
-  !else
-  !  dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
-  !end if
+  if (SphFlag) then
+    dQdt(NumDof+1:NumDof+3) = 0.d0
+  end if
 
   Cao = xbeam_Rot(dQdt(NumDof+7:NumDof+10))
+
   ACoa(1:3,1:3) = transpose(Cao)
   ACoa(4:6,4:6) = transpose(Cao)
+
 ! Export velocities and accelerations in body frame
   if (Options%OutInaframe) then
       Vrel   (1,:) = dQdt (NumDof+1:NumDof+6)
       VrelDot(1,:) = dQddt(NumDof+1:NumDof+6)
+
 ! Export velocities and accelerations in inertial frame
   else
       Vrel   (1,:) = matmul(ACoa,dQdt (NumDof+1:NumDof+6))
@@ -1216,17 +1164,16 @@ module xbeam_solv
   end do
 
 ! Compute initial acceleration (we are neglecting qdotdot in Kmass).
-! sm: why we are neglecting it? Let's set it to be on-zero
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
 &                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),            &
-&                            0.d0*dQddt(NumDof+1:NumDof+6),                     & ! sm old: 0.d0*dQddt(NumDof+1:NumDof+6),
+&                            0.d0*dQddt(NumDof+1:NumDof+6),                     &
 &                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
 
   Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Fdyn(:,:,1),NumDof,Filter=ListIN))
 
   call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,    &
 &                           dQdt(NumDof+1:NumDof+6),                            &
-&                           0.d0*dQddt(NumDof+1:NumDof+6),                      & ! sm old: 0.d0*dQddt(NumDof+1:NumDof+6),
+&                           0.d0*dQddt(NumDof+1:NumDof+6),                      &
 &                           dQdt(NumDof+7:NumDof+10),                                                                       &
 &                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
@@ -1269,6 +1216,7 @@ module xbeam_solv
 
 ! Solve matrix system
 !  call lapack_sparse (mtot,Mtotal,-Qtotal,dQddt)
+  call lu_sparse (mtot,Mtotal,-Qtotal,dQddt)
 
 ! Loop in the time steps.
   do iStep=1,size(Time)-1
@@ -1418,10 +1366,6 @@ module xbeam_solv
 
 ! ----------------------------------------------------- end check of convergence
 
-
-
-
-
 ! Compute total damping and stiffness matrices linear system
       call sparse_addsparse (0,0,cs,CSS,ctot,Ctotal)
       call sparse_addmat    (0,NumDof,CSR,ctot,Ctotal)
@@ -1444,13 +1388,10 @@ module xbeam_solv
         call sparse_set_colrows_zero(sph_rows,ktot,Ktotal)
       end if
 
-
 ! Compute Jacobian
       ! Spherical Joint - note:
       ! here for the translational dofs of the hinge/spherical joint we will
-      ! solve 1.d0/(beta*dt*dt*mass*acceleration = 0.0
-      ! the solution being zero, doens't matter the coefficient that premultiplies
-      ! the mass matrix.
+      ! solve 1.d0/(beta*dt**2*mass*acceleration) = 0.0
       call sparse_zero (as,Asys)
       call sparse_addsparse(0,0,ktot,Ktotal,as,Asys,Factor=1.d0)
       call sparse_addsparse(0,0,ctot,Ctotal,as,Asys,Factor=gamma/(beta*dt))
@@ -1459,7 +1400,8 @@ module xbeam_solv
       ! call sparse_print_nonzero(as,Asys)
 
 ! Calculation of the correction.
-      call lapack_sparse (as,Asys,-Qtotal,DQ)
+      !call lapack_sparse (as,Asys,-Qtotal,DQ)
+      call lu_sparse (as,Asys,-Qtotal,DQ)
 
       Q     = Q     + DQ
       dQdt  = dQdt  + gamma/(beta*dt)*DQ

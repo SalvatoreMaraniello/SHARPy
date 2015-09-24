@@ -21,7 +21,7 @@ from warnings import warn
 import sys
 sys.path.append('../..')
 import shared
-import PyBeam.Utils.XbeamLib
+from PyBeam.Utils.XbeamLib import Rot as PyBeam_Utils_XbeamLib_Rot
 import lib.diff, lib.integr
 
 
@@ -160,7 +160,7 @@ def vector_time_history(Xi,vec0=np.array([1,0,0])):
     
     for tt in range(NumSteps+1):
         
-        Cga = PyBeam.Utils.XbeamLib.Rot(Xi[tt,:]).transpose()
+        Cga = PyBeam_Utils_XbeamLib_Rot(Xi[tt,:]).transpose()
         V[tt,:] = np.dot(Cga,vec0)
         
     return V
@@ -207,7 +207,7 @@ def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a',xi0=np.array([1,0,0,0])):
     # apply rotation to the position vector of each node
     # nb: two loops are requires as the position vector changes at each time-step
     for tt in range(NumSteps+1):
-        Cga = PyBeam.Utils.XbeamLib.Rot(Xi[tt,:]).transpose() 
+        Cga = PyBeam_Utils_XbeamLib_Rot(Xi[tt,:]).transpose() 
         for nn in range(NumNodes):     
             THPosDefGlobal[tt,nn,:]=np.dot(Cga,THPosDefLocal[tt,nn,:]) +aOrigin[tt,:]
     

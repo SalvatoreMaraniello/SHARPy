@@ -14,7 +14,6 @@ Modified: 25 Feb 2015 by S. Maraniello
 Change list: 
     - new method to get home folder (use environmental variable)
     
-    
 Change in Progress:
     - use 
           " OutputDir, OutputfileRoot, 

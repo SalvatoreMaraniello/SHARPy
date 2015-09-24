@@ -13,7 +13,7 @@ sys.path.append(codedir+'/pysrc')
 import shared
 from xbcomponent import XBeamSolver
 import lib.postpr, lib.read, lib.plot.dyn, cost
-import PyBeam.Utils.XbeamLib
+#import PyBeam.Utils.XbeamLib
 
 import numpy as np
 import matplotlib.pyplot as plt
