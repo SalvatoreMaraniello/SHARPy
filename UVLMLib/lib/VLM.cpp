@@ -16,7 +16,9 @@
 #include <vector>
 #include <assert.h>
 #include "omp.h"
-#include <iostream> //sm fix(?)
+#include <aicMats.hpp>
+#include <iostream>
+
 
 void KJMethodForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 		const double* ZetaStar_Vec, const double* GammaStar_Vec,\
@@ -96,7 +98,7 @@ void KJMethodForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 			BilinearInterpTriad(Forces[i][j],Forces[i][j+1],\
 								Forces[i+1][j+1],Forces[i+1][j],\
 								UnstForceTemp,\
-								0.0,0.5,true);
+								0.5,0.5,true);
 
 		} //END for j
 	}//END for i
@@ -251,6 +253,8 @@ void KJMethodForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 		//Add on Usurf
 		AddTriad(UincSeg,UsurfSeg,UincSeg);
 
+//		std::cout << "downwash at seg " << Seg[k].SegmentNo << std::endl;
+//		PrintTriad(UincSeg);
 
 		//Get force
 		Seg[k].Force(UincSeg,ForceSeg);
@@ -272,6 +276,442 @@ void KJMethodForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 	}
 
 }
+
+void KJMethodForces_vC(const double* Zeta_Vec, const double* Gamma_Vec,\
+		const double* ZetaStar_Vec, const double* GammaStar_Vec,\
+		const double* ZetaDot_Vec, \
+		const double* Uext_Vec, \
+		VMopts VMOPTS,\
+		const double* Gamma_tm1_Vec,\
+		double* Forces_Vec) {
+	/**@brief calculate unsteady panel forces then segment forces with collocation velocity approximation.
+	 * @param Zeta_Vec Grid points.
+	 * @param Gamma_Vec Bound vortex ring gammas.
+	 * @param ZetaStar_Vec Wake grid points.
+	 * @param GammaStar_Vec Wake vortex ring gammas.
+	 * @param VMOPTS Simulation options.
+	 * @param Gamma_tm1_Vec Bound vortex ring gammas from previous timestep.
+	 * @param Forces_Vec Unsteady Forces at grid points.
+	 */
+
+	// cast vectors into useful pointers
+	double (*Zeta)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) Zeta_Vec;
+	double (*ZetaDot)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) ZetaDot_Vec;
+	double (*Uext)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) Uext_Vec;
+	double (*Gamma)[VMOPTS.N] = (double (*)[VMOPTS.N]) Gamma_Vec;
+	double (*Gamma_tm1)[VMOPTS.N] = (double (*)[VMOPTS.N]) Gamma_tm1_Vec;
+	double (*Forces)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) Forces_Vec;
+
+	// declare local, automatically-managed dynamic memory using boost ...
+	BoostArray2D Area_(boost::extents[VMOPTS.M][VMOPTS.N]);
+	BoostArray2D dGamma_dt_(boost::extents[VMOPTS.M][VMOPTS.N]);
+
+	// ... and get useful pointers to that data
+	double (*Area)[VMOPTS.N] = (double (*)[VMOPTS.N]) Area_.data();
+	double (*dGamma_dt)[VMOPTS.N] = (double (*)[VMOPTS.N]) dGamma_dt_.data();
+
+	//Temporary variables
+	double Normal[3] = {0.0,0.0,0.0};
+	double DeltaP = 0.0;
+	double NormalForce = 0.0;
+	double UnstForceTemp[3] = {0.0,0.0,0.0};
+	double* NullDouble = NULL;
+
+	//get unsteady component of pressure forces and map to nodes
+	//loop through collocation points i,j
+	for (unsigned int i = 0; i < VMOPTS.M; i++) {
+		for (unsigned int j = 0; j < VMOPTS.N; j++) {
+
+			//calculate panel normals
+			PanelNormal(Zeta[i][j], Zeta[i][j+1], \
+						Zeta[i+1][j+1], Zeta[i+1][j],
+									Normal);
+
+
+			// calculate panel areas
+			Area[i][j] = PanelArea(Zeta[i][j], Zeta[i][j+1],\
+								   Zeta[i+1][j+1], Zeta[i+1][j]);
+
+
+			// calculate panel d(Gamma)/dt
+			if (VMOPTS.Steady == true) {
+				dGamma_dt[i][j] = 0.0;
+			} else if (VMOPTS.Steady == false) {
+				dGamma_dt[i][j] = (Gamma[i][j] - Gamma_tm1[i][j]) / \
+									VMOPTS.DelTime;
+			}
+
+			// pressure jump
+			DeltaP = dGamma_dt[i][j];
+
+			//calculate corresponding normal force
+			NormalForce = DeltaP*Area[i][j];
+
+
+			// apply along panel normal
+			MulTriad(Normal,NormalForce,UnstForceTemp);
+
+			// map to corner points
+			BilinearInterpTriad(Forces[i][j],Forces[i][j+1],\
+								Forces[i+1][j+1],Forces[i+1][j],\
+								UnstForceTemp,\
+								0.5,0.5,true);
+
+		} //END for j
+	}//END for i
+
+	//get vector of segments
+	std::vector<VortexSegment> Seg;
+
+	//calculate expected number of segements
+	unsigned int K = (VMOPTS.M+1)*VMOPTS.N + VMOPTS.M*(VMOPTS.N+1);
+
+	//initialise segment list
+	for (unsigned int i = 0; i < VMOPTS.M; i++) {
+		for (unsigned int j = 0; j < VMOPTS.N; j++) {
+
+			//segment 4 of panels (:,:)
+			if (VMOPTS.ImageMethod == 1 && j==0) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j][0],&Zeta[i][j][0],\
+								  	  	  	&Gamma[i][j], &Gamma[i][j],\
+								  	  	  	false,true,i,j,4));
+
+			} else if (VMOPTS.ImageMethod == 0 && j==0) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j][0],&Zeta[i][j][0],\
+											&Gamma[i][j], NullDouble,\
+											false,false,i,j,4));
+
+			} else if (j>0) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j][0],&Zeta[i][j][0],\
+											&Gamma[i][j], &Gamma[i][j-1],\
+											false,false,i,j,4));
+
+			} //end if, else-if, else-if
+
+			//segment 1 of panels (:,:)
+			if (i == 0) {
+				Seg.push_back(VortexSegment(&Zeta[i][j][0],&Zeta[i][j+1][0],\
+											&Gamma[i][j], NullDouble,\
+											false,false,i,j,1));
+
+			} else if (i > 0) {
+				Seg.push_back(VortexSegment(&Zeta[i][j][0],&Zeta[i][j+1][0],\
+											&Gamma[i][j], &Gamma[i-1][j],\
+											false,false,i,j,1));
+
+			} // end if, else-if
+
+			//segment 2 of panels(:,N-1)
+			if (j == VMOPTS.N - 1) {
+				Seg.push_back(VortexSegment(&Zeta[i][j+1][0],&Zeta[i+1][j+1][0],\
+											&Gamma[i][j], NullDouble,\
+											false,false,i,j,2));
+
+			} //end if
+
+			//add segment 3 if at the TE
+			if (i == VMOPTS.M - 1) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j+1][0],&Zeta[i+1][j][0],\
+											&Gamma[i][j], NullDouble,\
+											true,false,i,j,3));
+			} //end if
+		}
+	}
+
+	//check length
+	assert(Seg.size() == K);
+
+	//loop through each segment and add force to Forces
+	#pragma omp parallel for
+	for (unsigned int k = 0; k < K; k++) {
+		//get panel i,j
+		unsigned int i = Seg[k].Paneli;
+		unsigned int j = Seg[k].Panelj;
+
+		//declare local vars
+		double ZetaDotSeg[3] = {0.0,0.0,0.0};
+		double UextSeg[3] = {0.0,0.0,0.0};
+		double UwakeSeg[3] = {0.0,0.0,0.0};
+		double UsurfSeg[3] = {0.0,0.0,0.0};
+		double UincSeg[3] = {0.0,0.0,0.0};
+		double ForceSeg[3] = {0.0,0.0,0.0};
+
+		//set collocation location in panel dimensionless coords
+		double Eta1 = 0.5;
+		double Eta2 = 0.5;
+
+		//calc incident veloc
+		// -ZetaDot + Uext + Uwake + Ubound
+
+		//ZetaDot at collocation
+		BilinearInterpTriad(ZetaDot[i][j], ZetaDot[i][j+1], \
+						 	ZetaDot[i+1][j+1], ZetaDot[i+1][j], \
+						 	ZetaDotSeg,Eta1,Eta2,false);
+
+		//Uext at collocation
+		BilinearInterpTriad(Uext[i][j], Uext[i][j+1], \
+							Uext[i+1][j+1], Uext[i+1][j], \
+							UextSeg,Eta1,Eta2,false);
+
+		//Uwake at collocation using segment list
+		//get collocation
+		double Col[3] = {0.0,0.0,0.0};
+		BilinearInterpTriad(Zeta[i][j], Zeta[i][j+1], \
+							Zeta[i+1][j+1], Zeta[i+1][j], \
+							Col,Eta1,Eta2,false);
+
+		//Uwake
+		BiotSavartSurf(ZetaStar_Vec,GammaStar_Vec,Col,\
+					   0,0,\
+					   VMOPTS.Mstar,VMOPTS.N,\
+					   VMOPTS.Mstar,VMOPTS.N,\
+					   VMOPTS.ImageMethod, UwakeSeg);
+
+		//Usurf
+		BiotSurfaceSegments(Seg,VMOPTS.M,VMOPTS.N,\
+				   	   	   	VMOPTS.ImageMethod,Col,\
+				   	   	   	UsurfSeg);
+
+		//Combine Uext - ZetaDot
+		SubTriad(UextSeg,ZetaDotSeg,UincSeg);
+		//Add on Uwake
+		AddTriad(UincSeg,UwakeSeg,UincSeg);
+		//Add on Usurf
+		AddTriad(UincSeg,UsurfSeg,UincSeg);
+
+//		std::cout << "downwash at seg " << Seg[k].SegmentNo << std::endl;
+//		PrintTriad(UincSeg);
+
+		//Get force
+		Seg[k].Force(UincSeg,ForceSeg);
+
+		//Map to corner points
+		#pragma omp critical
+		BilinearInterpTriad(Forces[i][j], Forces[i][j+1], \
+							Forces[i+1][j+1], Forces[i+1][j], \
+							ForceSeg,Eta1,Eta2,true);
+	}
+
+}
+
+void KJMethodForces_vC_mod(const double* Zeta_Vec, const double* Gamma_Vec,\
+		const double* ZetaStar_Vec, const double* GammaStar_Vec,\
+		const double* ZetaDot_Vec, \
+		const double* Uext_Vec, \
+		VMopts VMOPTS,\
+		const double* Gamma_tm1_Vec,\
+		double* Forces_Vec) {
+	/**@brief calculate unsteady panel forces then segment forces with
+	 * collocation velocity approximation and modification omitting vortex
+	 * segment self influence.
+	 * @param Zeta_Vec Grid points.
+	 * @param Gamma_Vec Bound vortex ring gammas.
+	 * @param ZetaStar_Vec Wake grid points.
+	 * @param GammaStar_Vec Wake vortex ring gammas.
+	 * @param VMOPTS Simulation options.
+	 * @param Gamma_tm1_Vec Bound vortex ring gammas from previous timestep.
+	 * @param Forces_Vec Unsteady Forces at grid points.
+	 */
+
+	// cast vectors into useful pointers
+	double (*Zeta)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) Zeta_Vec;
+	double (*ZetaDot)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) ZetaDot_Vec;
+	double (*Uext)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) Uext_Vec;
+	double (*Gamma)[VMOPTS.N] = (double (*)[VMOPTS.N]) Gamma_Vec;
+	double (*Gamma_tm1)[VMOPTS.N] = (double (*)[VMOPTS.N]) Gamma_tm1_Vec;
+	double (*Forces)[VMOPTS.N+1][3] = (double (*)[VMOPTS.N+1][3]) Forces_Vec;
+
+	// declare local, automatically-managed dynamic memory using boost ...
+	BoostArray2D Area_(boost::extents[VMOPTS.M][VMOPTS.N]);
+	BoostArray2D dGamma_dt_(boost::extents[VMOPTS.M][VMOPTS.N]);
+
+	// ... and get useful pointers to that data
+	double (*Area)[VMOPTS.N] = (double (*)[VMOPTS.N]) Area_.data();
+	double (*dGamma_dt)[VMOPTS.N] = (double (*)[VMOPTS.N]) dGamma_dt_.data();
+
+	//Temporary variables
+	double Normal[3] = {0.0,0.0,0.0};
+	double DeltaP = 0.0;
+	double NormalForce = 0.0;
+	double UnstForceTemp[3] = {0.0,0.0,0.0};
+	double* NullDouble = NULL;
+
+	//get unsteady component of pressure forces and map to nodes
+	//loop through collocation points i,j
+	for (unsigned int i = 0; i < VMOPTS.M; i++) {
+		for (unsigned int j = 0; j < VMOPTS.N; j++) {
+
+			//calculate panel normals
+			PanelNormal(Zeta[i][j], Zeta[i][j+1], \
+						Zeta[i+1][j+1], Zeta[i+1][j],
+									Normal);
+
+
+			// calculate panel areas
+			Area[i][j] = PanelArea(Zeta[i][j], Zeta[i][j+1],\
+								   Zeta[i+1][j+1], Zeta[i+1][j]);
+
+
+			// calculate panel d(Gamma)/dt
+			if (VMOPTS.Steady == true) {
+				dGamma_dt[i][j] = 0.0;
+			} else if (VMOPTS.Steady == false) {
+				dGamma_dt[i][j] = (Gamma[i][j] - Gamma_tm1[i][j]) / \
+									VMOPTS.DelTime;
+			}
+
+			// pressure jump
+			DeltaP = dGamma_dt[i][j];
+
+			//calculate corresponding normal force
+			NormalForce = DeltaP*Area[i][j];
+
+
+			// apply along panel normal
+			MulTriad(Normal,NormalForce,UnstForceTemp);
+
+			// map to corner points
+			BilinearInterpTriad(Forces[i][j],Forces[i][j+1],\
+								Forces[i+1][j+1],Forces[i+1][j],\
+								UnstForceTemp,\
+								0.5,0.5,true);
+
+		} //END for j
+	}//END for i
+
+	//get vector of segments
+	std::vector<VortexSegment> Seg;
+
+	//calculate expected number of segements
+	unsigned int K = (VMOPTS.M+1)*VMOPTS.N + VMOPTS.M*(VMOPTS.N+1);
+
+	//initialise segment list
+	for (unsigned int i = 0; i < VMOPTS.M; i++) {
+		for (unsigned int j = 0; j < VMOPTS.N; j++) {
+
+			//segment 4 of panels (:,:)
+			if (VMOPTS.ImageMethod == 1 && j==0) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j][0],&Zeta[i][j][0],\
+								  	  	  	&Gamma[i][j], &Gamma[i][j],\
+								  	  	  	false,true,i,j,4));
+
+			} else if (VMOPTS.ImageMethod == 0 && j==0) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j][0],&Zeta[i][j][0],\
+											&Gamma[i][j], NullDouble,\
+											false,false,i,j,4));
+
+			} else if (j>0) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j][0],&Zeta[i][j][0],\
+											&Gamma[i][j], &Gamma[i][j-1],\
+											false,false,i,j,4));
+
+			} //end if, else-if, else-if
+
+			//segment 1 of panels (:,:)
+			if (i == 0) {
+				Seg.push_back(VortexSegment(&Zeta[i][j][0],&Zeta[i][j+1][0],\
+											&Gamma[i][j], NullDouble,\
+											false,false,i,j,1));
+
+			} else if (i > 0) {
+				Seg.push_back(VortexSegment(&Zeta[i][j][0],&Zeta[i][j+1][0],\
+											&Gamma[i][j], &Gamma[i-1][j],\
+											false,false,i,j,1));
+
+			} // end if, else-if
+
+			//segment 2 of panels(:,N-1)
+			if (j == VMOPTS.N - 1) {
+				Seg.push_back(VortexSegment(&Zeta[i][j+1][0],&Zeta[i+1][j+1][0],\
+											&Gamma[i][j], NullDouble,\
+											false,false,i,j,2));
+
+			} //end if
+
+			//add segment 3 if at the TE
+			if (i == VMOPTS.M - 1) {
+				Seg.push_back(VortexSegment(&Zeta[i+1][j+1][0],&Zeta[i+1][j][0],\
+											&Gamma[i][j], NullDouble,\
+											true,false,i,j,3));
+			} //end if
+		}
+	}
+
+	//check length
+	assert(Seg.size() == K);
+
+	//loop through each segment and add force to Forces
+	for (unsigned int k = 0; k < K; k++) {
+		//get panel i,j
+		unsigned int i = Seg[k].Paneli;
+		unsigned int j = Seg[k].Panelj;
+
+		//declare local vars
+		double ZetaDotSeg[3] = {0.0,0.0,0.0};
+		double UextSeg[3] = {0.0,0.0,0.0};
+		double UwakeSeg[3] = {0.0,0.0,0.0};
+		double UsurfSeg[3] = {0.0,0.0,0.0};
+		double UincSeg[3] = {0.0,0.0,0.0};
+		double ForceSeg[3] = {0.0,0.0,0.0};
+
+		//set collocation location in panel dimensionless coords
+		double Eta1 = 0.5;
+		double Eta2 = 0.5;
+
+		//calc incident veloc
+		// -ZetaDot + Uext + Uwake + Ubound
+
+		//ZetaDot at collocation
+		BilinearInterpTriad(ZetaDot[i][j], ZetaDot[i][j+1], \
+						 	ZetaDot[i+1][j+1], ZetaDot[i+1][j], \
+						 	ZetaDotSeg,Eta1,Eta2,false);
+
+		//Uext at collocation
+		BilinearInterpTriad(Uext[i][j], Uext[i][j+1], \
+							Uext[i+1][j+1], Uext[i+1][j], \
+							UextSeg,Eta1,Eta2,false);
+
+		//Uwake at collocation using segment list
+		//get collocation
+		double Col[3] = {0.0,0.0,0.0};
+		BilinearInterpTriad(Zeta[i][j], Zeta[i][j+1], \
+							Zeta[i+1][j+1], Zeta[i+1][j], \
+							Col,Eta1,Eta2,false);
+
+		//Uwake
+		BiotSavartSurf(ZetaStar_Vec,GammaStar_Vec,Col,\
+					   0,0,\
+					   VMOPTS.Mstar,VMOPTS.N,\
+					   VMOPTS.Mstar,VMOPTS.N,\
+					   VMOPTS.ImageMethod, UwakeSeg);
+
+		//Usurf
+		// set self influence to zero
+		bool ignore = Seg[k].atImage;
+		Seg[k].atImage = true;
+		BiotSurfaceSegments(Seg,VMOPTS.M,VMOPTS.N,\
+				   	   	   	VMOPTS.ImageMethod,Col,\
+				   	   	   	UsurfSeg);
+		Seg[k].atImage = ignore;
+
+		//Combine Uext - ZetaDot
+		SubTriad(UextSeg,ZetaDotSeg,UincSeg);
+		//Add on Uwake
+		AddTriad(UincSeg,UwakeSeg,UincSeg);
+		//Add on Usurf
+		AddTriad(UincSeg,UsurfSeg,UincSeg);
+
+		//Get force
+		Seg[k].Force(UincSeg,ForceSeg);
+
+		//Map to corner points
+		BilinearInterpTriad(Forces[i][j], Forces[i][j+1], \
+							Forces[i+1][j+1], Forces[i+1][j], \
+							ForceSeg,Eta1,Eta2,true);
+	}
+
+}
+
 
 void KatzForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 				const double* ZetaStar_Vec, const double* GammaStar_Vec,\
@@ -576,7 +1016,7 @@ void cpp_solver_vlm(const double* Zeta_Vec, const double* ZetaDot_Vec, \
 	Eigen::VectorXd RHS(VMOPTS.M*VMOPTS.N);
 	EigenMapVectXd Gamma(Gamma_Vec,VMOPTS.M*VMOPTS.N);
 	EigenMapVectXd GammaStar(GammaStar_Vec,VMOPTS.Mstar*VMOPTS.N);
-	EigenMapMatrixXd AIC(AIC_Vec,VMOPTS.M*VMOPTS.N,VMOPTS.M*VMOPTS.N);
+	EigenMapMatrixXd Aic(AIC_Vec,VMOPTS.M*VMOPTS.N,VMOPTS.M*VMOPTS.N);
 	EigenMapMatrixXd BIC(BIC_Vec,VMOPTS.M*VMOPTS.N,VMOPTS.M*VMOPTS.N);
 	Eigen::VectorXd Downwash(VMOPTS.M*VMOPTS.N);
 
@@ -813,7 +1253,7 @@ void cpp_solver_vlm(const double* Zeta_Vec, const double* ZetaDot_Vec, \
 						} //END if, else if VMOPTS.M-1
 
 						// element of AIC matrix
-						AIC(i*VMOPTS.N + j,ii*VMOPTS.N + jj) = \
+						Aic(i*VMOPTS.N + j,ii*VMOPTS.N + jj) = \
 													DotTriad(Temp3,Normal[i][j]);
 
 					} //END for jj
@@ -844,8 +1284,14 @@ void cpp_solver_vlm(const double* Zeta_Vec, const double* ZetaDot_Vec, \
 		myfile.close();
 	}
 
+	if (false) {// I'm testing the new AIC routine
+		AIC(Zeta_Vec,VMOPTS.M,VMOPTS.N,Zeta_Vec,VMOPTS.M,VMOPTS.N,false,AIC_Vec);
+		// must add wake effect in steady calcs!
+	}
+
 	//solve for gamma
-	Gamma = AIC.colPivHouseholderQr().solve(RHS);
+//	std::cout << "AIC matrix:" << std::endl << Aic << std::endl;
+	Gamma = Aic.colPivHouseholderQr().solve(RHS);
 
 	//set GammaStar to TE velocities
 	//check if steady set all to TE gamma

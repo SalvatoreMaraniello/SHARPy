@@ -39,7 +39,8 @@ def WriteToOutFile(writeDict,
                      PosIni,
                      PsiIni,
                      XBELEM,
-                     ctrlSurf):
+                     ctrlSurf = None,
+                     mpcCont = None):
     """@brief Write simulation outputs to file object.
     
     @param writeDict An ordered dict of outputs to write.
@@ -51,6 +52,7 @@ def WriteToOutFile(writeDict,
     @param PsiIni Initial element CRVs.
     @param XBELEM Element info derived type from PyBeam.
     @param ctrlSurf Control surface derived type.
+    @param mpcCont MPC controller.
     """
     
     fp.write("{:<14,e}".format(Time_iStep))
@@ -132,19 +134,23 @@ def WriteToOutFile(writeDict,
             
             fp.write("{:<14,e}".format(locStrain[0,3+component]))
         
-        elif re.search(r'^u_.',myStr):
+        elif re.search(r'^u_.',myStr) and ctrlSurf != None:
             if re.search(r'^u_opt_[0-9]',myStr):
                 index = int(myStr[6])
                 fp.write("{:<14,e}".format(ctrlSurf.beta))
             else:
                 raise IOError("u_opt output format not recognised")
             
-        elif re.search(r'^du_.',myStr):
+        elif re.search(r'^du_.',myStr) and ctrlSurf != None:
             if re.search(r'^du_opt_[0-9]',myStr):
                 index = int(myStr[7])
                 fp.write("{:<14,e}".format(ctrlSurf.betaDot))
             else:
                 raise IOError("du_opt output format not recognised")
+            
+        elif re.search(r'^contTime',myStr) and mpcCont != None:
+            fp.write("{:<14,e}".format(mpcCont.contTime))
+            
         else:
             ErrorMsg = "writeDict key not recognised. (" + myStr + ")"
             raise IOError(ErrorMsg)

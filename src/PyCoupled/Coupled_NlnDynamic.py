@@ -26,7 +26,7 @@ from PyAero.UVLM.Solver.VLM import InitSteadyExternalVels
 from PyAero.UVLM.Solver.VLM import InitSteadyWake
 from PyCoupled.Utils.DerivedTypesAeroelastic import AeroelasticOps
 import PyCoupled.Coupled_NlnStatic as Static
-import PyBeam.Utils.XbeamLib as XbeamLib
+import PyBeam.Utils.XbeamLib as xbl
 from PyCoupled.Coupled_NlnStatic import AddGravityLoads
 from DerivedTypesAero import ControlSurf
 from collections import OrderedDict
@@ -59,7 +59,10 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     @param VMINPUT UVLM solver inputs (for initialization in Python).
     @param VMUNST Unsteady input information for aero solver.
     @param AELAOPTS Options relevant to coupled aeroelastic simulations.
-    @param writeDict OrderedDict of 'name':tuple of outputs to write.
+    
+    kwords:
+    @param writeDict OrderedDict of of outputs to write.
+    @param mpcCont Instance of PyMPC.MPC class.
     """
 
     # I/O management
@@ -265,15 +268,15 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                    TimeStep = 0,
                                    NumTimeSteps = XBOPTS.NumLoadSteps.value,
                                    Time = 0.0,
-                                   Text = True)
+                                   Text = False)
     
     # Open output file for writing
     if 'writeDict' in kwords and Settings.WriteOut == True:
-        fp = OpenOutFile(writeDict, XBOPTS, Settings)
+        fp = OpenOutFile(kwords['writeDict'], XBOPTS, Settings)
         
     # Write initial outputs to file.
     if 'writeDict' in kwords and Settings.WriteOut == True:
-        WriteToOutFile(writeDict,
+        WriteToOutFile(kwords['writeDict'],
                        fp,
                        Time[0],
                        PosDefor,
@@ -281,7 +284,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                        PosIni,
                        PsiIni,
                        XBELEM,
-                       ctrlSurf)
+                       ctrlSurf,
+                       kwords['mpcCont'])
     # END if write
     
     # sm write class
@@ -305,7 +309,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         
         # Save Gamma at iStep.
         GammaSav = Gamma.copy(order = 'C')
-        
         # Force at current time-step
         if iStep > 0 and AELAOPTS.Tight == False:
             
@@ -313,14 +316,14 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             AeroForces[:,:,:] = 0.0
             
             # Update CRV.
-            PsiA_G = BeamLib.Cbeam3_quat2psi(Quat) # CRV at iStep
+            PsiA_G = xbl.quat2psi(Quat) # CRV at iStep
             
             # Update origin.
             OriginA_G[:] = OriginA_G[:] + ForcedVel[iStep-1,:3]*dt
             
             # Update control surface deflection.
             if VMINPUT.ctrlSurf != None:
-                if 'mpcCont' in kwords:
+                if 'mpcCont' in kwords and kwords['mpcCont'] != None:
                     uOpt = kwords['mpcCont'].getUopt(
                             getState(Gamma,GammaStar,GammaDot,X,dXdt) )
                     VMINPUT.ctrlSurf.update(Time[iStep],uOpt[0,0])
@@ -360,14 +363,14 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             if Settings.PlotTec==True:
                 PostProcess.WriteUVLMtoTec(FileObject,
-                                           Zeta,
-                                           ZetaStar,
+                                           Zeta - OriginA_G[:],
+                                           ZetaStar - OriginA_G[:],
                                            Gamma,
                                            GammaStar,
                                            TimeStep = iStep,
                                            NumTimeSteps = XBOPTS.NumLoadSteps.value,
                                            Time = Time[iStep],
-                                           Text = True)
+                                           Text = False)
 
             # map AeroForces to beam.
             CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
@@ -379,16 +382,18 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         #END if iStep > 0
         
         # Quaternion update for orientation.
-        Temp = np.linalg.inv(Unit4 + 0.25*XbeamLib.QuadSkew(ForcedVel[iStep+1,3:])*dt)
-        Quat = np.dot(Temp, np.dot(Unit4 - 0.25*XbeamLib.QuadSkew(ForcedVel[iStep,3:])*dt, Quat))
+        Temp = np.linalg.inv(Unit4 + 0.25*xbl.QuadSkew(ForcedVel[iStep+1,3:])*dt)
+        Quat = np.dot(Temp, np.dot(Unit4 - 0.25*xbl.QuadSkew(ForcedVel[iStep,3:])*dt, Quat))
         Quat = Quat/np.linalg.norm(Quat)
-        Cao  = XbeamLib.Rot(Quat) # transformation matrix at iStep+1
+        Cao  = xbl.Rot(Quat) # transformation matrix at iStep+1
         
         if AELAOPTS.Tight == True:
             # CRV at iStep+1
-            PsiA_G = BeamLib.Cbeam3_quat2psi(Quat)
+            PsiA_G = xbl.quat2psi(Quat)
             # Origin at iStep+1
             OriginA_G[:] = OriginA_G[:] + ForcedVel[iStep,:3]*dt
+            
+            GammaSav = Gamma.copy(order = 'C')
             
         # Predictor step.
         X        = X + dt*dXdt + (0.5-beta)*dXddt*pow(dt,2.0)
@@ -572,12 +577,12 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                            PosIni,
                            PsiIni,
                            XBELEM,
-                           ctrlSurf)
+                           ctrlSurf,
+                           kwords['mpcCont'])
         # END if write.
         XBOUT.QuatList.append(Quat)
         
         
-        # 'Rollup' due to external velocities. TODO: Must add gusts here!
         ZetaStar[:,:] = ZetaStar[:,:] + VMINPUT.U_infty*dt
         if VMINPUT.gust != None:
             ZetaStar[:,:,:] = ZetaStar[:,:,:] + VMINPUT.gust.Vels(ZetaStar)*dt
@@ -661,7 +666,6 @@ def getState(Gamma,GammaStar,GammaDot,X,dXdt):
     nX = X.size
     nXd = dXdt.size
     xSize = nG + nGs + nGd + nX + nXd
-    
     # Print if you want to cross reference state sizes with MATLAB.
     check = False
     if check == True:
@@ -699,13 +703,20 @@ if __name__ == '__main__':
                                  NewmarkDamp = ct.c_double(5e-3))
     # beam inputs.
     XBINPUT = DerivedTypes.Xbinput(3,10)
-    XBINPUT.BeamLength = 6.096
+    XBINPUT.BeamLength = 5*6.096
+#     XBINPUT.BeamLength = 16.0
     XBINPUT.BeamStiffness[0,0] = 1.0e+09
     XBINPUT.BeamStiffness[1,1] = 1.0e+09
     XBINPUT.BeamStiffness[2,2] = 1.0e+09
     XBINPUT.BeamStiffness[3,3] = 0.99e+06
     XBINPUT.BeamStiffness[4,4] = 9.77e+06
     XBINPUT.BeamStiffness[5,5] = 1.0e+09
+#     XBINPUT.BeamStiffness[0,0] = 1.0e+09
+#     XBINPUT.BeamStiffness[1,1] = 1.0e+09
+#     XBINPUT.BeamStiffness[2,2] = 1.0e+09
+#     XBINPUT.BeamStiffness[3,3] = 1.0e+04
+#     XBINPUT.BeamStiffness[4,4] = 2.0e+04
+#     XBINPUT.BeamStiffness[5,5] = 5.0e+06
     XBINPUT.BeamStiffness[:,:] = 1.0*XBINPUT.BeamStiffness[:,:]
     XBINPUT.BeamMass[0,0] = 35.71
     XBINPUT.BeamMass[1,1] = 35.71
@@ -713,42 +724,53 @@ if __name__ == '__main__':
     XBINPUT.BeamMass[3,3] = 8.64
     XBINPUT.BeamMass[4,4] = 0.001
     XBINPUT.BeamMass[5,5] = 0.001
+#     XBINPUT.BeamMass[0,0] = 0.75
+#     XBINPUT.BeamMass[1,1] = 0.75
+#     XBINPUT.BeamMass[2,2] = 0.75
+#     XBINPUT.BeamMass[3,3] = 0.1
+#     XBINPUT.BeamMass[4,4] = 0.001
+#     XBINPUT.BeamMass[5,5] = 0.001
     # Off diagonal terms (in Theodorsen sectional coordinates)
     ElasticAxis = -0.34
-    InertialAxis = -7.0/50.0
+#     ElasticAxis = -0.5
+#     InertialAxis = -7.0/50.0
+    InertialAxis =  -0.54
+#     InertialAxis = -0.5
     x_alpha = InertialAxis - ElasticAxis
     # pitch-plunge coupling term (b-frame coordinates)
     c = 1.8288
     cgLoc = 0.5*c*np.array([0.0, x_alpha, 0.0])
     cgSkew = Skew(cgLoc)
-#     mOff = x_alpha*(c/2)*XBINPUT.BeamMass[0,0]
-#     XBINPUT.BeamMass[2,3] = -mOff
-#     XBINPUT.BeamMass[0,5] = mOff
-#     XBINPUT.BeamMass[3:,:3] = XBINPUT.BeamMass[:3,3:].T
     XBINPUT.BeamMass[:3,3:] = XBINPUT.BeamMass[0,0] * cgSkew
     XBINPUT.BeamMass[3:,:3] = XBINPUT.BeamMass[:3,3:].T
     XBINPUT.BeamMass[4,4] = 0.001 + XBINPUT.BeamMass[0,0]*pow(cgLoc[2],2.0)
     XBINPUT.BeamMass[5,5] = 0.001 + XBINPUT.BeamMass[0,0]*pow(cgLoc[1],2.0)
     
+    #XBINPUT.g = 9.81
+    
     # Get suggested panelling.
-    Umag = 140.0
+    Umag = 28.0
     M = 8
 #     M, delTime = panellingFromFreq(70,c,Umag)
+    delTime = c/(Umag*M)
     delTime = c/(Umag*M)
     # Unsteady parameters.
     XBINPUT.dt = delTime
     XBINPUT.t0 = 0.0
-    XBINPUT.tfin = 1.0
+    XBINPUT.tfin = 5.0
     
     # Set motion of wing.
-    NumSteps = np.ceil( (XBINPUT.tfin + XBINPUT.dt - XBINPUT.t0) / XBINPUT.dt) + 2
+    alpha = 0.0*np.pi/180.0
+    NumSteps = np.ceil( (XBINPUT.tfin + XBINPUT.dt - XBINPUT.t0) / XBINPUT.dt)
     XBINPUT.ForcedVel = np.zeros((NumSteps,6),ct.c_double,'F')
     for i in range(XBINPUT.ForcedVel.shape[0]):
-        XBINPUT.ForcedVel[i,:] = [0.0, Umag, 0.0, 0.0, 0.0, 0.0]
+        XBINPUT.ForcedVel[i,:] = [0.0, Umag*np.cos(alpha), -Umag*np.sin(alpha), 0.0, 0.0, 0.0]
     XBINPUT.ForcedVelDot = np.zeros((NumSteps,6),ct.c_double,'F')
      
+     
     # aero params.
-    WakeLength = 15.0*1.8#c
+    WakeLength = 15.0*1.8 #c
+#     WakeLength = 30.0
     Mstar = int(WakeLength/(delTime*Umag))
     # aero options.
     N = XBINPUT.NumNodesTot - 1
@@ -757,7 +779,7 @@ if __name__ == '__main__':
                                      ImageMethod = True,
                                      Mstar = Mstar,
                                      Steady = False,
-                                     KJMeth = True,
+                                     KJMeth = False,
                                      NewAIC = True,
                                      DelTime = delTime,
                                      NumCores = 4)
@@ -768,7 +790,7 @@ if __name__ == '__main__':
     jMax = N
     typeMotion = 'asInput'
     betaBar = 0.0*np.pi/180.0
-    omega = 30.0
+    omega = np.pi
     ctrlSurf = ControlSurf(iMin,
                            iMax,
                            jMin,
@@ -779,7 +801,7 @@ if __name__ == '__main__':
     
     # Gust inputs
     gust = Gust(uMag = 17.07,
-                l = 10.0,
+                l = 20.0,
                 r = 0.0)
     
     VMINPUT = DerivedTypesAero.VMinput(c = c,
@@ -792,13 +814,15 @@ if __name__ == '__main__':
                                        gust = gust)
     
     # Aerolastic simulation.
+    AirDensity = 1.02
     AELAOPTS = AeroelasticOps(ElasticAxis = ElasticAxis,
                               InertialAxis = InertialAxis,
-                              AirDensity = 1.02,
+                              AirDensity = AirDensity,
                               Tight = False,
                               ImpStart = True)
     
-    mpcCont = MPC.MPC('golandControl','/home/rjs10/git/SHARPy/src/PyMPC/systems/')
+    mpcCont = MPC.MPC('modifiedGolandControlOutput','/home/rjs10/git/SHARPy/src/PyMPC/systems/', LQR = True)
+#     mpcCont = None
     
     # Live output options.
     writeDict = OrderedDict()
@@ -808,10 +832,12 @@ if __name__ == '__main__':
     writeDict['kappa_z_root'] = 0
     writeDict['u_opt_1'] = 0
     writeDict['du_opt_1'] = 0
+    writeDict['contTime'] = 0
     
-    Settings.OutputDir = Settings.SharPyProjectDir + "output/MPC/Goland/testMPC/"
-    Settings.OutputFileRoot = "Q140_M8N20_CS80_L10_Nmod8_wUnit_NH100_uFree"
+    Settings.OutputDir = Settings.SharPyProjectDir + "output/MPC/ModifiedGoland/testMPC/"
+    Settings.OutputFileRoot = "Q28_M8N20_CS80_L20_W1707_Nmod8_LQR"
     
     # Solve nonlinear dynamic simulation.
     Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS,
-             writeDict =  writeDict,mpcCont = mpcCont)
+             writeDict =  writeDict, mpcCont = mpcCont)
+

@@ -1,3 +1,6 @@
+# editor made local copies
+*~
+
 *.py[cod]
 __pycache__/
 
@@ -31,7 +34,11 @@ var
 sdist
 develop-eggs
 .installed.cfg
+<<<<<<< HEAD
 #lib # sm july 2014
+=======
+#lib
+>>>>>>> 6b938af9e48891042977aa916567a6853bfabd53
 lib64
 res  # 
 
@@ -50,6 +57,7 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+.cproject
 
 # Ignore all .pdfs
 *.pdf

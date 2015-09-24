@@ -13,7 +13,6 @@ from VLM import Run_Cpp_Solver_VLM
 TestDir = (Settings.SharPyProjectDir + 'output/tests/PyAero/UVLM/' 
            + 'SteadyVLM/')
 
-
 class Test_SteadyVLM_v_TAT(unittest.TestCase):
     """@brief Test lift and drag for very large aspect ratio problem."""
 
@@ -82,7 +81,6 @@ class Test_SteadyVLM_v_UVLMpp(unittest.TestCase):
         # Check lift then drag.
         self.assertAlmostEqual(Coeffs[2],0.993501,5)
         self.assertAlmostEqual(-Coeffs[1],0.0113952,5)
-        
 
 class Test_SteadyVLM_v_TAT_KJMeth(unittest.TestCase):
     """@brief Test lift and drag for very large aspect ratio problem."""

@@ -11,7 +11,8 @@
 #include <VLM.hpp>
 #include <stdio.h>
 #include <datatypesx.hpp>
-
+#include <aicMats.hpp>
+#include <indices.hpp>
 
 // forward declare some useful functions
 
@@ -150,6 +151,287 @@ void cpp_wrap_solver_vlm(const double* Zeta_Vec, const double* ZetaDot_Vec, \
 			AIC_Vec,\
 			BIC_Vec);
 
+}
+
+void cpp_wrap_KJMethodForces(const double* Zeta_Vec,
+					  const double* Gamma_Vec,
+					  const double* ZetaStar_Vec,
+					  const double* GammaStar_Vec,
+					  const double* ZetaDot_Vec,
+					  const double* Uext_Vec,
+					  unsigned int& VMOPTS_M,
+					  unsigned int& VMOPTS_N,
+					  bool& VMOPTS_ImageMethod,
+					  unsigned int& VMOPTS_Mstar,
+					  bool& VMOPTS_Steady,
+					  bool& VMOPTS_KJMeth,
+					  bool& VMOPTS_NewAIC,
+					  double& VMOPTS_DelTime,
+					  bool& VMOPTS_Rollup,
+					  unsigned int& VMOPTS_NumCores,
+					  const double* Gamma_tm1_Vec,
+					  double* Forces_Vec) {
+	/** @brief wrapper for cpp_solver_vlm
+	 */
+
+	// Convert VMOPTS_* into class
+	VMopts VMOPTS;
+	VMOPTS.M = VMOPTS_M;
+	VMOPTS.N = VMOPTS_N;
+	VMOPTS.ImageMethod = VMOPTS_ImageMethod;
+	VMOPTS.Mstar = VMOPTS_Mstar;
+	VMOPTS.Steady = VMOPTS_Steady;
+	VMOPTS.KJMeth = VMOPTS_KJMeth;
+	VMOPTS.NewAIC = VMOPTS_NewAIC;
+	VMOPTS.DelTime = VMOPTS_DelTime;
+	VMOPTS.Rollup = VMOPTS_Rollup;
+	VMOPTS.NumCores = VMOPTS_NumCores;
+
+	KJMethodForces(Zeta_Vec, Gamma_Vec, ZetaStar_Vec, GammaStar_Vec,
+				   ZetaDot_Vec, Uext_Vec, VMOPTS, Gamma_tm1_Vec, Forces_Vec);
+
+}
+
+void cpp_wrap_KJMethodForces_vC(const double* Zeta_Vec,
+					  const double* Gamma_Vec,
+					  const double* ZetaStar_Vec,
+					  const double* GammaStar_Vec,
+					  const double* ZetaDot_Vec,
+					  const double* Uext_Vec,
+					  unsigned int& VMOPTS_M,
+					  unsigned int& VMOPTS_N,
+					  bool& VMOPTS_ImageMethod,
+					  unsigned int& VMOPTS_Mstar,
+					  bool& VMOPTS_Steady,
+					  bool& VMOPTS_KJMeth,
+					  bool& VMOPTS_NewAIC,
+					  double& VMOPTS_DelTime,
+					  bool& VMOPTS_Rollup,
+					  unsigned int& VMOPTS_NumCores,
+					  const double* Gamma_tm1_Vec,
+					  double* Forces_Vec) {
+	/** @brief wrapper for cpp_solver_vlm
+	 */
+
+	// Convert VMOPTS_* into class
+	VMopts VMOPTS;
+	VMOPTS.M = VMOPTS_M;
+	VMOPTS.N = VMOPTS_N;
+	VMOPTS.ImageMethod = VMOPTS_ImageMethod;
+	VMOPTS.Mstar = VMOPTS_Mstar;
+	VMOPTS.Steady = VMOPTS_Steady;
+	VMOPTS.KJMeth = VMOPTS_KJMeth;
+	VMOPTS.NewAIC = VMOPTS_NewAIC;
+	VMOPTS.DelTime = VMOPTS_DelTime;
+	VMOPTS.Rollup = VMOPTS_Rollup;
+	VMOPTS.NumCores = VMOPTS_NumCores;
+
+	KJMethodForces_vC(Zeta_Vec, Gamma_Vec, ZetaStar_Vec, GammaStar_Vec,
+				   ZetaDot_Vec, Uext_Vec, VMOPTS, Gamma_tm1_Vec, Forces_Vec);
+
+}
+
+void cpp_wrap_KJMethodForces_vC_mod(const double* Zeta_Vec,
+					  const double* Gamma_Vec,
+					  const double* ZetaStar_Vec,
+					  const double* GammaStar_Vec,
+					  const double* ZetaDot_Vec,
+					  const double* Uext_Vec,
+					  unsigned int& VMOPTS_M,
+					  unsigned int& VMOPTS_N,
+					  bool& VMOPTS_ImageMethod,
+					  unsigned int& VMOPTS_Mstar,
+					  bool& VMOPTS_Steady,
+					  bool& VMOPTS_KJMeth,
+					  bool& VMOPTS_NewAIC,
+					  double& VMOPTS_DelTime,
+					  bool& VMOPTS_Rollup,
+					  unsigned int& VMOPTS_NumCores,
+					  const double* Gamma_tm1_Vec,
+					  double* Forces_Vec) {
+	/** @brief wrapper for cpp_solver_vlm
+	 */
+
+	// Convert VMOPTS_* into class
+	VMopts VMOPTS;
+	VMOPTS.M = VMOPTS_M;
+	VMOPTS.N = VMOPTS_N;
+	VMOPTS.ImageMethod = VMOPTS_ImageMethod;
+	VMOPTS.Mstar = VMOPTS_Mstar;
+	VMOPTS.Steady = VMOPTS_Steady;
+	VMOPTS.KJMeth = VMOPTS_KJMeth;
+	VMOPTS.NewAIC = VMOPTS_NewAIC;
+	VMOPTS.DelTime = VMOPTS_DelTime;
+	VMOPTS.Rollup = VMOPTS_Rollup;
+	VMOPTS.NumCores = VMOPTS_NumCores;
+
+	KJMethodForces_vC_mod(Zeta_Vec, Gamma_Vec, ZetaStar_Vec, GammaStar_Vec,
+				   ZetaDot_Vec, Uext_Vec, VMOPTS, Gamma_tm1_Vec, Forces_Vec);
+
+}
+
+void cpp_wrap_AIC(const double* zetaSrc_,
+				  const unsigned int& mSrc,
+				  const unsigned int& nSrc,
+				  const double* zetaTgt_,
+				  const unsigned int& mTgt,
+				  const unsigned int& nTgt,
+				  const bool& imageMeth,
+				  double* Aic_) {
+	//call AIC generator
+	AIC(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,imageMeth,Aic_);
+}
+
+void cpp_wrap_dAgamma0_dZeta(const double* zetaSrc_,
+								const unsigned int& mSrc,
+								const unsigned int& nSrc,
+								const double* gamma0_,
+								const double* zetaTgt_,
+								const unsigned int& mTgt,
+								const unsigned int& nTgt,
+								double* dAgam0_) {
+	// call function
+	dAgamma0_dZeta(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dAgam0_);
+}
+
+void cpp_wrap_dWzetaPri0_dZeta(const double* zeta_,
+								  const unsigned int& m,
+								  const unsigned int& n,
+								  const double* zetaPri_,
+								  double* dX_) {
+	//call function
+	dWzetaPri0_dZeta(zeta_, m, n, zetaPri_, dX_);
+}
+
+void cpp_wrap_genW(const double* zeta_,
+					  const unsigned int& M,
+					  const unsigned int& N,
+					  double* W_){
+	genW(zeta_,M,N,W_);
+}
+
+void cpp_wrap_genH(const unsigned int& m,
+		   	   	     const unsigned int& n,
+		   	   	     double* H_){
+	genH(m,n,H_);
+}
+
+void cpp_wrap_genXi(const unsigned int& m,
+		    		 const unsigned int& n,
+		    		 const double& eta1,
+		    		 const double& eta2,
+		    		 double* Xi_) {
+	genXi(m,n,eta1,eta2,Xi_);
+}
+
+void cpp_wrap_AIC3(const double* zetaSrc_,
+		  const unsigned int& mSrc,
+		  const unsigned int& nSrc,
+		  const double* zetaTgt_,
+		  const unsigned int& mTgt,
+		  const unsigned int& nTgt,
+		  double* dX_){
+	AIC3(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,dX_);
+}
+
+void cpp_wrap_AIC3noTE(const double* zetaSrc_,
+		  const unsigned int& mSrc,
+		  const unsigned int& nSrc,
+		  const double* zetaTgt_,
+		  const unsigned int& mTgt,
+		  const unsigned int& nTgt,
+		  const bool& wakeSrc,
+		  double* dX_){
+	AIC3noTE(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,wakeSrc,dX_);
+}
+
+void cpp_wrap_dA3gamma0_dZeta(const double* zetaSrc_,
+								const unsigned int& mSrc,
+								const unsigned int& nSrc,
+								const double* gamma0_,
+								const double* zetaTgt_,
+								const unsigned int& mTgt,
+								const unsigned int& nTgt,
+								double* dA3gam0_) {
+	// call function
+	dA3gamma0_dZeta(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dA3gam0_);
+}
+
+void cpp_wrap_Y1(const double* vM_,
+				   const double* zeta_,
+				   const unsigned int& m,
+				   const unsigned int& n,
+				   double* Y1_) {
+	Y1(vM_,zeta_,m,n,Y1_);
+}
+
+void cpp_wrap_Y2(const double* gamma_,
+				   const double* vM_,
+				   const unsigned int& m,
+				   const unsigned int& n,
+				   double* Y2_) {
+	Y2(gamma_,vM_,m,n,Y2_);
+}
+
+void cpp_wrap_Y3(const double* gamma_,
+				   const double* zeta_,
+				   const unsigned int& m,
+				   const unsigned int& n,
+				   double* Y3_) {
+	Y3(gamma_,zeta_,m,n,Y3_);
+}
+
+void cpp_wrap_Y4(const double* zeta_,
+				  const unsigned int& m,
+				  const unsigned int& n,
+				  double* Y4_) {
+	Y4(zeta_,m,n,Y4_);
+}
+
+void cpp_wrap_Y5(const double* gammaPri_,
+				   const double* zeta_,
+				   const unsigned int& m,
+				   const unsigned int& n,
+				   double* Y5_) {
+	Y5(gammaPri_,zeta_,m,n,Y5_);
+}
+
+void cpp_wrap_AIC3s(const double* zetaSrc_,
+		  const unsigned int& mSrc,
+		  const unsigned int& nSrc,
+		  const double* zetaTgt_,
+		  const unsigned int& mTgt,
+		  const unsigned int& nTgt,
+		  double* dX_){
+	AIC3s(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,dX_);
+}
+
+void cpp_wrap_AIC3s_noTE(const double* zetaSrc_,
+		  const unsigned int& mSrc,
+		  const unsigned int& nSrc,
+		  const double* zetaTgt_,
+		  const unsigned int& mTgt,
+		  const unsigned int& nTgt,
+		  const bool& wakeSrc,
+		  double* dX_){
+	AIC3s_noTE(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,wakeSrc,dX_);
+}
+
+unsigned int cpp_wrap_q_k(const unsigned int k_,
+				   	         const unsigned int N,
+				   	         const unsigned int no) {
+	return(q_k(k_,N,no));
+}
+
+void cpp_wrap_dAs3gam0_dZeta_numerical(const double* zetaSrc_,
+									  const unsigned int& mSrc,
+									  const unsigned int& nSrc,
+									  const double* gamma0_,
+									  const double* zetaTgt_,
+									  const unsigned int& mTgt,
+									  const unsigned int& nTgt,
+									  double* dX_) {
+	dAs3gam0_dZeta_numerical(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dX_);
 }
 
 } // END extern C

@@ -44,7 +44,7 @@ P = 1.0*Q[:,:] # Terminal constraint
 R = 1.0*np.eye(Bd.shape[1])
 
 # Input constraints
-eui = 360.0*np.pi/180
+eui = 10.0*np.pi/180
 u_lb = [[-eui]]
 u_ub = [[eui]]
 
