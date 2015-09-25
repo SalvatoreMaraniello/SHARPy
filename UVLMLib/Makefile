@@ -159,9 +159,14 @@ OBJS=\
 	$(OBJDIR)/datatypesx.o \
 	$(OBJDIR)/PanelTools.o \
 	$(OBJDIR)/VLM.o \
+	$(OBJDIR)/aicMats.o	\
+	$(OBJDIR)/indices.o \
 	$(OBJDIR)/triads.o \
 	$(OBJDIR)/vorticity.o \
-	$(OBJDIR)/wrapper.o 
+	$(OBJDIR)/wrapper.o
+
+
+
 
 
 ################################################################################
@@ -174,8 +179,18 @@ OBJS=\
 # $? names of all prerequisites that are newer than the target, separated by spaces. 
 
 #--------------------------------------------------------------- dynamic Library
-UVLMLib: buildfolder  $(OBJS)
-	$(CPPCOMP) $(INCLOPT) $(LINKOPT) -o $(BUILDDIR)/UVLMLib.so $(OBJS)
+UVLMLib: buildfolder $(OBJS)
+	@echo 'Building target: ./Debug/main.o'	
+	$(CPPCOMP) $(INCLOPT) $(COMPOPT) -c -o ./Debug/main.o ./main/main.cpp
+	@echo 'Finished building target: ./Debug/main.o'
+	@echo 'Building target: $(BUILDDIR)/UVLMLib.so'	
+	$(CPPCOMP) $(LINKOPT) -o $(BUILDDIR)/UVLMLib.so ./Debug/main.o $(OBJS)
+	@echo 'Finished building target: $(BUILDDIR)/UVLMLib.so'
+
+#	g++ -fopenmp -shared  -o ./Debug/UVLMLib.so ./Debug/main.o  ./Debug/lib/PanelTools.o ./Debug/lib/VLM.o ./Debug/lib/aicMats.o ./Debug/lib/datatypesx.o ./Debug/lib/indices.o ./Debug/lib/triads.o ./Debug/lib/vorticity.o ./Debug/lib/wrapper.o 
+#	$(CPPCOMP)               $(LINKOPT) -o $(BUILDDIR)/UVLMLib.so $(OBJS) ./Debug/main.o
+
+
 
 mainexe: buildfolder  $(OBJS)
 	$(CPPCOMP) $(INCLOPT) $(COMPOPT) -c -o ./Debug/main.o ./main/main.cpp  
