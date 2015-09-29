@@ -157,7 +157,7 @@ def vector_time_history(Xi,vec0=np.array([1,0,0])):
     return V
 
 
-def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a',xi0=np.array([1,0,0,0]),**kwargs):
+def THPosDefGlobal(DynOut,Time,RefVel,set_origin='a',**kwargs): #xi0=np.array([1,0,0,0]),
     ''' 
     Given a time simulation, the function changes the FoR in which the Position
     of each node of the beam, at each time-step of the simulation, from local (a)
@@ -176,19 +176,25 @@ def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a',xi0=np.array([1,0,0,0]),**k
         nn: beam node
         ii: coordinate x, y, z
     
+    The orientation of the FoR A can be passed in input (Xi) or can be integrated
+    from the FoR A velocities.
     '''
 
+    
+    if 'Xi' in  kwargs:
+        Xi=kwargs['Xi']
+    else:
+        if 'xi0' in kwargs:
+            xi0 = kwargs['xi0']
+        else:
+            xi0=np.array([1,0,0,0])
+        Xi = PyLibs.numerics.integr.rotations(RefVel[:,3:],Time,xi0=xi0)
+        
     NumSteps=len(Time)-1
     NumNodes = int( (DynOut.shape[0])/(NumSteps+1) )
     THPosDefGlobal=np.zeros((NumSteps+1,NumNodes,3))  
-
-    print('NUmSteps=%d'%NumSteps)
-    print('NUmNodes',NumNodes)
-    print('Dynout shape',DynOut.shape)
      
     THPosDefLocal = DynOut.reshape((NumSteps+1,NumNodes,3)) # output in a frame
-
-
 
     if set_origin=='a':
         aOrigin = np.zeros((NumSteps+1,3)) # a bit memory consuming but who cares...
@@ -197,9 +203,9 @@ def THPosDefGlobal(DynOut,RefVel,Time,set_origin='a',xi0=np.array([1,0,0,0]),**k
     else:
         raise NameError("Set a valid origin ('a' or 'G') for the positions vectors!")
         
-    # compute quaternions associated with a frame rotation
-    if not 'Xi' in kwargs:
-        Xi = PyLibs.numerics.integr.rotations(RefVel[:,3:],Time,xi0=xi0)
+    #### compute quaternions associated with a frame rotation
+    #if not 'Xi' in kwargs:
+    #    Xi = PyLibs.numerics.integr.rotations(RefVel[:,3:],Time,xi0=xi0)
     
     # apply rotation to the position vector of each node
     # nb: two loops are requires as the position vector changes at each time-step

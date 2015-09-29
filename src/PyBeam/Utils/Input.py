@@ -6,6 +6,9 @@
 @date       28/11/2012
 @pre        None
 @warning    None
+
+Modified: S. Maraniello, 28 Sep 2015
+    - Node: New BCs allowed
 '''
 
 import sys
@@ -85,29 +88,46 @@ def Elem(XBINPUT, XBOPTS, XBELEM):
 
 
 def Node(XBINPUT, XBOPTS, NumNodes_tot, XBELEM):
-    """@brief Define nodal properties."""
+    """@brief Define nodal properties.
+    
+    Note: the beam is always assumed to lie along the x axis. If spherical joint
+    are found, this is shifted.
+    
+    """
+    
+    # Declare and populate boundary conditions.
+    BoundConds = np.zeros(NumNodes_tot.value,dtype=ct.c_int,order='F')
+    if XBINPUT.BConds[0] is 'M':
+        BoundConds[0                     ] = -1
+        BoundConds[NumNodes_tot.value - 1] = -1 
+        MidNode = (NumNodes_tot.value - 1)/2
+        if XBINPUT.BConds[1] is 'C': BoundConds[ MidNode ] = 1
+        if XBINPUT.BConds[1] is 'S': BoundConds[ MidNode ] = 2
+        x_shift=-XBINPUT.BeamLength*(float(MidNode)/float(NumNodes_tot.value - 1))
+    else:    
+        if XBINPUT.BConds[0] is 'C': BoundConds[                     0] =  1
+        if XBINPUT.BConds[1] is 'C': BoundConds[NumNodes_tot.value - 1] =  1
+        if XBINPUT.BConds[0] is 'F': BoundConds[                     0] = -1
+        if XBINPUT.BConds[1] is 'F': BoundConds[NumNodes_tot.value - 1] = -1
+        if XBINPUT.BConds[0] is 'S': BoundConds[                     0] =  2
+        x_shift=0.0
+        if XBINPUT.BConds[1] is 'S': 
+            BoundConds[NumNodes_tot.value - 1] =  2
+            x_shift=-XBINPUT.BeamLength 
+    if np.max(BoundConds)==0 or XBINPUT.BConds=='SS':
+        raise Exception('Invalid boundary conditions string.')
+
     
     # Default straight beam based on BeamLength
     PosIni = np.zeros((NumNodes_tot.value,3), dtype=ct.c_double, order='F')
     
     for NodeNo in range(0,NumNodes_tot.value):
-        PosIni[NodeNo,0] = XBINPUT.BeamLength*\
+        PosIni[NodeNo,0] = x_shift + XBINPUT.BeamLength*\
                             (float(NodeNo)/float(NumNodes_tot.value - 1))
         
     # Define pre-twist.
-    PhiNodes = np.zeros(NumNodes_tot.value, dtype=ct.c_double, order='F')
-    
-    # Declare and populate boundary conditions.
-    BoundConds = np.zeros(NumNodes_tot.value,dtype=ct.c_int,order='F')
-    if XBINPUT.BConds == 'CF':
-        BoundConds[0] = 1
-        BoundConds[NumNodes_tot.value - 1] = -1
-    elif XBINPUT.BConds == 'CC':
-        BoundConds[0] = 1
-        BoundConds[NumNodes_tot.value - 1] = 1
-    else:
-        raise Exception('Invalid boundary conditions string.')
-    
+    PhiNodes = np.zeros(NumNodes_tot.value, dtype=ct.c_double, order='F')    
+
     return PosIni, PhiNodes, BoundConds
     
 

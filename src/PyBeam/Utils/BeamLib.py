@@ -516,7 +516,6 @@ def Cbeam3_Asbly_Fglobal(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
                 Cao.ctypes.data_as(ct.POINTER(ct.c_double)) ) 
 
 
-
 def Xbeam_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
                         PosIni, PsiIni, PosDefor, PsiDefor,\
                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
@@ -653,6 +652,7 @@ def Xbeam_Solv_FreeNonlinDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni,\
                 XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBNODE.Sflag.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBINPUT.ForceStatic.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 XBINPUT.ForceDyn.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 ForceTime.ctypes.data_as(ct.POINTER(ct.c_double)),\

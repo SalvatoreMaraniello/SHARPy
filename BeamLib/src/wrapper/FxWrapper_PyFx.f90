@@ -952,6 +952,7 @@ module test
 
         type(xbelem),allocatable:: Elem(:)
         type(xbnode),allocatable:: Node(:)
+
         
         allocate(Elem(NumElems))
         allocate(Node(NumNodes_tot))
@@ -2916,7 +2917,7 @@ module test
 &                   Psi, Vector, Mass_Array,                &!for do_xbelem_var
 &                   Stiff_Array,                            &!for do_xbelem_var
 &                   InvStiff_Array, RBMass_Array,           &!for do_xbelem_var
-&                   NumNodes_tot, Master, Vdof, Fdof,       &!for pack_xbnode
+&                   NumNodes_tot, Master, Vdof, Fdof,Sflag, &!for pack_xbnode
 &                   F0_Vec,Fa_Vec,Ftime,                                &
 &                   Vrel_Vec, VrelDot_Vec, Quat,                        &
 &                   Coords_Vec, Psi0_Vec, PosDefor_Vec,                 &
@@ -2949,6 +2950,7 @@ module test
         integer,    intent(in)  :: Master(2*NumNodes_tot)   !for pack_xbnode
         integer,    intent(in)  :: Vdof(NumNodes_tot)       !for pack_xbnode
         integer,    intent(in)  :: Fdof(NumNodes_tot)       !for pack_xbnode
+        integer,    intent(in)  :: Sflag(NumNodes_tot)      !for pack_xbnode
         real(8),    intent(in)  :: F0_Vec(NumNodes_tot*6)   !Applied static nodal forces
         real(8),    intent(in)  :: Fa_Vec(NumNodes_tot*6)   !Amplitude of dynamic nodal forces
         real(8),    intent(in)  :: Ftime(NumSteps+1)    !Time history of applied forces
@@ -2991,6 +2993,7 @@ module test
         real(8)     ,allocatable:: PosDotDefor(:,:)
         real(8)     ,allocatable:: PsiDotDefor(:,:,:)
         real(8)     ,allocatable:: DynOut(:,:)
+
         ! create Options struct
         type(xbopts):: Options
 
@@ -3017,7 +3020,7 @@ module test
 &               Stiff_Array,InvStiff_Array,RBMass_Array)
 
         ! Convert PY data to F90 data
-        call pack_xbnode(NumNodes_tot,Node,Master,Vdof,Fdof)
+        call pack_xbnode(NumNodes_tot,Node,Master,Vdof,Fdof,Sflag)
 
         ! Convert PY data to F90 data
         call pack_xbopts(Options,FollowerForce,FollowerForceRig,            &

@@ -6,6 +6,10 @@
 @date       24/10/2013
 @pre        None
 @warning    None
+
+Modified: S. Maraniello, 25 Sep 2015
+    - I/O with HDF5
+    - Spherical Joints BCs
 '''
 
 import sys
@@ -20,32 +24,44 @@ import XbeamLib
 from DerivedTypes import dump
 from PyBeam.Solver.NonlinearStatic import Solve_Py as Solve_Py_Static
 
-def Solve_F90(XBINPUT,XBOPTS):
+import PyLibs.io.save
+import h5py
+
+
+def Solve_F90(XBINPUT,XBOPTS,**kwords):
     """@brief Nonlinear dynamic structural solver using f90 solve routine."""
     
     #Check correct solution code
     assert XBOPTS.Solution.value == 912, ('NonlinearDynamic (F90) requested' +\
-                                              ' with wrong solution code')
+                                              ' with wrong solution code')  
     
-    
+    # I/O management
+    if 'SaveDict' in kwords:
+        SaveDict=kwords['SaveDict']
+        Settings.OutputDir     =SaveDict['OutputDir']
+        Settings.OutputFileRoot=SaveDict['OutputFileRoot']     
+
     #Initialise variables for static analysis
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT, XBOPTS)
     
-    
     #Change solution code to NonlinearStatic
     XBOPTS.Solution.value = 112
-    
     
     #Set initial conditions as undef config
     PosDefor = PosIni.copy(order='F')
     PsiDefor = PsiIni.copy(order='F')
     
-    
     #Solve static
-    BeamLib.Cbeam3_Solv_NonlinearStatic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM,\
+    # sm: to be defined
+    print('static solution commented out!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+    solve_static=False
+    if solve_static:
+        BeamLib.Cbeam3_Solv_NonlinearStatic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM,\
                             PosIni, PsiIni, XBNODE, NumDof,\
                             PosDefor, PsiDefor)
+    else:
+        pass
     
     #Change solution code back to NonlinearDynamic
     XBOPTS.Solution.value = 912
@@ -68,10 +84,16 @@ def Solve_F90(XBINPUT,XBOPTS):
         
     
     #Initialise variables for dynamic analysis
+    #### sm: previous code
+    #Time, NumSteps, ForceTime, ForcedVel, ForcedVelDot,\
+    #PosDotDef, PsiDotDef,\
+    #OutGrids, PosPsiTime, VelocTime, DynOut\
+    #    = BeamInit.Dynamic(XBINPUT,XBOPTS, NumNodes_tot)
     Time, NumSteps, ForceTime, ForcedVel, ForcedVelDot,\
     PosDotDef, PsiDotDef,\
     OutGrids, PosPsiTime, VelocTime, DynOut\
-        = BeamInit.Dynamic(XBINPUT,XBOPTS, NumNodes_tot)
+    = BeamInit.Dynamic(XBINPUT,XBOPTS)
+    
     # Delete unused variables.
     del PosPsiTime, VelocTime
     
@@ -85,7 +107,16 @@ def Solve_F90(XBINPUT,XBOPTS):
     fp = open(ofile,'w')
     BeamIO.Write_force_File(fp, Time, ForceTime, ForcedVel, ForcedVelDot)
     fp.close() 
-        
+
+    # sm write class
+    XBOUT=DerivedTypes.Xboutput()
+    XBOUT.QuatList.append(Quat)
+    XBOUT.Time=Time
+    XBOUT.PosIni=PosIni
+    XBOUT.PsiIni=PsiIni  
+    #XBOUT.ForcedVel=ForcedVel        # ...SOL912_force.dat
+    #XBOUT.ForcedVelDot=ForcedVelDot
+    XBOUT.ForceTime=ForceTime
         
     #Solve dynamic using f90 solver
     BeamLib.Xbeam_Solv_FreeNonlinDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM,\
@@ -106,10 +137,27 @@ def Solve_F90(XBINPUT,XBOPTS):
     fp = open(ofile,'w')
     BeamIO.Write_rigid_File(fp, Time, ForcedVel, ForcedVelDot)
     fp.close()
-
     
+    # collect output for saving
+    XBOUT.DynOut=DynOut
+    XBOUT.ForcedVel=ForcedVel
+    XBOUT.ForcedVelDot=ForcedVelDot
+    
+    try:
+        h5filename=Settings.OutputDir + Settings.OutputFileRoot + '.h5'
+        hdfile=h5py.File(h5filename,'w')
+        print ('created %s'%h5filename)
+        PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
+        hdfile.close()
+    except:
+        pass  
+    
+    return XBOUT     
 
-def Solve_Py(XBINPUT,XBOPTS):
+
+def Solve_Py(XBINPUT,XBOPTS,**kwords):
     """Nonlinear dynamic structural solver in Python. Assembly of matrices 
     is carried out with Fortran subroutines."""
     
@@ -117,16 +165,32 @@ def Solve_Py(XBINPUT,XBOPTS):
     assert XBOPTS.Solution.value == 912, ('NonlinearDynamic requested' +\
                                               ' with wrong solution code')
     
+    # I/O management
+    if 'SaveDict' in kwords:
+        SaveDict=kwords['SaveDict']
+        Settings.OutputDir     =SaveDict['OutputDir']
+        Settings.OutputFileRoot=SaveDict['OutputFileRoot'] 
+    
     #Initialise beam
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT,XBOPTS)
-     
-      
-    #Solve static
-    XBOPTS.Solution.value = 112 
-    PosDefor, PsiDefor = Solve_Py_Static(XBINPUT,XBOPTS)
-    XBOPTS.Solution.value = 912 
     
+    # special BCs
+    SphFlag=False
+    if XBNODE.Sflag.any(): SphFlag=True
+     
+    #Solve static
+    ### sm commented
+    PosDefor = PosIni.copy(order='F')
+    PsiDefor = PsiIni.copy(order='F')
+    print('STATIC SOLUTION COMMENTED OUT!!!')
+    solve_static=False
+    if solve_static:
+        XBOPTS.Solution.value = 112 
+        PosDefor, PsiDefor = Solve_Py_Static(XBINPUT,XBOPTS)
+    
+    XBOPTS.Solution.value = 912 
+
     #Write deformed configuration to file
     ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_def.dat'
     if XBOPTS.PrintInfo==True:
@@ -139,15 +203,19 @@ def Solve_Py(XBINPUT,XBOPTS):
         sys.stdout.write('done\n')
     WriteMode = 'a'
     
-    BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM, \
+    BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM,
                        PosDefor, PsiDefor, ofile, WriteMode)
+    
+    # sm I/O
+    XBOUT=DerivedTypes.Xboutput()       # ...SOL912_def.dat
+    XBOUT.PosDefor=PosDefor
+    XBOUT.PsiDefor=PsiDefor
     
     
     #Initialise variables for dynamic analysis
     Time, NumSteps, ForceTime, Vrel, VrelDot,\
     PosDotDef, PsiDotDef,\
-    OutGrids, PosPsiTime, VelocTime, DynOut\
-        = BeamInit.Dynamic(XBINPUT,XBOPTS)
+    OutGrids, PosPsiTime, VelocTime, DynOut = BeamInit.Dynamic(XBINPUT,XBOPTS)
     # Delete unused variables.
     del OutGrids, VelocTime
     
@@ -157,8 +225,17 @@ def Solve_Py(XBINPUT,XBOPTS):
     fp = open(ofile,'w')
     BeamIO.Write_force_File(fp, Time, ForceTime, Vrel, VrelDot)
     fp.close() 
-        
     
+    # sm I/O
+    ### why forced velocity with Sol912 ???
+    ### If forced velocities are prescribed, then is Sol312
+    XBOUT.Time_force=Time               # ...SOL912_force.dat
+    XBOUT.ForceTime_force=ForceTime
+    XBOUT.Vrel_force=Vrel
+    XBOUT.VrelDot_force=VrelDot   
+    
+    
+    #---------------------------------------------------- Start Dynamic Solution
     if XBOPTS.PrintInfo.value==True:
         sys.stdout.write('Solve nonlinear dynamic case in Python ... \n')
     
@@ -227,15 +304,15 @@ def Solve_Py(XBINPUT,XBOPTS):
         
     
     #Extract initial displacements and velocities
-    BeamLib.Cbeam_Solv_Disp2State(NumNodes_tot, NumDof, XBINPUT, XBNODE,\
+    BeamLib.Cbeam_Solv_Disp2State(NumNodes_tot, NumDof, XBINPUT, XBNODE,
                           PosDefor, PsiDefor, PosDotDef, PsiDotDef,
                           X, dXdt)
         
         
     #Initialise accelerations as zero arrays
     PosDotDotDef = np.zeros((NumNodes_tot.value,3),ct.c_double,'F')
-    PsiDotDotDef = np.zeros((XBINPUT.NumElems,Settings.MaxElNod,3),\
-                             ct.c_double, 'F')
+    PsiDotDotDef = np.zeros((XBINPUT.NumElems,Settings.MaxElNod,3),
+                            ct.c_double, 'F')
 
     
     #Populate state vector
@@ -252,14 +329,14 @@ def Solve_Py(XBINPUT,XBOPTS):
     #Assemble matrices and loads for structural dynamic analysis
     tmpVrel=Vrel[0,:].copy('F')
     tmpQuat=Quat.copy('F')
-    BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
-                         PosIni, PsiIni, PosDefor, PsiDefor,\
-                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
-                         Force, tmpVrel, 0*tmpVrel,\
-                         NumDof, Settings.DimMat,\
-                         ms, MssFull, Msr,\
-                         cs, CssFull, Csr,\
-                         ks, KssFull, fs, FstrucFull,\
+    BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,
+                         PosIni, PsiIni, PosDefor, PsiDefor,
+                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,
+                         Force, tmpVrel, 0*tmpVrel,
+                         NumDof, Settings.DimMat,
+                         ms, MssFull, Msr,
+                         cs, CssFull, Csr,
+                         ks, KssFull, fs, FstrucFull,
                          Qstruc, XBOPTS, Cao)
     
     BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),\
@@ -314,10 +391,15 @@ def Solve_Py(XBINPUT,XBOPTS):
     Qsys[NumDof.value:NumDof.value+6] = Qrigid
     Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
        
+    # special BCs
+    if SphFlag:
+        iitrans = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
+        Msys[iitrans,:] = np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+        Msys[iitrans,iitrans] = np.ones(3,ct.c_double,order='F').copy('F')
+        Qsys[iitrans] = np.zeros((3),ct.c_double,order='F').copy('F')
 
     #Initial Accel
     dQddt[:] = np.dot(np.linalg.inv(Msys), -Qsys)
-    
     
     #Record position of all grid points in global FoR at initial time step
     DynOut[0:NumNodes_tot.value,:] = PosDefor
@@ -331,6 +413,11 @@ def Solve_Py(XBINPUT,XBOPTS):
     gamma = 0.5 + XBOPTS.NewmarkDamp.value
     beta = 0.25*(gamma + 0.5)**2
     
+    # sm write class
+    XBOUT.QuatList.append(Quat)
+    XBOUT.PosIni=PosIni
+    XBOUT.PsiIni=PsiIni 
+   
     
     #Time loop
     for iStep in range(NumSteps.value):
@@ -351,7 +438,7 @@ def Solve_Py(XBINPUT,XBOPTS):
         
         
         #Force at current time-step
-        Force = (XBINPUT.ForceStatic + \
+        Force = (XBINPUT.ForceStatic + 
                  XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
         
         
@@ -478,14 +565,35 @@ def Solve_Py(XBINPUT,XBOPTS):
             Qstruc -= tmpQforces      
             Qrigid -= tmpQrigid
     
-            
             #Compute residual
             Qstruc += -np.dot(FstrucFull, Force_Dof)
             Qrigid += -np.dot(FrigidFull, Force_All)
-               
+              
             Qsys[:NumDof.value] = Qstruc
             Qsys[NumDof.value:NumDof.value+6] = Qrigid
             Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
+            
+            
+            ### special BCs
+            # special BCs
+            if SphFlag:
+                XBOUT.MsysBefore=Msys.copy()
+                XBOUT.QsysBefore=Qsys.copy('F')
+                XBOUT.CsysBefore=Csys.copy('F')
+                XBOUT.KsysBefore=Ksys.copy('F')
+                
+                Msys[iitrans,:] = np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+                Msys[iitrans,iitrans] = np.ones(3,ct.c_double,order='F').copy('F')
+                Csys[iitrans,:] = np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+                Ksys[iitrans,:] = np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+                Qsys[iitrans] = np.zeros((3),ct.c_double,order='F').copy('F')
+                
+                XBOUT.Msys=Msys.copy('F')
+                XBOUT.Qsys=Qsys.copy('F')
+                XBOUT.Csys=Csys.copy('F')
+                XBOUT.Ksys=Ksys.copy('F')
+                
+            
             
             Qsys += np.dot(Msys,dQddt)
 
@@ -516,7 +624,7 @@ def Solve_Py(XBINPUT,XBOPTS):
             if XBOPTS.PrintInfo.value==True:
                 sys.stdout.write('%-10.4e %8.4f\n' %(max(abs(DQ)),ResLog10))
                 
-        #END Netwon-Raphson
+        #END Newton-Raphson
         
         
         #update to converged nodal displacements and velocities
@@ -547,9 +655,13 @@ def Solve_Py(XBINPUT,XBOPTS):
             
             Vrel[iStep+1,:] = np.dot(ACoa,dQdt[NumDof.value:NumDof.value+6].copy('F'))
             VrelDot[iStep+1,:] = np.dot(ACoa,dQddt[NumDof.value:NumDof.value+6].copy('F'))
+            
+        # sm I/O
+        XBOUT.QuatList.append(Quat)
+
     
     #END Time loop
-    
+
     #Write _dyn file
     ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_dyn.dat'
     fp = open(ofile,'w')
@@ -567,11 +679,34 @@ def Solve_Py(XBINPUT,XBOPTS):
     fp = open(ofile,'w')
     BeamIO.Write_rigid_File(fp, Time, Vrel, VrelDot)
     fp.close()
-
     
     if XBOPTS.PrintInfo.value==True:
         sys.stdout.write(' ... done\n')
         
+
+    # sm I/O: FoR A velocities/accelerations
+    
+    XBOUT.Time=Time                     # ...dyn.dat
+    XBOUT.PosPsiTime = PosPsiTime       
+    
+    XBOUT.DynOut=DynOut                 # ...sgape.dat
+    
+    XBOUT.Vrel=Vrel                     # ...rigid.dat
+    XBOUT.VrelDot=VrelDot
+    XBOUT.PosPsiTime=PosPsiTime    
+    
+    try:
+        h5filename=Settings.OutputDir + Settings.OutputFileRoot + '.h5'
+        hdfile=h5py.File(h5filename,'w')
+        print ('created %s'%h5filename)
+        PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
+        hdfile.close()
+    except:
+        pass  
+    
+    return XBOUT    
     
     
 

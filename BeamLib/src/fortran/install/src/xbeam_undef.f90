@@ -278,10 +278,21 @@ module xbeam_undef
 
   integer,intent(out):: ListSflag (:)      ! 1 if node is hinged, 0 if not
   integer,intent(inout), optional :: Solution ! Solution number. Used for Sperical Joint BCs only
+  integer :: SolutionCode ! copy of solution number
 
 ! Local variables.
   integer:: iNode                          ! Counter on the nodes.
   integer:: NumFr                          ! Counter on the force vector.
+
+! Solution not present: if not present (wrapper) rigid-flex body dynamic solution
+! is assumed
+  if (present(Solution)) then
+      SolutionCode=Solution
+  else
+      ! for wrapper
+      print *, 'xbeam_undef: setting Solution=912!!!'
+      SolutionCode=912
+  end if
 
 ! Loop on the nodes and remove then from the final list if they are constrained.
   NumIN=0
@@ -304,7 +315,7 @@ module xbeam_undef
         NumFr=NumFr+1
         ListFr(iNode)=NumFr
       case (2)
-        select case (Solution)
+        select case (SolutionCode)
           case default
             print *, 'Spherical Joint not implemented for Solution: ', Solution
             stop 'Program terminated - xbeam_undef_nodeindep'

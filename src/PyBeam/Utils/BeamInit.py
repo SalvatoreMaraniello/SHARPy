@@ -85,6 +85,7 @@ def Static(XBINPUT,XBOPTS, moduleName = None):
         sys.stdout.write('Identify nodal degrees of freedom ... ')
     # Initialize nodal data derived type.
     XBNODE = DerivedTypes.Xbnode(NumNodes_tot.value)
+
     BeamLib.f_xbeam_undef_dofs( 
         ct.byref(ct.c_int(XBINPUT.NumElems)), 
         ct.byref(NumNodes_tot), 
@@ -106,6 +107,7 @@ def Static(XBINPUT,XBOPTS, moduleName = None):
         XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)), 
         ct.byref(NumDof),
         XBNODE.Sflag.ctypes.data_as(ct.POINTER(ct.c_int)) )
+
     if XBOPTS.PrintInfo==True:
         sys.stdout.write('done\n')
     

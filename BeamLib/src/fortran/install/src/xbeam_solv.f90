@@ -499,6 +499,13 @@ module xbeam_solv
   !print*, 'scaling factor for simulation:'
   !print*, 'Fsc=', Fsc, 'Msc=', Msc
 
+  ! Initialise
+  NumN=size(Node)
+  allocate (ListIN (NumN));
+  do k=1,NumN
+    ListIN(k)=Node(k)%Vdof
+  end do
+
   ! Initialize (sperical joint) sm
   SphFlag=.false.
   do k=1,NumN
@@ -508,12 +515,6 @@ module xbeam_solv
   end do
   sph_rows = (/1,2,3/)+NumDof
 
-  ! Initialise
-  NumN=size(Node)
-  allocate (ListIN (NumN));
-  do k=1,NumN
-    ListIN(k)=Node(k)%Vdof
-  end do
 
   gamma=1.d0/2.d0+Options%NewmarkDamp
   beta =1.d0/4.d0*(gamma+0.5d0)*(gamma+0.5d0)
@@ -690,10 +691,6 @@ module xbeam_solv
         print *, 'Reminders:'
         print *, '1. Old convergence criteria still used. Consider upgrading as per static solver.'
         print *, '2. Spherical Joint, not hinge!'
-        print *, '3. The predictor part of the Q vector is set to zero for the translationals dof if spherical joint is used.'
-        print *, '   However, the corrector part not. This should not affect the other dofs as columns are deleted.'
-        print *, '   is also better if a moving hinge/spherical joint is implemented.'
-        print *, '4. If moving hinge/spherical joint is implemented, the columns cannot be set to zero'
         !!! sm: stop commented to allow python wrapper to handle exceptions
         if (present(SUCCESS)) then
             SUCCESS=.false.
@@ -1214,6 +1211,7 @@ module xbeam_solv
     call sparse_set_rows_unit(sph_rows,mtot,Mtotal)
   end if
 
+
 ! Solve matrix system
 !  call lapack_sparse (mtot,Mtotal,-Qtotal,dQddt)
   call lu_sparse (mtot,Mtotal,-Qtotal,dQddt)
@@ -1251,10 +1249,6 @@ module xbeam_solv
         print *, 'Reminders:'
         print *, '1. Old convergence criteria still used. Consider upgrading as per static solver.'
         print *, '2. Spherical Joint, not hinge!'
-        print *, '3. The predictor part of the Q vector is set to zero for the translationals dof if spherical joint is used.'
-        print *, '   However, the corrector part not. This should not affect the other dofs as columns are deleted.'
-        print *, '   is also better if a moving hinge/spherical joint is implemented.'
-        print *, '4. If moving hinge/spherical joint is implemented, the columns cannot be set to zero'
         !!! sm: stop commented to allow python wrapper to handle exceptions
         if (present(SUCCESS)) then
             SUCCESS=.false.

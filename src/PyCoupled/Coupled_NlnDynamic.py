@@ -580,6 +580,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                            ctrlSurf,
                            kwords['mpcCont'])
         # END if write.
+        
+        # sm - I/O
         XBOUT.QuatList.append(Quat)
         
         
@@ -615,9 +617,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # For interactive analysis at end of simulation set breakpoint.
     pass
 
-    # collect output for saving
+    # sm - I/O - collect output for saving
     XBOUT.DynOut=DynOut
-    
     try:
         h5filename=Settings.OutputDir + Settings.OutputFileRoot + '_sol312_dyn.h5'
         hdfile=h5py.File(h5filename,'w')
