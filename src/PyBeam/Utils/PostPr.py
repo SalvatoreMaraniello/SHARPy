@@ -7,15 +7,18 @@ PostProcessing tools.
 
 '''
 
+import ctypes as ct
 import numpy as np
-#import scipy.integrate
-
 from warnings import warn
+import copy
 
 import sys
 sys.path.append('../..')
+
 import PyBeam.Utils.XbeamLib
 import PyLibs.numerics.diff, PyLibs.numerics.integr
+import BeamIO, BeamInit
+import PyBeam.Utils.DerivedTypes
 
 
 
@@ -178,9 +181,11 @@ def THPosDefGlobal(DynOut,Time,RefVel,set_origin='a',**kwargs): #xi0=np.array([1
     
     The orientation of the FoR A can be passed in input (Xi) or can be integrated
     from the FoR A velocities.
+    
+    The RefVel is intended in G FoR!!!
     '''
 
-    
+    # quaternion key words
     if 'Xi' in  kwargs:
         Xi=kwargs['Xi']
     else:
@@ -197,7 +202,7 @@ def THPosDefGlobal(DynOut,Time,RefVel,set_origin='a',**kwargs): #xi0=np.array([1
     THPosDefLocal = DynOut.reshape((NumSteps+1,NumNodes,3)) # output in a frame
 
     if set_origin=='a':
-        aOrigin = np.zeros((NumSteps+1,3)) # a bit memory consuming but who cares...
+        aOrigin = np.zeros((NumSteps+1,3))
     elif set_origin=='G':
         aOrigin = PyLibs.numerics.integr.function(RefVel[:,:3],Time)
     else:
@@ -216,7 +221,74 @@ def THPosDefGlobal(DynOut,Time,RefVel,set_origin='a',**kwargs): #xi0=np.array([1
     
     return THPosDefGlobal
         
+  
+def ElasticForces(XBINPUT,XBOPTS,DynOut,PsiList): 
+    '''
+    Given the results of a simulation computes the stresses along
+    the beam at each time step.
     
+    - PsiList is a list of CRV at each step of the simulation. 
+    - DynOut is an array containing all the displacements.
+    - XBINPUT & XBOPTS are either:
+        1. objects of the Xbinput/Xbopts classes (see PyBeam.Utils.DerivedTypes)
+           with attributes defined as c_types
+        2. objects from a class having the same attributes (but not defined 
+           as c_types)
+    
+    The elastic forces are returned in the format:
+        S = [ time_step, Node, component ]
+        
+           
+    Remark:
+    - PsiList and DynOut are equivalent (one for displ one for rotation)
+      but the format is inconsistent!
+    '''
+    
+    # Prepare classes
+    if not(isinstance(XBOPTS,PyBeam.Utils.DerivedTypes.Xbopts)):
+        H=copy.deepcopy(XBOPTS)
+        XBOPTS=PyBeam.Utils.DerivedTypes.Xbopts()
+        XBOPTS.init_from_class(H)
+    
+    # Initialise beam
+    XBINPUT, XBOPTS, NumNodes_tot, \
+    XBELEM, PosIni, PsiIni, XBNODE, NumDof = BeamInit.Static(XBINPUT,XBOPTS)
+    
+    # Extract Elements Type
+    if isinstance(XBINPUT,PyBeam.Utils.DerivedTypes.Xbinput):
+        NumNodesElem=XBINPUT.NumNodesElem.value 
+    else:
+        NumNodesElem=XBINPUT.NumNodesElem
+    
+    # Prepare Node List
+    if NumNodesElem == 2:
+        NodeList=[ii for ii in range(int(NumNodes_tot.value))] 
+    elif NumNodesElem == 3:
+        # midpoint nodes not supported
+        NodeList=[2*ii for ii in range(int(0.5*NumNodes_tot.value))]
+    else:
+        raise NameError('Incorrect Number of Nodes per Element in XBINPUT!')
+    
+    # get number of steps
+    NumSteps = int( DynOut.shape[0]/NumNodes_tot.value ) - 1
+    
+    print('dynout shape', DynOut.shape       )
+    print('NumNodes'    , NumNodes_tot.value )
+    print('NumSteps'    , NumSteps           )
+    
+    PosDef=PyBeam.Utils.PostPr.reshape_DynOut(DynOut,NumSteps)
+    
+    # compute stresses
+    Smat=np.empty(( NumSteps, len(NodeList), 6 ))
+    for tt in range(NumSteps):
+        # strains=BeamIO.localStrains(PosDef[tt,:,:], xbout.PsiList[tt], 
+        #                             xbout.PosIni, xbout.PsiIni, XBELEM, NodeList,SO3 = False)
+        Smat[tt,:,:]=BeamIO.localElasticForces(PosDef[tt,:,:], PsiList[tt], 
+                                                 PosIni,  PsiIni, 
+                                                 XBELEM, NodeList)
+    
+    return Smat, NodeList
+        
 
 ''' ------------------------------------------------------------------------ '''
 

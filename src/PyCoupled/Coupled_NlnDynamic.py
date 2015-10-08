@@ -71,8 +71,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         Settings.OutputDir     =SaveDict['OutputDir']
         Settings.OutputFileRoot=SaveDict['OutputFileRoot']
         
-
-        
+   
     # Check correct solution code.
     assert XBOPTS.Solution.value == 312, ('NonlinearDynamic requested' +
                                           ' with wrong solution code')
@@ -293,6 +292,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     XBOUT.QuatList.append(Quat)
     XBOUT.PosIni=PosIni
     XBOUT.PsiIni=PsiIni
+    XBOUT.Time=Time
     
 
     # Time loop.

@@ -6,6 +6,9 @@
 @date       07/11/2013
 @pre        None
 @warning    None
+
+Modified S. Maraniello, 25 Sep 2015
+
 '''
 
 import sys
@@ -34,6 +37,9 @@ import re
 from math import pow
 from PyBeam.Utils.XbeamLib import Skew
 from PyAero.UVLM.Utils.DerivedTypesAero import Gust
+import h5py, time                                          # sm added packages
+import PyLibs.io.save
+
 
 def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     """@brief Nonlinear dynamic solver using Python to solve aeroelastic
@@ -52,10 +58,53 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # Check correct solution code.
     assert XBOPTS.Solution.value == 912, ('NonlinearFlightDynamic requested' +
                                           ' with wrong solution code')
+    
+    # I/O management
+    SaveDict=Settings.SaveDict
+    if 'SaveDict' in kwords: SaveDict=kwords['SaveDict']
+    if SaveDict['Format']=='h5':
+        Settings.WriteOut=False
+        Settings.PlotTec=False
+        
+    # sm: Define Output class
+    XBOUT=DerivedTypes.Xboutput()  
+    
+    #XBOUT.PsiList=[]    
+    #XBOUT.ZetaList=[]
+    #XBOUT.ZetaStarList=[]
+    #XBOUT.ForceAeroList=[]
+    #XBOUT.GammaStarList=[]
+    #XBOUT.GammaList=[]
+    # for performance
+    #XBOUT.cputime=[]
+    XBOUT.cputime.append(time.clock()) # time.processor_time more appropriate but equivalent
+    # for debugging
+    XBOUT.ForceDofList=[]
+    XBOUT.ForceRigidList=[]
+
+
     # Initialise static beam data.
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT,XBOPTS)
-                
+    
+    # special BCs
+    SphFlag=False
+    if XBNODE.Sflag.any(): SphFlag=True
+    SphMoving=False # not required: the V given to G will apply to S as well (Rafa)
+    
+    
+    # Debugging Flags
+    SaveContinuously=False
+    EnforcePitch=False
+    HardCodeAero=False
+    if 'EnforcePitch' in kwords: EnforcePitch=kwords['EnforcePitch'] 
+    if 'HardCodeAero' in kwords: HardCodeAero=kwords['HardCodeAero']
+        
+
+    
+    
+    #------------------------- Initial Displacement: ImpStart vs Static Solution
+    
     # Calculate initial displacements.
     if AELAOPTS.ImpStart == False:
         XBOPTS.Solution.value = 112 # Modify options.
@@ -72,21 +121,12 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         PosDefor = PosIni.copy(order='F')
         PsiDefor = PsiIni.copy(order='F')
         Force = np.zeros((XBINPUT.NumNodesTot,6),ct.c_double,'F')
-        
-    # Write deformed configuration to file. TODO: tidy this away inside function.
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_def.dat'
-    if XBOPTS.PrintInfo==True:
-        sys.stdout.write('Writing file %s ... ' %(ofile))
-    fp = open(ofile,'w')
-    fp.write('TITLE="Non-linear static solution: deformed geometry"\n')
-    fp.write('VARIABLES="iElem" "iNode" "Px" "Py" "Pz" "Rx" "Ry" "Rz"\n')
-    fp.close()
-    if XBOPTS.PrintInfo==True:
-        sys.stdout.write('done\n')
-    WriteMode = 'a'
-    # Write
-    BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM,
-                       PosDefor, PsiDefor, ofile, WriteMode)
+
+    if SaveDict['Format']!='h5': 
+        write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict)
+    
+    
+    #------------------------------------------------ Initialise Dynamic Problem
     
     # Initialise structural variables for dynamic analysis.
     Time, NumSteps, ForceTime, Vrel, VrelDot,\
@@ -96,10 +136,21 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # Delete unused variables.
     del OutGrids, VelocTime
     
+    # sm I/O
+    ### why forced velocity with Sol912 ???
+    ### If forced velocities are prescribed, then is Sol312        
+    XBOUT.PosDefor=PosDefor                # ...SOL912_def.dat
+    XBOUT.PsiDefor=PsiDefor   
+    XBOUT.ForceTime_force=ForceTime        # ...SOL912_force.dat
+    XBOUT.Vrel_force=Vrel
+    XBOUT.VrelDot_force=VrelDot   
+    
     if XBOPTS.PrintInfo.value==True:
         sys.stdout.write('Solve nonlinear dynamic case in Python ... \n')
     
     
+    
+    #------------------------------------------------------ Initialise Variables
     #Initialise structural system tensors
     MssFull = np.zeros((NumDof.value,NumDof.value), ct.c_double, 'F')
     CssFull = np.zeros((NumDof.value,NumDof.value), ct.c_double, 'F') 
@@ -150,10 +201,26 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     Qsys = np.zeros(NumDof.value+6+4, ct.c_double, 'F')
     
+
+    
+    #---------------------------------------------------- Start Dynamic Solution
+    
     #Initialise rotation operators. TODO: include initial AOA here
     currVrel=Vrel[0,:].copy('F')
-    AOA  = np.arctan(currVrel[2]/-currVrel[1])
-    Quat = xbl.Euler2Quat(AOA,0,0)
+    
+    # sm included AOA here!!!
+    if np.linalg.norm(currVrel[:3])<1e-6:  # wind tunnel experiment
+        ###AOA= np.arctan(VMINPUT.alpha)   # sm: not sure!!!
+        AOA=0.0  
+    else:
+        AOA  = np.arctan(currVrel[2]/-currVrel[1]) ### <--- Even here add AOA alpha !!! SM I THINK THIS IS WRONG !!!
+        
+    Quat = xbl.Euler2Quat(AOA,0,0) # !!! SM I THINK THIS IS WRONG !!! 
+    
+    #### sm debug
+    XBOUT.Quat0=Quat
+    XBOUT.currVel0=currVrel
+    
     Cao  = xbl.Rot(Quat)
     ACoa = np.zeros((6,6), ct.c_double, 'F')
     ACoa[:3,:3] = np.transpose(Cao)
@@ -188,57 +255,55 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     #Assemble matrices and loads for structural dynamic analysis
     currVrel=Vrel[0,:].copy('F')
     tmpQuat=Quat.copy('F')
-    BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
-                         PosIni, PsiIni, PosDefor, PsiDefor,\
-                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
-                         Force, currVrel, 0*currVrel,\
-                         NumDof, Settings.DimMat,\
-                         ms, MssFull, Msr,\
-                         cs, CssFull, Csr,\
-                         ks, KssFull, fs, FstrucFull,\
+    BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,
+                         PosIni, PsiIni, PosDefor, PsiDefor,
+                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,
+                         Force, currVrel, 0*currVrel,
+                         NumDof, Settings.DimMat,
+                         ms, MssFull, Msr,
+                         cs, CssFull, Csr,
+                         ks, KssFull, fs, FstrucFull,
                          Qstruc, XBOPTS, Cao)
        
-    BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),\
-                              ct.byref(ct.c_int(6)),\
-                              Force.ctypes.data_as(ct.POINTER(ct.c_double)),\
-                              ct.byref(NumDof),\
-                              Force_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),\
+    BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),
+                              ct.byref(ct.c_int(6)),
+                              Force.ctypes.data_as(ct.POINTER(ct.c_double)),
+                              ct.byref(NumDof),
+                              Force_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),
                               XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)) )
 
     Qstruc -= np.dot(FstrucFull, Force_Dof)
     
     
     #Assemble matrices for rigid-body dynamic analysis
-    BeamLib.Xbeam_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
-                         PosIni, PsiIni, PosDefor, PsiDefor,\
-                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
-                         currVrel, 0*currVrel, tmpQuat,\
-                         NumDof, Settings.DimMat,\
-                         mr, MrsFull, Mrr,\
-                         cr, CrsFull, Crr, Cqr, Cqq,\
-                         kr, KrsFull, fr, FrigidFull,\
+    BeamLib.Xbeam_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,
+                         PosIni, PsiIni, PosDefor, PsiDefor,
+                         PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,
+                         currVrel, 0*currVrel, tmpQuat,
+                         NumDof, Settings.DimMat,
+                         mr, MrsFull, Mrr,
+                         cr, CrsFull, Crr, Cqr, Cqq,
+                         kr, KrsFull, fr, FrigidFull,
                          Qrigid, XBOPTS, Cao)
     
-    BeamLib.f_fem_m2v_nofilter(ct.byref(NumNodes_tot),\
-                               ct.byref(ct.c_int(6)),\
-                               Force.ctypes.data_as(ct.POINTER(ct.c_double)),\
-                               ct.byref(ct.c_int(NumDof.value+6)),\
+    BeamLib.f_fem_m2v_nofilter(ct.byref(NumNodes_tot),
+                               ct.byref(ct.c_int(6)),
+                               Force.ctypes.data_as(ct.POINTER(ct.c_double)),
+                               ct.byref(ct.c_int(NumDof.value+6)),
                                Force_All.ctypes.data_as(ct.POINTER(ct.c_double)) )
 
     Qrigid -= np.dot(FrigidFull, Force_All)
-        
-          
+         
 #     #Separate assembly of follower and dead loads   
 #     tmpForceTime=ForceTime[0].copy('F') 
-#     tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \
-#                                     PosIni, PsiIni, PosDefor, PsiDefor, \
-#                                     (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll*tmpForceTime), \
-#                                     (XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead*tmpForceTime), \
-#                                     Cao,1)
+#     tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, 
+#                                  PosIni, PsiIni, PosDefor, PsiDefor, 
+#                                  (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll*tmpForceTime), 
+#                                  (XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead*tmpForceTime), 
+#                                   Cao,1)
 #                            
 #     Qstruc -= tmpQforces      
 #     Qrigid -= tmpQrigid
-    
     
     #Assemble system matrices
     Msys[:NumDof.value,:NumDof.value] = MssFull.copy('F')
@@ -251,10 +316,27 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     Qsys[NumDof.value:NumDof.value+6] = Qrigid
     Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
        
-
+    # special BCs
+    if SphFlag:
+        if SphMoving is True:
+            iitrans = [NumDof.value, NumDof.value+2]
+        else: 
+            iitrans = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
+        Msys[iitrans,:] = 0.0#np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+        Msys[iitrans,iitrans] = 1.0#np.ones(3,ct.c_double,order='F').copy('F')
+        Qsys[iitrans] = 0.0#np.zeros((3),ct.c_double,order='F').copy('F')     
+        ### sm debug
+        XBOUT.Msysiitrans= Msys[iitrans,iitrans].copy('F')
+        XBOUT.Msysiitransdd=Msys[iitrans,:].copy('F')
+    
+    ### sm debug
+    XBOUT.Msys0=Msys.copy('F')
+    XBOUT.Qsys0=Qsys.copy('F')
+    
     # Initial Accel.
     dQddt[:] = np.dot(np.linalg.inv(Msys), -Qsys)
     
+    XBOUT.dQddt0=dQddt.copy()
     
     #Record position of all grid points in global FoR at initial time step
     DynOut[0:NumNodes_tot.value,:] = PosDefor
@@ -269,8 +351,11 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     beta = 0.25*(gamma + 0.5)**2
     
     
+    #---------------------------------------------- Initialise Aerodynamic Force
     # Initialise Aero       
     Section = InitSection(VMOPTS,VMINPUT,AELAOPTS.ElasticAxis)
+    # sm debug
+    XBOUT.Section=Section
     
     # Declare memory for Aero variables.
     ZetaDot = np.zeros((Section.shape[0],PosDefor.shape[0],3),ct.c_double,'C')
@@ -284,7 +369,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     PsiA_G = xbl.quat2psi(Quat) # CRV at iStep
     
     # Init external velocities.  
-    Ufree = InitSteadyExternalVels(VMOPTS,VMINPUT)
+    Ufree = InitSteadyExternalVels(VMOPTS,VMINPUT) 
     if AELAOPTS.ImpStart == True:
         Zeta = np.zeros((Section.shape[0],PosDefor.shape[0],3),ct.c_double,'C')             
         Gamma = np.zeros((VMOPTS.M.value,VMOPTS.N.value),ct.c_double,'C')
@@ -295,100 +380,25 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                        VMINPUT.ctrlSurf)
         # init wake grid and gamma matrix.
         ZetaStar, GammaStar = InitSteadyWake(VMOPTS,VMINPUT,Zeta,currVrel[:3])
-          
-    # Define tecplot stuff
-    if Settings.PlotTec==True:
-        FileName = Settings.OutputDir + Settings.OutputFileRoot + 'AeroGrid.dat'
-        Variables = ['X', 'Y', 'Z','Gamma']        
-        FileObject = PostProcess.WriteAeroTecHeader(FileName, 
-                                                    'Default',
-                                                    Variables)
-        # Plot results of static analysis
-        PostProcess.WriteUVLMtoTec(FileObject,
-                                   Zeta,
-                                   ZetaStar,
-                                   Gamma,
-                                   GammaStar,
-                                   TimeStep = 0,
-                                   NumTimeSteps = XBOPTS.NumLoadSteps.value,
-                                   Time = 0.0,
-                                   Text = True)
-    
-    # Open output file for writing
-    if 'writeDict' in kwords and Settings.WriteOut == True:
-        writeDict = kwords['writeDict']
-        ofile = Settings.OutputDir + \
-                Settings.OutputFileRoot + \
-                '_SOL912_out.dat'
-        fp = open(ofile,'w')
-        fp.write("{:<14}".format("Time"))
-        for output in writeDict.keys():
-            fp.write("{:<14}".format(output))
-        fp.write("\n")
-        fp.flush()
         
-    # Write initial outputs to file.
+    # sm save
+    XBOUT.ZetaStarList.append( ZetaStar.copy('C') )
+    
+    # Define TecPlot stuff
+    if Settings.PlotTec==True:
+        FileObject=write_TecPlot(Zeta, ZetaStar, Gamma, GammaStar, NumSteps.value, 0, Time[0], SaveDict)
+    
     if 'writeDict' in kwords and Settings.WriteOut == True:
-        locForces = None # Stops recalculation of forces
-        fp.write("{:<14,e}".format(Time[0]))
-        for myStr in writeDict.keys():
-            if re.search(r'^R_.',myStr):
-                if re.search(r'^R_._.', myStr):
-                    index = int(myStr[4])
-                elif re.search(r'root', myStr):
-                    index = 0
-                elif re.search(r'tip', myStr):
-                    index = -1
-                else:
-                    raise IOError("Node index not recognised.")
-                
-                if myStr[2] == 'x':
-                    component = 0
-                elif myStr[2] == 'y':
-                    component = 1
-                elif myStr[2] == 'z':
-                    component = 2
-                else:
-                    raise IOError("Displacement component not recognised.")
-                
-                fp.write("{:<14,e}".format(PosDefor[index,component]))
-                
-            elif re.search(r'^M_.',myStr):
-                if re.search(r'^M_._.', myStr):
-                    index = int(myStr[4])
-                elif re.search(r'root', myStr):
-                    index = 0
-                elif re.search(r'tip', myStr):
-                    index = -1
-                else:
-                    raise IOError("Node index not recognised.")
-                
-                if myStr[2] == 'x':
-                    component = 0
-                elif myStr[2] == 'y':
-                    component = 1
-                elif myStr[2] == 'z':
-                    component = 2
-                else:
-                    raise IOError("Moment component not recognised.")
-                
-                if locForces == None:
-                    locForces = BeamIO.localElasticForces(PosDefor,
-                                                          PsiDefor,
-                                                          PosIni,
-                                                          PsiIni,
-                                                          XBELEM,
-                                                          [index])
-                
-                fp.write("{:<14,e}".format(locForces[0,3+component]))
-            else:
-                raise IOError("writeDict key not recognised.")
-        # END for myStr
-        fp.write("\n")
-        fp.flush()
-    # END if write
+        fp= write_SOL912_out(Time[0], PosDefor, PsiDefor, PosIni, PsiIni, XBELEM, kwords['writeDict'], SaveDict)
+            
+    
+    
+    # sm write class
+    XBOUT.QuatList.append(Quat.copy())
+    XBOUT.PosIni=PosIni
+    XBOUT.PsiIni=PsiIni    
 
-    # Time loop.
+    #---------------------------------------------------------------- Time loop
     for iStep in range(NumSteps.value):
         
         if XBOPTS.PrintInfo.value==True:
@@ -417,7 +427,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         BeamLib.Cbeam3_Solv_State2Disp(XBINPUT,NumNodes_tot,XBELEM,XBNODE,
                                        PosIni,PsiIni,NumDof,X,dXdt,
                                        PosDefor,PsiDefor,PosDotDef,PsiDotDef)
+        
             
+        #------------------------------------------------------- Aero Force Loop
         # Force at current time-step. TODO: Check communication flow. 
         if iStep > 0 and AELAOPTS.Tight == False:
             
@@ -429,7 +441,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             # Update origin.
             currVrel=Vrel[iStep-1,:].copy('F')
-            OriginA_G[:] = OriginA_G[:] + currVrel[:3]*dt
+            OriginA_G[:] = OriginA_G[:] + currVrel[:3]*dt #sm: OriginA_G initialised to zero
             
             # Update control surface deflection.
             if VMINPUT.ctrlSurf != None:
@@ -465,19 +477,19 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             AeroForces[:,:,:] = AELAOPTS.AirDensity*AeroForces[:,:,:]
             
             if Settings.PlotTec==True:
-                PostProcess.WriteUVLMtoTec(FileObject,
-                                           Zeta,
-                                           ZetaStar,
-                                           Gamma,
-                                           GammaStar,
-                                           TimeStep = iStep,
-                                           NumTimeSteps = XBOPTS.NumLoadSteps.value,
-                                           Time = Time[iStep],
-                                           Text = True)
+                FileObject=write_TecPlot(Zeta, ZetaStar, Gamma, GammaStar, NumSteps.value, iStep, 
+                                         Time[iStep], SaveDict,FileObject=FileObject)
 
             # map AeroForces to beam.
             CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
                                 Force)
+            
+            # sm: save aerodynamic force
+            if HardCodeAero:
+                Force=0.0*Force
+                Force[-1,2]=35.0*6.0*9.8*0.3# 30% Goland wing weight
+            
+            ForceAero = Force.copy('C')  
             
             # Add gravity loads.
             AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS,
@@ -486,17 +498,27 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             # Add thrust and other point loads
             Force += (XBINPUT.ForceStatic + 
                       XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
-        #END if iStep > 0
+                      
+            # sm: here to avoid crash at first time-step
+            XBOUT.ForceAeroList.append(ForceAero.copy('C')) 
+         
+        
+        #END if iStep > 0        
             
-            
+        # sm: save aero data
+        XBOUT.ZetaList.append(Zeta.copy('C'))
+        XBOUT.ZetaStarList.append(ZetaStar.copy('C'))
+        XBOUT.GammaStarList.append(GammaStar.copy('C'))
+        XBOUT.GammaList.append(Gamma.copy('C')) 
+                      
+          
         #Reset convergence parameters
         Iter = 0
         ResLog10 = 1.0
         
         
         #Newton-Raphson loop      
-        while ( (ResLog10 > XBOPTS.MinDelta.value) \
-                & (Iter < XBOPTS.MaxIterations.value) ):
+        while ( (ResLog10 > XBOPTS.MinDelta.value) & (Iter < XBOPTS.MaxIterations.value) ):
                                     
             #set tensors to zero 
             MssFull[:,:] = 0.0; CssFull[:,:] = 0.0
@@ -510,31 +532,22 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             Qrigid[:] = 0.0
     
             Msys[:,:] = 0.0; Csys[:,:] = 0.0
-            Ksys[:,:] = 0.0; Asys[:,:] = 0.0;
+            Ksys[:,:] = 0.0; Asys[:,:] = 0.0
             Qsys[:] = 0.0
             
             # Update counter.
             Iter += 1
-            
-            if XBOPTS.PrintInfo.value==True:
-                sys.stdout.write('   %-7d ' %(Iter))
+            if XBOPTS.PrintInfo.value==True: sys.stdout.write('   %-7d ' %(Iter))
                         
-            #nodal diplacements and velocities from state vector
+            # Nodal displacements and velocities from state vector
             X=Q[:NumDof.value].copy('F') 
             dXdt=dQdt[:NumDof.value].copy('F'); 
-            BeamLib.Cbeam3_Solv_State2Disp(XBINPUT,
-                                           NumNodes_tot,
-                                           XBELEM,
-                                           XBNODE,
-                                           PosIni,
-                                           PsiIni,
-                                           NumDof,
-                                           X,
-                                           dXdt,
-                                           PosDefor,
-                                           PsiDefor,
-                                           PosDotDef,
-                                           PsiDotDef)
+            BeamLib.Cbeam3_Solv_State2Disp(XBINPUT, NumNodes_tot,
+                                           XBELEM, XBNODE,
+                                           PosIni, PsiIni,
+                                           NumDof, X, dXdt,
+                                           PosDefor, PsiDefor,
+                                           PosDotDef, PsiDotDef)
 
 
             #rigid-body velocities and orientation from state vector
@@ -548,39 +561,39 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             #Update matrices and loads for structural dynamic analysis
             tmpVrel=Vrel[iStep+1,:].copy('F')
             tmpQuat=Quat.copy('F')
-            BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
-                                 PosIni, PsiIni, PosDefor, PsiDefor,\
-                                 PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
-                                 Force, tmpVrel, 0*tmpVrel,\
-                                 NumDof, Settings.DimMat,\
-                                 ms, MssFull, Msr,\
-                                 cs, CssFull, Csr,\
-                                 ks, KssFull, fs, FstrucFull,\
+            BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,
+                                 PosIni, PsiIni, PosDefor, PsiDefor,
+                                 PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,
+                                 Force, tmpVrel, 0*tmpVrel,
+                                 NumDof, Settings.DimMat,
+                                 ms, MssFull, Msr,
+                                 cs, CssFull, Csr,
+                                 ks, KssFull, fs, FstrucFull,
                                  Qstruc, XBOPTS, Cao)
             
-            BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),\
-                              ct.byref(ct.c_int(6)),\
-                              Force.ctypes.data_as(ct.POINTER(ct.c_double)),\
-                              ct.byref(NumDof),\
-                              Force_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),
+                              ct.byref(ct.c_int(6)),
+                              Force.ctypes.data_as(ct.POINTER(ct.c_double)),
+                              ct.byref(NumDof),
+                              Force_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),
                               XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)) )
                     
             
             #Update matrices for rigid-body dynamic analysis
-            BeamLib.Xbeam_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
-                                 PosIni, PsiIni, PosDefor, PsiDefor,\
-                                 PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
-                                 tmpVrel, 0*tmpVrel, tmpQuat,\
-                                 NumDof, Settings.DimMat,\
-                                 mr, MrsFull, Mrr,\
-                                 cr, CrsFull, Crr, Cqr, Cqq,\
-                                 kr, KrsFull, fs, FrigidFull,\
+            BeamLib.Xbeam_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,
+                                 PosIni, PsiIni, PosDefor, PsiDefor,
+                                 PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,
+                                 tmpVrel, 0*tmpVrel, tmpQuat,
+                                 NumDof, Settings.DimMat,
+                                 mr, MrsFull, Mrr,
+                                 cr, CrsFull, Crr, Cqr, Cqq,
+                                 kr, KrsFull, fs, FrigidFull,
                                  Qrigid, XBOPTS, Cao)
     
-            BeamLib.f_fem_m2v_nofilter(ct.byref(NumNodes_tot),\
-                                       ct.byref(ct.c_int(6)),\
-                                       Force.ctypes.data_as(ct.POINTER(ct.c_double)),\
-                                       ct.byref(ct.c_int(NumDof.value+6)),\
+            BeamLib.f_fem_m2v_nofilter(ct.byref(NumNodes_tot),
+                                       ct.byref(ct.c_int(6)),
+                                       Force.ctypes.data_as(ct.POINTER(ct.c_double)),
+                                       ct.byref(ct.c_int(NumDof.value+6)),
                                        Force_All.ctypes.data_as(ct.POINTER(ct.c_double)) )
         
         
@@ -607,8 +620,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             Ksys[:NumDof.value,:NumDof.value] = KssFull.copy('F')
             Ksys[NumDof.value:NumDof.value+6,:NumDof.value] = KrsFull.copy('F')
-            
-          
+                     
 #             #Separate assembly of follower and dead loads   
 #             tmpForceTime=ForceTime[iStep+1].copy('F') 
 #             tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \
@@ -619,8 +631,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
 #                                    
 #             Qstruc -= tmpQforces      
 #             Qrigid -= tmpQrigid
-    
-            
+         
             #Compute residual to solve update vector
             Qstruc += -np.dot(FstrucFull, Force_Dof)
             Qrigid += -np.dot(FrigidFull, Force_All)
@@ -628,17 +639,42 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             Qsys[:NumDof.value] = Qstruc
             Qsys[NumDof.value:NumDof.value+6] = Qrigid
             Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
-            
+
             Qsys += np.dot(Msys,dQddt)
 
+            # special BCs
+            if SphFlag:
+                XBOUT.MsysBefore=Msys.copy()
+                XBOUT.QsysBefore=Qsys.copy('F')
+                XBOUT.CsysBefore=Csys.copy('F')
+                XBOUT.KsysBefore=Ksys.copy('F')
                 
+                Msys[iitrans,:] = 0.0 #np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+                Msys[iitrans,iitrans] = 1.0 #np.ones(3,ct.c_double,order='F').copy('F')
+                Csys[iitrans,:] = 0.0 #np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+                Ksys[iitrans,:] = 0.0 #np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
+                Qsys[iitrans] = 0.0 #np.zeros((3),ct.c_double,order='F').copy('F')
+                
+                XBOUT.Msys=Msys.copy('F')
+                XBOUT.Qsys=Qsys.copy('F')
+                XBOUT.Csys=Csys.copy('F')
+                XBOUT.Ksys=Ksys.copy('F')
+          
+ 
+    
             #Calculate system matrix for update calculation
-            Asys = Ksys + \
-                      Csys*gamma/(beta*dt) + \
-                      Msys/(beta*dt**2)
-                      
+            Asys = Ksys + Csys*gamma/(beta*dt) + Msys/(beta*dt**2)
+
+            ### --------------------------------------------- sm debugging start
+            XBOUT.Asys=Asys.copy()  
+            if SaveContinuously:
+                saveh5(Settings, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
+                                    
+            
+            ### --------------------------------------------- sm debugging end
             
             #Compute correction
+            
             DQ[:] = np.dot(np.linalg.inv(Asys), -Qsys)
 
             Q += DQ
@@ -659,8 +695,13 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 sys.stdout.write('%-10.4e %8.4f\n' %(max(abs(DQ)),ResLog10))
 
         # END Netwon-Raphson.
-                
-                
+        
+        
+        # sm debug:
+        # save forcing terms:
+        XBOUT.ForceDofList.append( np.dot(FstrucFull, Force_Dof).copy() )
+        XBOUT.ForceRigidList.append( np.dot(FrigidFull, Force_All).copy() )
+              
         #update to converged nodal displacements and velocities
         X=Q[:NumDof.value].copy('F') 
         dXdt=dQdt[:NumDof.value].copy('F'); 
@@ -689,104 +730,70 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             Vrel[iStep,:] = np.dot(ACoa,dQdt[NumDof.value:NumDof.value+6].copy('F'))
             VrelDot[iStep,:] = np.dot(ACoa,dQddt[NumDof.value:NumDof.value+6].copy('F'))
-            
-        # Write selected outputs
-        # tidy this away using function.
+        
+        
         if 'writeDict' in kwords and Settings.WriteOut == True:
-            locForces = None # Stops recalculation of forces
-            fp.write("{:<14,e}".format(Time[iStep+1]))
-            for myStr in writeDict.keys():
-                if re.search(r'^R_.',myStr):
-                    if re.search(r'^R_._.', myStr):
-                        index = int(myStr[4])
-                    elif re.search(r'root', myStr):
-                        index = 0
-                    elif re.search(r'tip', myStr):
-                        index = -1
-                    else:
-                        raise IOError("Node index not recognised.")
-                    
-                    if myStr[2] == 'x':
-                        component = 0
-                    elif myStr[2] == 'y':
-                        component = 1
-                    elif myStr[2] == 'z':
-                        component = 2
-                    else:
-                        raise IOError("Displacement component not recognised.")
-                    
-                    fp.write("{:<14,e}".format(PosDefor[index,component]))
-                    
-                elif re.search(r'^M_.',myStr):
-                    if re.search(r'^M_._.', myStr):
-                        index = int(myStr[4])
-                    elif re.search(r'root', myStr):
-                        index = 0
-                    elif re.search(r'tip', myStr):
-                        index = -1
-                    else:
-                        raise IOError("Node index not recognised.")
-                    
-                    if myStr[2] == 'x':
-                        component = 0
-                    elif myStr[2] == 'y':
-                        component = 1
-                    elif myStr[2] == 'z':
-                        component = 2
-                    else:
-                        raise IOError("Moment component not recognised.")
-                    
-                    if locForces == None:
-                        locForces = BeamIO.localElasticForces(PosDefor,
-                                                              PsiDefor,
-                                                              PosIni,
-                                                              PsiIni,
-                                                              XBELEM,
-                                                              [index])
-                    
-                    fp.write("{:<14,e}".format(locForces[0,3+component]))
-                else:
-                    raise IOError("writeDict key not recognised.")
-            # END for myStr
-            fp.write("\n")
-            fp.flush()
+            fp= write_SOL912_out(Time[iStep+1], PosDefor, PsiDefor, PosIni, PsiIni, XBELEM, 
+                                 kwords['writeDict'], SaveDict, FileObject=fp)
                     
         # 'Rollup' due to external velocities. TODO: Must add gusts here!
         ZetaStar[:,:] = ZetaStar[:,:] + VMINPUT.U_infty*dt
-    
+        
+        # sm: append outputs
+        XBOUT.QuatList.append(Quat)
+ 
+        # sm I/O: FoR A velocities/accelerations
+        XBOUT.Time=Time                     # ...dyn.dat
+        #XBOUT.PosPsiTime = PosPsiTime       
+        
+        XBOUT.DynOut=DynOut                 # ...shape.dat
+        
+        XBOUT.Vrel=Vrel                     # ...rigid.dat
+        XBOUT.VrelDot=VrelDot
+        #XBOUT.PosPsiTime=PosPsiTime          
+        
+        XBOUT.PsiList.append(PsiDefor)   
+        
+        XBOUT.cputime.append( time.clock() - XBOUT.cputime[0] )
+        
+        if SaveContinuously:
+            saveh5(Settings, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
+        
     # END Time loop
     
-    # Write _dyn file.
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_dyn.dat'
-    fp = open(ofile,'w')
-    BeamIO.Write_dyn_File(fp, Time, PosPsiTime)
-    fp.close()
     
-    #Write _shape file
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_shape.dat'
-    fp = open(ofile,'w')
-    BeamIO.Write_shape_File(fp, len(Time), NumNodes_tot.value, Time, DynOut)
-    fp.close()
-    
-    #Write rigid-body velocities
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_rigid.dat'
-    fp = open(ofile,'w')
-    BeamIO.Write_rigid_File(fp, Time, Vrel, VrelDot)
-    fp.close()
-    
+    if SaveDict['Format'] != 'h5': 
+        write_SOL912_final(Time, PosPsiTime, NumNodes_tot, DynOut, Vrel, VrelDot, SaveDict) 
+        
     # Close output file if it exists.
     if 'writeDict' in kwords and Settings.WriteOut == True:
         fp.close()
-    
-    # Close Tecplot ascii FileObject.
+        
+    # Close TecPlot ASCII FileObject.
     if Settings.PlotTec==True:
         PostProcess.CloseAeroTecFile(FileObject)
-    
+        
     if XBOPTS.PrintInfo.value==True:
         sys.stdout.write(' ... done\n')
         
     # For interactive analysis at end of simulation set breakpoint.
     pass
+
+    # sm I/O: FoR A velocities/accelerations
+
+    XBOUT.Time=Time                     # ...dyn.dat
+    XBOUT.PosPsiTime = PosPsiTime       
+    
+    XBOUT.DynOut=DynOut                 # ...sgape.dat
+    
+    XBOUT.Vrel=Vrel                     # ...rigid.dat
+    XBOUT.VrelDot=VrelDot
+    XBOUT.PosPsiTime=PosPsiTime        
+    
+    saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
+    
+    return XBOUT
+        
 
 def panellingFromFreq(freq,c=1.0,Umag=1.0):
     """@brief Calculate adequate spatial/temporal resolution on UVLM grid
@@ -801,6 +808,161 @@ def panellingFromFreq(freq,c=1.0,Umag=1.0):
     M = int(50.0*k/np.pi) #get adequate panelling
     DelTime = c/(Umag*M) #get resulting DelTime
     return M, DelTime
+
+
+def saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT ):
+        h5filename=SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '.h5'
+        hdfile=h5py.File(h5filename,'w')
+        #print ('created %s'%h5filename)
+        PyLibs.io.save.add_class_as_grp(AELAOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(VMINPUT,hdfile)
+        PyLibs.io.save.add_class_as_grp(VMOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
+        PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
+        hdfile.close()
+        return None
+
+
+def write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict):
+        
+    # Write deformed configuration to file. TODO: tidy this away inside function.
+    ofile = SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '_SOL912_def.dat'
+    if XBOPTS.PrintInfo==True:
+        sys.stdout.write('Writing file %s ... ' %(ofile))
+    fp = open(ofile,'w')
+    fp.write('TITLE="Non-linear static solution: deformed geometry"\n')
+    fp.write('VARIABLES="iElem" "iNode" "Px" "Py" "Pz" "Rx" "Ry" "Rz"\n')
+    fp.close()
+    if XBOPTS.PrintInfo==True:
+        sys.stdout.write('done\n')
+    WriteMode = 'a'
+    # Write
+    BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM,
+                       PosDefor, PsiDefor, ofile, WriteMode)
+    return None
+    
+
+def write_SOL912_final(Time, PosPsiTime, NumNodes_tot, DynOut, Vrel, VrelDot, SaveDict):
+
+    # Write _dyn file.
+    ofile = SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '_SOL912_dyn.dat'
+    fp = open(ofile,'w')
+    BeamIO.Write_dyn_File(fp, Time, PosPsiTime)
+    fp.close()
+    
+    #Write _shape file
+    ofile = SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '_SOL912_shape.dat'
+    fp = open(ofile,'w')
+    BeamIO.Write_shape_File(fp, len(Time), NumNodes_tot.value, Time, DynOut)
+    fp.close()
+    
+    #Write rigid-body velocities
+    ofile = SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '_SOL912_rigid.dat'
+    fp = open(ofile,'w')
+    BeamIO.Write_rigid_File(fp, Time, Vrel, VrelDot)
+    fp.close()
+    
+    return None
+
+
+def write_SOL912_out(time, PosDefor, PsiDefor, PosIni, PsiIni, XBELEM, 
+                     writeDict, SaveDict , **kwargs):
+
+    '''
+    Writes structural output. Function called at each time-step to update the 
+    solution. 
+    If a file object is not passed in input, this is created from scratch. 
+    '''
+    
+    if 'FileObject' in kwargs:
+        fp = kwargs['FileObject']
+    else:
+        # create file
+        ofile = SaveDict['OutputDir'] +SaveDict['OutputFileRoot'] + '_SOL912_out.dat'
+        fp = open(ofile,'w')
+        fp.write("{:<14}".format("Time"))
+        for output in writeDict.keys():
+            fp.write("{:<14}".format(output))
+        fp.write("\n")
+        fp.flush()
+     
+        
+    # Write initial outputs to file.
+    locForces = None # Stops recalculation of forces
+    fp.write("{:<14,e}".format(time))
+    for myStr in writeDict.keys():
+        
+        # Search for Forces
+        if re.search(r'^R_.',myStr):
+            
+            if re.search(r'^R_._.', myStr): index = int(myStr[4])
+            elif re.search(r'root', myStr): index = 0
+            elif re.search(r'tip', myStr): index = -1
+            else:
+                raise IOError("Node index not recognised.")
+            
+            if myStr[2] == 'x':  component = 0
+            elif myStr[2] == 'y': component = 1
+            elif myStr[2] == 'z': component = 2
+            else: raise IOError("Displacement component not recognised.")
+            
+            fp.write("{:<14,e}".format(PosDefor[index,component]))
+        
+        # Search for Moments    
+        elif re.search(r'^M_.',myStr):
+            
+            if re.search(r'^M_._.', myStr): index = int(myStr[4])
+            elif re.search(r'root', myStr): index =  0
+            elif re.search(r'tip', myStr): index = -1
+            else: raise IOError("Node index not recognised.")
+            
+            if   myStr[2] == 'x': component = 0
+            elif myStr[2] == 'y': component = 1
+            elif myStr[2] == 'z': component = 2
+            else: raise IOError("Moment component not recognised.")
+            
+            if locForces == None:
+                locForces = BeamIO.localElasticForces(PosDefor, PsiDefor,
+                                                      PosIni, PsiIni,
+                                                      XBELEM,
+                                                      [index])
+            
+            fp.write("{:<14,e}".format(locForces[0,3+component]))
+        else:
+            raise IOError("writeDict key not recognised.")
+    # END for myStr
+    fp.write("\n")
+    fp.flush()
+ 
+    return fp
+    
+
+def write_TecPlot(Zeta, ZetaStar, Gamma, GammaStar, NumTimeSteps, iStep, time, SaveDict, **kwargs):
+    '''
+    Writes TecPlot file. Function called during the time-stepping to update the
+    solution. 
+    If a file object is not passed in input, this is created from scratch. 
+    '''
+    
+    if 'FileObject' in kwargs: 
+        FileObject=kwargs['FileObject']
+    else:
+        FileName = SaveDict['OutputDir']+SaveDict['OutputFileRoot']+'AeroGrid.dat'
+        Variables = ['X', 'Y', 'Z','Gamma']    
+        FileObject = PostProcess.WriteAeroTecHeader(FileName,'Default',Variables)
+    
+    # Plot results of static analysis
+    PostProcess.WriteUVLMtoTec(    FileObject,
+                                   Zeta, ZetaStar,
+                                   Gamma, GammaStar,
+                                   TimeStep = iStep,
+                                   NumTimeSteps = NumTimeSteps,#XBOPTS.NumLoadSteps.value,
+                                   Time = time,
+                                   Text = True)
+    
+    return FileObject
+
 
 
 if __name__ == '__main__':
@@ -922,9 +1084,9 @@ if __name__ == '__main__':
     writeDict['M_y (root)'] = 0
     writeDict['M_z (root)'] = 0
     
-    Settings.OutputDir = Settings.SharPyProjectDir + "output/temp/"
-    Settings.OutputFileRoot = "FlyingWing"
+    SaveDict=Settings.SaveDict
+    SaveDict['OutputDir'] = Settings.SharPyProjectDir + "output/temp/"
+    SaveDict['OutputFileRoot'] = "FlyingWing"
     
     # Solve nonlinear dynamic simulation.
-    Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS,
-             writeDict =  writeDict)
+    Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS,writeDict =  writeDict,SaveDict=SaveDict)

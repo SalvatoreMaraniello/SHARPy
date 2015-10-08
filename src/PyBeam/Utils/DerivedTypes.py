@@ -12,6 +12,7 @@ xbeam_shared.f90 plus extras.
 @modified   S.Maraniello
 @date       08/09/2015
 @comment    Sflag for spherical BCs added
+            Methods to convert class to Xbopts
 '''
 
 import sys
@@ -72,6 +73,42 @@ class Xbopts:
         self.DeltaCurved = DeltaCurved
         self.MinDelta = MinDelta
         self.NewmarkDamp = NewmarkDamp
+        
+        
+    def init_from_class(self,H):
+        '''
+        Given a class object H (containing all or part of the attributes 
+        created in the  __init__ method but not defined as c_types), 
+        overrides all the  values of  the attributes in self according to 
+        the values of H attributes.
+        '''
+        
+        #### working but not robust:
+        #### If an attribute in misspelled, an error will not occur
+        #
+        #### extract all attributes
+        #dict=self.__dict__
+        #for attrname in dict:
+        #    ### get link to c type
+        #    link=getattr(self,attrname)
+        #    try: link.value=getattr(H,attrname)
+        #    except AttributeError: print('%s will not be changed!!!')
+        
+        
+        #### more robust:
+        #
+        # extract all attributes
+        dict=H.__dict__
+        for attrname in dict:
+            ### get link to c type
+            link=getattr(self,attrname)
+            link.value=getattr(H,attrname)
+
+        return self
+                
+                
+        
+        
         
         
 class Xbinput:
@@ -229,10 +266,18 @@ class Xboutput:
     
     def __init__(self):
         self.QuatList=[]
-        
+        self.ZetaList=[]
+        self.ZetaStarList=[]
+        self.ForceAeroList=[]
+        self.GammaStarList=[]
+        self.GammaList=[]
+        self.PsiList=[]
+        # for performance
+        self.cputime=[]
+     
     
-       
-    
+
+
 
 
 if(__name__ == '__main__'):

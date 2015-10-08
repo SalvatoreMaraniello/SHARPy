@@ -9,12 +9,12 @@ import h5py
 
 def add_class_as_grp(obj,hdfile):
     '''
-    Given a class instance 'obj', the adds it as a group to a hdf5 file
+    Given a class instance 'obj', the routine adds it as a group to a hdf5 file
     
     Remark: the previous content of the file is not deleted or modified. If the
     class already exists, an error occurs. 
     
-    Warning: multiple calls to this function will lead to a file increase
+    Warning: multiple calls of this function will lead to a file increase
     
     '''
 
@@ -30,7 +30,7 @@ def add_class_as_grp(obj,hdfile):
         if value != None:
             # check for c_types
             if type(value).__name__[:2]=='c_':
-                print('%s is a ctype:'%attr)
+                #print('%s is a ctype:'%attr)
                 value=value.value
             try:
                 grp[attr]=value

@@ -78,5 +78,14 @@ PlotOut = True
 # Write UVLM info to text file for debugging.
 WriteUVLMdebug = False
 
+
+# Save Dictionary for Standard I/O:
+# The dictionary can be imported in any input file and passed to the solver.
+SaveDict={}
+SaveDict['OutputDir'] = OutputDir
+SaveDict['OutputFileRoot'] = OutputFileRoot
+SaveDict['Format']='h5' # 'dat', 'all'
+
+
 if __name__ == '__main__':
     pass

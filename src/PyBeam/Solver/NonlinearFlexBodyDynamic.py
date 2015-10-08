@@ -573,6 +573,7 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
             Qsys[NumDof.value:NumDof.value+6] = Qrigid
             Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
             
+            Qsys += np.dot(Msys,dQddt)
             
             ### special BCs
             # special BCs
@@ -592,16 +593,10 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
                 XBOUT.Qsys=Qsys.copy('F')
                 XBOUT.Csys=Csys.copy('F')
                 XBOUT.Ksys=Ksys.copy('F')
-                
-            
-            
-            Qsys += np.dot(Msys,dQddt)
 
                 
             #Calculate system matrix for update calculation
-            Asys = Ksys + \
-                      Csys*gamma/(beta*dt) + \
-                      Msys/(beta*dt**2)
+            Asys = Ksys + Csys*gamma/(beta*dt) + Msys/(beta*dt**2)
                       
             
             #Compute correction

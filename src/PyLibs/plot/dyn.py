@@ -8,16 +8,11 @@ rigid body dynamics)
 
 '''
 
-
-#import matplotlib as mpl
-#import matplotlib.pyplot as plt
-#from mpl_toolkits.mplot3d import Axes3D
-## packages and common variables imported in lib.plot.shared
-#import  lib.plot.shared
-#grayshade = lib.plot.shared.grayshade
-
 # packages and common variables imported in lib.plot.shared
 from PyLibs.plot.shared import *
+
+from matplotlib.collections import PolyCollection
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def traj(V):
@@ -113,7 +108,7 @@ def axis_traj(V,Origin=None):
     return None
 
 
-def beam_snapshots(THPosDef):
+def beam_snapshots(THPosDef,asp_ratio='equal'):
     '''
     Plots snapshots of the beam during a dynamic simulation. 
     
@@ -157,20 +152,62 @@ def beam_snapshots(THPosDef):
     else:
         raise NameError('THPosDef is not 2D or 3D!!!')
     
-    ax.set_aspect('equal')
+    ax.set_aspect(asp_ratio)
     
     return fig, ax
     
 
-
-   
+def polytrend(xv,tv,Fmat,fig=plt.figure('Poly trend',(10,8)),**kwargs):
+    '''
+    The function visualises the quantity Fmat, continuously defined over the 
+    domain xv, at the discrete times tv.
+    Fmat has size (len(xv),len(tv))
+    '''
+    
+    #------------------------------------------------ Extract optional arguments
+    #if 'figure' is kwargs:
+    #    fig = kwargs['figure']
+    #else: 
+    #    print('creating a brand new figure')
+    #    fig = plt.figure('Poly trend',(10,8))
+        
+    if 'cmap' in kwargs:
+        cmap=kwargs['cmap']
+    else:
+        cmap=mpl.cm.winter     
+     
+    
+    ax = fig.gca(projection='3d')
+    
+    verts = []
+    for ii in range(len(tv)):
+        
+        fvec = np.abs(Fmat[:,ii])
+    
+        #####create vertices for polygon
+        # to the set of points given in input, additional edges need to be 
+        # included to 'close' the polygons
+        XS=np.concatenate([[xv[0]],xv,[xv[-1]]])
+        YS=np.concatenate([[0],fvec,[0]])
+        verts.append(list(zip(XS, YS)))    
+    
+    # create a list of different colours from a colour map for each facet
+    ticknumber=np.linspace(0,1,len(tv))
+    clist=[]
+    for nn in ticknumber:
+        clist.append(cmap(nn))
+    
+    poly = PolyCollection(verts, facecolors = clist, edgecolors='0.6' )#, edgecolors=clist)
+    poly.set_alpha(0.7)
+    ax.add_collection3d(poly, zs=tv, zdir='y')
+    
+    ax.grid(False)
+    
+    return fig, ax   
     
     
     
     
-
-
-
 
 
 if __name__=='__main__':
