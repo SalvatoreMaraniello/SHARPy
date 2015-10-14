@@ -6,6 +6,14 @@
 @date       18/01/2013
 @pre        None
 @warning    None
+
+@modified   Salvatore Maraniello
+@date       14 oct 2015
+@change:    Fix projection matrix CoincidentGrid
+            Add PsiA_G to input of CoincidentAeroGrid for (a) keeping consistency 
+            with  CoincidentGrid and (b) allowing dynamic solution with moving FoR A. 
+            Change not back-compatible (previous solutions with PsiA_G != 0 would
+            not function by the way...)
 '''
 
 import numpy as np
@@ -20,7 +28,7 @@ from PyBeam.Utils.Misc import iNode2iElem
 def CoincidentGrid(PosDefor, PsiDefor, Section,
                    VelA_A, OmegaA_A, PosDotDef, PsiDotDef,
                    XBINPUT, AeroGrid, AeroVels,
-                   OriginA_G = None,
+                   OriginA_a = None,
                    PsiA_G = None,
                    ctrlSurf = None):
     """@brief Creates aero grid and velocities 
@@ -35,7 +43,7 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
     @param XBINPUT Beam input options.
     @param AeroGrid Aerodynamic grid to be updated.
     @param AeroVels Aerodynamic grid velocities to be updated
-    @param OriginA_G Origin of a-frame.
+    @param OriginA_a Origin of a-frame (in a-frame components)
     @param PsiA_G Attitude of a-frame w.r.t earth.
     @param ctrlSurf Control surface definition. 
     
@@ -126,18 +134,20 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
         #END for jSection
     #END for iNode
     
-    if ( (OriginA_G != None) and (PsiA_G != None) ):
+    if ( (OriginA_a != None) and (PsiA_G != None) ):
         # Get transformation from a-frame to earth frame.
-        CaG = Psi2TransMat(PsiA_G)
-        CGa = CaG.T
+        #CaG = Psi2TransMat(PsiA_G)
+        #CGa = CaG.T #] sm: this rotated, doesn't project
+        CGa = Psi2TransMat(PsiA_G)
         
-        # Add the origin to grids in earth frame and transform velocities.
+        ### sm: convert OriginA_a into FoR G components
+        OriginA_G=np.dot(CGa,OriginA_a)
+        
         for iNode in range(PosDefor.shape[0]):
             for jSection in range(Section.shape[0]):
                 AeroGrid[jSection,iNode,:] = OriginA_G + \
                                              np.dot(
-                                             CGa, AeroGrid[jSection,iNode,:])
-                                             
+                                             CGa, AeroGrid[jSection,iNode,:])                        
                 AeroVels[jSection,iNode,:] = np.dot(
                                              CGa, AeroVels[jSection,iNode,:])
             #END for jSection
@@ -145,7 +155,7 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
     #END if    
 
 def CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
-                           BeamForces):
+                        BeamForces, PsiA_G=np.zeros(3)):
     """@brief Calculates aero forces and moments on the beam nodes from those on
     the aerodynamic grid.
     @param XBINPUT Beam input options.
@@ -153,6 +163,7 @@ def CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
     @param Section Array containing sectional camberline coordinates.
     @param AeroForces Aerodynamic grid forces to be mapped to beam nodes.
     @param BeamForces BeamForces to overwrite.
+    @param PsiA_G Attitude of a-frame w.r.t earth. Default zero.
     
     @details All Beam forces calculated in in a-frame, while aero forces 
     are defined in earth frame."""
@@ -160,9 +171,9 @@ def CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
     # Zero beam forces.
     BeamForces[:,:] = 0.0
     
-    # Get transformation matrix between a-frame and earth.
-    CGa = Psi2TransMat(XBINPUT.PsiA_G)
-    CaG = CGa.T
+    # Get transformation matrix between a-frame and earth. 
+    CGa = Psi2TransMat(PsiA_G) # project from a -> G
+    CaG = CGa.T                # project from G -> a
     
     # Num Nodes
     NumNodes = XBINPUT.NumNodesTot
@@ -201,7 +212,7 @@ def InitSection(VMOPTS,VMINPUT,ElasticAxis):
     @param VMINPUT UVLM solver inputs.
     @param ElasticAxis Position of elastic axis, defined as Theodorsen's a 
     parameter - i.e the number of semi-chords aft of midchord.
-    @return Section cross section coordinates."""
+    @return Section cross section coordinates in FoR A."""
     
     Section = np.zeros((VMOPTS.M.value+1,3),ct.c_double,'C')
     

@@ -82,6 +82,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS):
                                                     'Default',
                                                     Variables)
         
+        # FoR A orientation/position
+        PsiA_G = XBINPUT.PsiA_G
+        
         # Start Load Loop.
 #         for iLoadStep in range(XBOPTS.NumLoadSteps.value):
         for iLoadStep in range(XBOPTS.MaxIterations.value):
@@ -100,16 +103,16 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS):
                                Section,
                                XBINPUT.ForcedVel[0,:3],
                                XBINPUT.ForcedVel[0,3:],
-                               PosDotDef,
-                               PsiDotDef,
+                               PosDotDef, PsiDotDef,
                                XBINPUT,
-                               Zeta,
-                               ZetaDot,
+                               Zeta, ZetaDot,
+                               np.zeros(3), PsiA_G,  # allows correct call from Couple_NlnFlightDyn 
                                ctrlSurf = VMINPUT.ctrlSurf)
             else:
                 CoincidentGrid(PosDefor, PsiDefor, Section, VelA_A, 
                                OmegaA_A, PosDotDef, PsiDotDef, XBINPUT,
                                Zeta, ZetaDot,
+                               np.zeros(3), PsiA_G,  # allows correct call from Couple_NlnFlightDyn 
                                ctrlSurf = VMINPUT.ctrlSurf)
             
             if hasattr(XBINPUT,'ForcedVel'):
@@ -136,7 +139,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS):
             
             # Map AeroForces to beam.
             CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
-                                Force)
+                                Force, PsiA_G=XBINPUT.PsiA_G)
             
             # Add gravity loads.
             AddGravityLoads(Force,XBINPUT,XBELEM,AELAOPTS,

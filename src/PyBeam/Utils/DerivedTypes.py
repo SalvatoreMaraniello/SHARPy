@@ -13,6 +13,7 @@ xbeam_shared.f90 plus extras.
 @date       08/09/2015
 @comment    Sflag for spherical BCs added
             Methods to convert class to Xbopts
+            
 '''
 
 import sys
@@ -86,7 +87,7 @@ class Xbopts:
         #### working but not robust:
         #### If an attribute in misspelled, an error will not occur
         #
-        #### extract all attributes
+        ## extract all attributes
         #dict=self.__dict__
         #for attrname in dict:
         #    ### get link to c type
@@ -94,11 +95,9 @@ class Xbopts:
         #    try: link.value=getattr(H,attrname)
         #    except AttributeError: print('%s will not be changed!!!')
         
-        
         #### more robust:
         #
         # extract all attributes
-        dict=H.__dict__
         for attrname in dict:
             ### get link to c type
             link=getattr(self,attrname)
@@ -136,6 +135,8 @@ class Xbinput:
     @param ForceDyn_dead Numnodes dynamic forces of dead loads at nodes.
     @param ForcingType Type of dynamic forcing.
     @param g acceleration due to gravity.
+    @param PsiA_G CRV associated to the angle/axis that requited to rotate G over A
+    
     """
 
     def __init__(self, NumNodesElem, NumElems,
@@ -152,7 +153,8 @@ class Xbinput:
                  ForcingType = 'Const',
                  RampTime = 0.0,
                  g = 0.0, # Leave this alone!
-                 PsiA_G = np.array([0.0,0.0,0.0])):
+                 PsiA_G = np.array([0.0,0.0,0.0])
+                 ):
         """@brief NumNodesElem and NumElems must be specified for initialisation
                   of force arrays.
         
@@ -175,6 +177,7 @@ class Xbinput:
         self.RampTime = RampTime
         self.g = g
         self.PsiA_G = PsiA_G
+        #self.quat0 = quat0
         
         # Check number of nodes per element.
         if self.NumNodesElem != 2 and self.NumNodesElem != 3:
@@ -266,6 +269,7 @@ class Xboutput:
     
     def __init__(self):
         self.QuatList=[]
+        self.PsiList=[]
         self.ZetaList=[]
         self.ZetaStarList=[]
         self.ForceAeroList=[]

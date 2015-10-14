@@ -85,6 +85,8 @@ SaveDict={}
 SaveDict['OutputDir'] = OutputDir
 SaveDict['OutputFileRoot'] = OutputFileRoot
 SaveDict['Format']='h5' # 'dat', 'all'
+SaveDict['SaveProgress']=True
+SaveDict['NumSavePoints']=10
 
 
 if __name__ == '__main__':

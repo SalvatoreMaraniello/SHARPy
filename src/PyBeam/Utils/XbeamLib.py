@@ -41,6 +41,12 @@ def QuadSkew(Omega):
 def Rot(q1):
     """@brief Calculate rotation matrix based on quaternions.
     See Aircraft Control and Simulation, pag. 31, by Stevens, Lewis.
+    
+    Remark: if A is a FoR obtained rotating a FoR G of angle fi about an axis n (remind n will be 
+    invariant during the rotation), and q is the related quaternion q(fi), the function will
+    return the matrix Cag such that:
+        - Cag rotated A to G
+        - Cag transforms the coordinates of a vector defined in G component to A components.
     """
     
     q = q1.copy(order='F')
@@ -334,6 +340,24 @@ def quat2psi(quat):
     @returns Cartesian rotation vector.
     """
     return(lib_rotvect.lib_rotvect.rotvect_quat2psi(quat))
+
+def psi2quat(psi):
+    """@brief Convert Cartesian rotation vector into quaternion.
+    
+    @param psi Cartesian rotation vector
+    @returns Quaternion.
+    """    
+    
+    fi = np.linalg.norm(psi)
+    if fi<1e-8: nv=np.zeros(3)
+    else: nv = psi/fi 
+    
+    quat=np.zeros(4)
+    quat[0] =np.cos(0.5*fi)
+    quat[1:]=np.sin(0.5*fi)*nv   
+    
+    return quat
+         
 
 def a1(psi,b):
     """@brief Calculates the A1 operator: delta(T)*b=a1(psi,b)*Delta(psi))
