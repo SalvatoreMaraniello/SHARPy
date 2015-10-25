@@ -5,6 +5,29 @@ Created on 21 Sep 2015
 '''
 
 import h5py
+import os
+
+
+def h5file(savedir,h5filename, *class_inst ):
+    '''
+    Creates h5filename and saves all the classes specified after the
+    first input argument
+    
+    @param savedir: target directory
+    @param h5filename: file name
+    @param *class_inst: a number of classes to save 
+    '''
+
+    os.system('mkdir -p %s'%savedir)
+    h5filename=os.path.join(savedir,h5filename)
+    
+    hdfile=h5py.File(h5filename,'w')
+    
+    for cc in class_inst:
+        add_class_as_grp(cc,hdfile)
+
+    hdfile.close()
+    return None
 
 
 def add_class_as_grp(obj,hdfile):
@@ -17,13 +40,15 @@ def add_class_as_grp(obj,hdfile):
     Warning: multiple calls of this function will lead to a file increase
     
     '''
-
-    grp = hdfile.create_group(obj.__class__.__name__)
+    
+    # look for a name, otherwise use class name
+    if hasattr(obj,'name'): grp = hdfile.create_group(obj.name)   
+    else: grp = hdfile.create_group(obj.__class__.__name__)
     
     # extract all attributes
-    dict=obj.__dict__
+    dictname=obj.__dict__
     
-    for attr in dict:
+    for attr in dictname:
         value=getattr(obj,attr)
         
         # check is not empty...
@@ -196,6 +221,7 @@ if __name__=='__main__':
     add_class_as_grp(XBINPUT,hdfile)
     
 
+      
 
 
 

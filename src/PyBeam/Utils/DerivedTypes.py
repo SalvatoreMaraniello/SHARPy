@@ -45,6 +45,9 @@ class Xbopts:
     @param DeltaCurved Min. angle for two vectors to be parallel, double.
     @param MinDelta Convergence param for Newton-Rhaphson iterations, double.
     @param NewmarkDamp Numerical damping in Newmark integration scheme, double.
+    @param EnforceAngVel_FoRA: if the n-th element of the list is True, the
+            n-th component of the angular velocity of the FoR A (expressed in 
+            FoR A components) is kept constant. 
     
     @warning If FollowerForce = ct.c_bool(True), beam forces must be applied
     in the local FoR, B.
@@ -74,6 +77,7 @@ class Xbopts:
         self.DeltaCurved = DeltaCurved
         self.MinDelta = MinDelta
         self.NewmarkDamp = NewmarkDamp
+        self.EnforceAngVel_FoRA=3*[False]
         
         
     def init_from_class(self,H):
@@ -275,7 +279,7 @@ class Xboutput:
         self.ForceAeroList=[]
         self.GammaStarList=[]
         self.GammaList=[]
-        self.PsiList=[]
+        self.CRVList=[]
         # for performance
         self.cputime=[]
      

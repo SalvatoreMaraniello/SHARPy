@@ -11,10 +11,10 @@ Modified S. Maraniello, 25 Sep 2015
 
 '''
 #----------------------------------------------------------------------- Packages
-import sys
+import sys, os, h5py
 import Main.SharPySettings as Settings
 import DerivedTypes
-import BeamIO
+#import BeamIO
 import BeamLib
 import BeamInit
 import numpy as np
@@ -23,24 +23,25 @@ from PyFSI.Beam2UVLM import InitSection
 from PyFSI.Beam2UVLM import CoincidentGrid
 from PyFSI.Beam2UVLM import CoincidentGridForce
 from PyAero.UVLM.Utils import UVLMLib
-from PyAero.UVLM.Utils import DerivedTypesAero
+#from PyAero.UVLM.Utils import DerivedTypesAero
 from PyAero.UVLM.Utils import PostProcess
 from PyAero.UVLM.Solver.VLM import InitSteadyExternalVels
 from PyAero.UVLM.Solver.VLM import InitSteadyWake
-from PyCoupled.Utils.DerivedTypesAeroelastic import AeroelasticOps
+#from PyCoupled.Utils.DerivedTypesAeroelastic import AeroelasticOps
 import PyCoupled.Coupled_NlnStatic as Static
 import PyBeam.Utils.XbeamLib as xbl
 from PyCoupled.Coupled_NlnStatic import AddGravityLoads
-from DerivedTypesAero import ControlSurf
-from collections import OrderedDict
-import re
-from math import pow
-from PyBeam.Utils.XbeamLib import Skew
-from PyAero.UVLM.Utils.DerivedTypesAero import Gust
-import h5py, time                                          # sm added packages
+#from DerivedTypesAero import ControlSurf
+#from collections import OrderedDict
+#import re
+#from math import pow
+#from PyBeam.Utils.XbeamLib import Skew
+#from PyAero.UVLM.Utils.DerivedTypesAero import Gust
+import time                                          # sm added packages
 import PyLibs.io.save
 
-from Coupled_NlnFlightDynamic_utils import *
+from PyCoupled.Coupled_NlnFlightDynamic_utils import write_SOL912_def, write_SOL912_final, \
+                                                     write_SOL912_out, write_TecPlot
 
 
 
@@ -63,20 +64,23 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                           ' with wrong solution code')
     
     # I/O management
+    XBOUT=DerivedTypes.Xboutput()  
     SaveDict=Settings.SaveDict
     if 'SaveDict' in kwords: SaveDict=kwords['SaveDict']
     if SaveDict['Format']=='h5':
         Settings.WriteOut=False
         Settings.PlotTec=False
-        
-    # sm: Define Output class
-    XBOUT=DerivedTypes.Xboutput()  
-    
+        OutList=[AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT]
+        if VMINPUT.ctrlSurf!=None:
+            OutList.append(VMINPUT.ctrlSurf)
+        if SaveDict['SaveWake'] is True:
+            dirwake=SaveDict['OutputDir']+'wake'+SaveDict['OutputFileRoot']+'/'
+            os.system('mkdir -p %s' %dirwake)
+            
     XBOUT.cputime.append(time.clock()) # time.processor_time more appropriate but equivalent
     # for debugging
     XBOUT.ForceDofList=[]
     XBOUT.ForceRigidList=[]
-
 
     # Initialise static beam data.
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
@@ -85,15 +89,16 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # special BCs
     SphFlag=False
     if XBNODE.Sflag.any(): SphFlag=True
-    SphMoving=False # not required: the V given to G will apply to S as well (Rafa)
+    SphMoving=False # not required: the V given to G will apply to A as well (Rafa)
     
     # Debugging Flags
     SaveContinuously=False
-    EnforcePitch=XBINPUT.EnforcePitch
+    #EnforcePitch=XBINPUT.EnforcePitch
+    #EnforceYaw = XBINPUT.EnforceYaw
     #try:    EnforcePitch=XBINPUT.EnforcePitch
     #except: EnforcePitch=False
     HardCodeAero=False
-    if 'EnforcePitch' in kwords: EnforcePitch=kwords['EnforcePitch'] 
+    #if 'EnforcePitch' in kwords: EnforcePitch=kwords['EnforcePitch'] 
     if 'HardCodeAero' in kwords: HardCodeAero=kwords['HardCodeAero']
         
 
@@ -318,16 +323,22 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
        
     # special BCs
     if SphFlag:
-        if EnforcePitch is True:
-            # AC can still yaw and roll, but the angular velocity wrt x will be unchanged
-            iitrans = [ ii for ii in range(NumDof.value,NumDof.value+4) ]
-        elif SphMoving is True:
-            iitrans = [NumDof.value, NumDof.value+2]
-        else: # proper spherical joints
-            iitrans = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
-        Msys[iitrans,:] = 0.0#np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
-        Msys[iitrans,iitrans] = 1.0#np.ones(3,ct.c_double,order='F').copy('F')
-        Qsys[iitrans] = 0.0#np.zeros((3),ct.c_double,order='F').copy('F')     
+        # block translations
+        iitrans = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
+        # block rotations
+        for ii in range(3):
+            if XBINPUT.EnforceAngVel_FoRA[ii] is True:
+                iitrans.append(NumDof.value+3+ii)
+        #if EnforcePitch is True:
+        #    # AC can still yaw and roll
+        #    iitrans = [ ii for ii in range(NumDof.value,NumDof.value+4) ]
+        #elif SphMoving is True:
+        #    iitrans = [NumDof.value, NumDof.value+2]
+        #else: # proper spherical joints
+        #    iitrans = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
+        Msys[iitrans,:] = 0.0
+        Msys[iitrans,iitrans] = 1.0
+        Qsys[iitrans] = 0.0
         ### sm debug
         XBOUT.Msysiitrans= Msys[iitrans,iitrans].copy('F')
         XBOUT.Msysiitransdd=Msys[iitrans,:].copy('F')
@@ -357,8 +368,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     #---------------------------------------------- Initialise Aerodynamic Force
     # Initialise Aero       
     Section = InitSection(VMOPTS,VMINPUT,AELAOPTS.ElasticAxis)
-    # sm debug
-    XBOUT.Section=Section
     
     # Declare memory for Aero variables.
     ZetaDot = np.zeros((Section.shape[0],PosDefor.shape[0],3),ct.c_double,'C')
@@ -387,7 +396,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # sm save
     XBOUT.Zeta0 = Zeta.copy('C')
     XBOUT.ZetaStar0 = ZetaStar.copy('C')
-    XBOUT.ZetaStarList.append( ZetaStar.copy('C') )
+    XBOUT.ZetaStarList.append(np.float32( ZetaStar.copy('C') ))
     
     # Define TecPlot stuff
     if Settings.PlotTec==True:
@@ -399,7 +408,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     # sm write class
     XBOUT.QuatList.append(Quat.copy())
-    XBOUT.PsiList.append(PsiA_G)
+    XBOUT.CRVList.append(PsiA_G)
     XBOUT.PosIni=PosIni
     XBOUT.PsiIni=PsiIni    
 
@@ -426,7 +435,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         Quat = Quat/np.linalg.norm(Quat)
         Cao  = xbl.Rot(Quat)
         
-        #nodal diplacements and velocities from state vector
+        #nodal displacements and velocities from state vector
         X=Q[:NumDof.value].copy('F') 
         dXdt=dQdt[:NumDof.value].copy('F'); 
         BeamLib.Cbeam3_Solv_State2Disp(XBINPUT,NumNodes_tot,XBELEM,XBNODE,
@@ -451,7 +460,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             # Update control surface deflection.
             if VMINPUT.ctrlSurf != None:
-                VMINPUT.ctrlSurf.update(Time[iStep])
+                # open-loop control
+                VMINPUT.ctrlSurf.update(Time[iStep],iStep=iStep)
             
             # Generate surface grid.
             currVrel=Vrel[iStep,:].copy('F')
@@ -512,10 +522,18 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         #END if iStep > 0        
             
         # sm: save aero data
-        XBOUT.ZetaList.append(Zeta.copy('C'))
-        XBOUT.ZetaStarList.append(ZetaStar.copy('C'))
-        XBOUT.GammaStarList.append(GammaStar.copy('C'))
-        XBOUT.GammaList.append(Gamma.copy('C')) 
+        if ( SaveDict['SaveWake']==True and 
+                 iStep%SaveDict['WaveSaveFreq'] == 0 ):
+            nfile=iStep//SaveDict['WaveSaveFreq']
+            hdwake=h5py.File(dirwake+'%.4d.h5'%nfile,'w')
+            hdwake['iStep']=iStep
+            hdwake['Zeta']= np.float32(Zeta.copy('C'))
+            hdwake['ZetaStar']= np.float32(ZetaStar.copy('C'))            
+            hdwake.close()
+            #XBOUT.ZetaList.append( np.float32(Zeta.copy('C')) )
+            #XBOUT.ZetaStarList.append( np.float32(ZetaStar.copy('C')) )
+            #XBOUT.GammaStarList.append(GammaStar.copy('C'))
+            #XBOUT.GammaList.append(Gamma.copy('C')) 
                       
           
         #Reset convergence parameters
@@ -655,11 +673,11 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 XBOUT.CsysBefore=Csys.copy('F')
                 XBOUT.KsysBefore=Ksys.copy('F')
                 
-                Msys[iitrans,:] = 0.0 #np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
-                Msys[iitrans,iitrans] = 1.0 #np.ones(3,ct.c_double,order='F').copy('F')
-                Csys[iitrans,:] = 0.0 #np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
-                Ksys[iitrans,:] = 0.0 #np.zeros((3,NumDof.value+10),ct.c_double,order='F').copy('F')
-                Qsys[iitrans] = 0.0 #np.zeros((3),ct.c_double,order='F').copy('F')
+                Msys[iitrans,:] = 0.0
+                Msys[iitrans,iitrans] = 1.0
+                Csys[iitrans,:] = 0.0
+                Ksys[iitrans,:] = 0.0
+                Qsys[iitrans]   = 0.0
                 
                 XBOUT.Msys=Msys.copy('F')
                 XBOUT.Qsys=Qsys.copy('F')
@@ -667,19 +685,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 XBOUT.Ksys=Ksys.copy('F')
           
  
-    
             #Calculate system matrix for update calculation
             Asys = Ksys + Csys*gamma/(beta*dt) + Msys/(beta*dt**2)
 
-            ### --------------------------------------------- sm debugging start
-            XBOUT.Asys=Asys.copy()  
-            #if SaveDict['SaveProgress']:
-            #    iisave=np.arange(1,NumSteps.value,np.ceil(NumSteps.value/SaveDict['NumSavePoints']))
-            #    if any(iisave==iStep):
-            #        saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
-                                    
-            
-            ### --------------------------------------------- sm debugging end
             
             #Compute correction
             
@@ -749,7 +757,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         
         # sm: append outputs
         XBOUT.QuatList.append(Quat)
-        XBOUT.PsiList.append(PsiA_G)
+        XBOUT.CRVList.append(PsiA_G)
  
         # sm I/O: FoR A velocities/accelerations
         XBOUT.Time=Time                     # ...dyn.dat
@@ -768,7 +776,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         if SaveDict['SaveProgress']:
             iisave=np.arange(1,NumSteps.value,np.ceil(NumSteps.value/SaveDict['NumSavePoints']))
             if any(iisave==iStep):
-                saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
+                PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5', 
+                                      *OutList)
         
     # END Time loop
     
@@ -799,9 +808,14 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     XBOUT.Vrel=Vrel                     # ...rigid.dat
     XBOUT.VrelDot=VrelDot
-    XBOUT.PosPsiTime=PosPsiTime        
+    XBOUT.PosPsiTime=PosPsiTime   
     
-    saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
+    if  SaveDict['SaveWake'] is True:
+        XBOUT.dirwake=dirwake  
+        XBOUT.NTwake=NumSteps.value//SaveDict['WaveSaveFreq']
+    
+    #saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT )
+    PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5', *OutList)
     
     return XBOUT
         

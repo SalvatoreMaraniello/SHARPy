@@ -58,21 +58,6 @@ def panellingFromFreq(freq,c=1.0,Umag=1.0):
     return M, DelTime
 
 
-def saveh5(SaveDict, AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT ):
-    
-    h5filename=SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '.h5'
-    hdfile=h5py.File(h5filename,'w')
-    #print ('created %s'%h5filename)
-    PyLibs.io.save.add_class_as_grp(AELAOPTS,hdfile)
-    PyLibs.io.save.add_class_as_grp(VMINPUT,hdfile)
-    PyLibs.io.save.add_class_as_grp(VMOPTS,hdfile)
-    PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
-    PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
-    PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
-    hdfile.close()
-    return None
-
-
 def write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict):
         
     # Write deformed configuration to file. TODO: tidy this away inside function.
