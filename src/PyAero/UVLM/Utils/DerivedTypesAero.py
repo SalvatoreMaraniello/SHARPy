@@ -6,11 +6,15 @@
 @date       30/01/2013
 @pre        None
 @warning    None
+
+@modified   Salvatore Maraniello (15/10/2015)
+            Allow for predefined control surface deflection
 '''
 
 import ctypes as ct
 import numpy as np
 from PyAero.UVLM.Utils.UVLMLib import Colloc
+
 
 class VMopts:
     """@brief options for UVLM
@@ -68,6 +72,7 @@ class VMinput:
         self.WakeLength = WakeLength
         self.ctrlSurf = ctrlSurf
         self.gust = gust
+
         
 class ControlSurf:
     """@brief Control surface data and member functions.
@@ -78,13 +83,32 @@ class ControlSurf:
     @param typeMotion string describing type of prescribed, or other, motion.
     @param betaBar Amplitude of control surface angle.
     @param omega Angular rate of control surface oscillations [rad/s].
-    @details Control surface rates are calculated using backward difference
-             in update and init routines.
+    @param asInput_fun: specifies method to predefine control surface
+           deflection time history. The method should return the following 
+           arguments: (time_vec, beta_vec, betaDot_vec). See note.
+    @param asInput_args: specifies arguments for asInput_method (see note)
+    
+    @details Control surface rates are calculated using backward difference 
+           in update and init routines unless tymeMotion=='asInput'
+           and asInput_method/asInput_args are specified (see note)
+            
+    @note: typeMotion 'asInput' can be used in two modes:
+               1. with iStep!=None and beta==None: in this case the control 
+               surface deflection time history is predefined in self.__init__ 
+               by specifying (a) a method (asInput_method) and (b) the required
+                arguments (asInput_args). Useful for open-loop control.
+               2. with beta !=None: in this case the beta is computed within 
+           the main solver and passed to the self.update method. Useful for 
+           feedback control.
+    
     """
     
     def __init__(self, iMin, iMax, jMin, jMax,
-                  typeMotion, betaBar,
-                  omega = 0.0):
+                  typeMotion, 
+                  betaBar=0.0, omega = 0.0, 
+                  asInput_fun = None,
+                  asInput_args = None
+                  ):
         """@brief Initialise control surface based on typeMotion."""
         
         self.iMin = iMin
@@ -94,10 +118,17 @@ class ControlSurf:
         self.typeMotion = typeMotion
         self.betaBar = betaBar
         self.omega = omega
+        self.asInput_fun = asInput_fun
+        self.asInput_args = asInput_args
         
         if typeMotion == 'asInput':
-            self.beta = 0.0
-            self.betaDot = 0.0
+            if asInput_fun != None and asInput_args !=None:
+                self.time_vec, self.beta_vec, self.betaDot_vec = asInput_fun(*asInput_args) 
+                self.beta=self.beta_vec[0]
+                self.betaDot=self.betaDot_vec[0]         
+            else:
+                self.beta = 0.0
+                self.betaDot = 0.0  
         elif typeMotion == 'sin':
             self.beta = 0.0
             self.betaDot = omega * betaBar
@@ -111,9 +142,10 @@ class ControlSurf:
         self.time = 0.0
         
         
-    def update(self, time, beta = None):
+    def update(self, time, beta = None, iStep=None):
         """@brief Calculate new beta and betaDot."""
         
+
         if (beta == None):
             if (self.typeMotion == 'sin'):
                 self.beta = self.betaBar * np.sin(self.omega*time)
@@ -122,10 +154,21 @@ class ControlSurf:
             elif (self.typeMotion == 'cos'):
                 self.beta = self.betaBar * np.cos(self.omega*time)
                 self.betaDot = - self.omega*self.betaBar*np.sin(self.omega*time)
-                self.time = time # For homogeneous function of update routine
+                self.time = time # For homogeneous function of update routine         
+            elif (self.typeMotion == 'asInput'):
+                if iStep != None:
+                    self.time=self.time_vec[iStep]
+                    self.beta=self.beta_vec[iStep]
+                    self.betaDot=self.betaDot_vec[iStep]
+                    # debug
+                    if np.abs(self.time-time)>1e-8:
+                        raise NameError('Time vectors not matching!')
+                else:
+                    raise NameError('iStep not specified!')
             else:
                 raise Exception ('beta unspecified and typeMotion not ' + 
                                  'recognised')
+                
         if (beta != None):
             if (self.typeMotion == 'asInput'):
                 # Save past control surface angle and corresponding time
@@ -146,7 +189,8 @@ class ControlSurf:
             else:
                 raise Exception('beta specified and typeMotion not ' +
                                 'recognised')
-        
+
+     
 class VMUnsteadyInput:
     """@brief Contains data for unsteady run of UVLM.
     
@@ -191,6 +235,7 @@ class VMUnsteadyInput:
             
         # Set DelTime for VMOPTS
         VMOPTS.DelTime = ct.c_double(self.DelTime)
+
         
 class Gust:
     """@brief Gust.
