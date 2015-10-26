@@ -40,6 +40,7 @@ Based on xbcompFD in optimiser/wrapper
 '''
 
 import copy
+import ctypes as ct
 import numpy as np
 import scipy.optimize as scopt
 import multiprocessing as mpr
@@ -87,10 +88,6 @@ class OptComp:
             self.fwd_run=Solve_Py
         else:
             raise NameError('Solution not supported!')
-    
-        #performance
-        self.PROCESSORS=1
-        self.parallelFDs = False
         
         #optimiser options:
         self.driver_options={'SLSQP': {'disp': False, # True to print convergence message
@@ -111,18 +108,20 @@ class OptComp:
         self.FUNC.geq.jac = np.zeros( (sum(self.FUNC.geq.len), self.DESIGN.Nx) )
         self.FUNC.cost.jac = np.zeros( (self.DESIGN.Nx, ) )
         
+        #self.XBOPTS.del_ctypes()
+        
+        # FD parallel
+        self.PROCESSORS=1
+        self.parallelFDs = False
+        # allocate 1 process for each fwd/perturbed solution
+        #self.NumCoresVM = (self.DESIGN.Nx + 1) * [1]
+        
 
-        
-        
-    def run_custom(self):
-        '''
-        add custom operations in the optimiser step
-        '''
-        
-        return self
-        
-    
+     
     def optimise(self):
+        
+        # Manage performance
+        self.set_number_processes()
         
         scopt.minimize(self.run_all, 
                        self.DESIGN.x, 
@@ -135,11 +134,7 @@ class OptComp:
         
         
     def run_wrap(self, xin):
-
-        # re-import
-        from PyCoupled.Coupled_NlnFlightDynamic import Solve_Py
-        self.fwd_run=Solve_Py
-            
+          
         # xin input from optimiser
         self.DESIGN.x = xin
         
@@ -150,9 +145,12 @@ class OptComp:
         self.update_solver_input()
         
         # solve aeroelastic analysis
+        
+        #self.XBOPTS.set_ctypes()
         self.XBOUTPUT=self.fwd_run(self.XBINPUT, self.XBOPTS, 
                            self.VMOPTS, self.VMINPUT, self.AELAOPTS,
                            SaveDict=self.SaveDict)
+        #self.XBOPTS.del_ctypes()
         
         # evaluate functionals
         self.eval_functionals()
@@ -188,23 +186,50 @@ class OptComp:
         print('Computing FD based Jacobian')  
         self.delta = self.DESIGN.Nx * [ self.driver_options['SLSQP']['eps'] ]
         
+        # ctypes set again in pertub method
+        #self.XBOPTS.del_ctypes()
+        
         if self.parallelFDs is False:
+            
+            # debugging: prepare dummy input
+            #a = np.array([dd for dd in range(self.DESIGN.Nx)])
+            
             for dd in range(self.DESIGN.Nx):
                 
                 ( self.FUNC.gdis.jac[:,dd], 
                   self.FUNC.geq.jac[:,dd] , 
                   self.FUNC.cost.jac[dd]  ) = self.perturb( copy.deepcopy( self ), dd) 
-
+                '''
+                ( self.FUNC.gdis.jac[:,dd], 
+                  self.FUNC.geq.jac[:,dd] , 
+                  self.FUNC.cost.jac[dd]  ) = self.dummy_perturb( a, dd, 
+                                                         sum(self.FUNC.geq.len), 
+                                                         sum(self.FUNC.gdis.len),
+                                                         copy.deepcopy(self.XBOPTS),
+                                                         copy.deepcopy(self) )
+                '''
         else:
             
+            # debugging: prepare dummy input
+            #a = np.array([dd for dd in range(self.DESIGN.Nx)])
+            
             # create pool of processes
-            pool = mpr.Pool(processes=self.PROCESSORS) 
+            pool = mpr.Pool(processes=self.PROCESSORS)  # @UndefinedVariable
             results=[]
             for dd in range(self.DESIGN.Nx):     
                 results.append( pool.apply_async(
                                      self.perturb,
-                                     args=( copy.deepcopy( self ), dd ) ))              
-            
+                                     args=( copy.deepcopy( self ), dd ) ))   
+                '''
+                results.append( pool.apply_async( 
+                                      self.dummy_perturb, args=(a, dd, 
+                                                         sum(self.FUNC.geq.len), 
+                                                         sum(self.FUNC.gdis.len),
+                                                         copy.deepcopy(self.XBOPTS),
+                                                         copy.deepcopy(self)
+                                                         #copy.deepcopy(self.XBINPUT) 
+                                                         )))           
+                '''
             # retrieve results
             jac_list = [p.get() for p in results]
             
@@ -216,8 +241,8 @@ class OptComp:
             # - 2. exit the worker processes (processes are killed)
             pool.close()
             pool.join() 
-
-
+            
+            #self.XBOPTS.set_ctypes()
 
         print('completed iteration %.3d'%self._counter)
         # re-save to include jacobian
@@ -226,19 +251,34 @@ class OptComp:
         
         return self.FUNC.cost.val 
                 
-                
+ 
+
+    def dummy_perturb(self,a,dd,Neq,Ndis,cpXBOPTS,cpself):
+        '''
+        Dummy perturb function for debugging
+        '''
+        
+        cpXBOPTS.set_ctypes()
+        
+        #jeq_dd  = a[dd]*np.ones(Neq)
+        jeq_dd = cpself.XBINPUT.BeamMass[dd,dd]*np.ones(Neq)
+        jdis_dd = a[dd]*np.ones(Ndis)
+        jcost_dd = cpXBOPTS.Solution.value*a[dd]
+
+        return (jdis_dd, jeq_dd, jcost_dd)   
+        
 
     def perturb(self, cpself, dd):
         '''
         Perform the analysis after perturbing the dd-th design parameter
         '''
 
-
         print('computing %.3d derivative'%dd)
         
+        #### set number of cores to be used
+        cpself.VMOPTS.NumCores = ct.c_int( cpself.NumCoresVM[dd+1] )
+        
         # perturb the design
-        #x = cpself.DESIGN.x.copy()
-        #x[dd] = delta[dd] + x[dd]
         cpself.DESIGN.x[dd] = cpself.DESIGN.x[dd] + cpself.delta[dd]
 
         # change a few setting...
@@ -447,5 +487,47 @@ class OptComp:
                                 self.DESIGN, self.PARAM, 
                                 self.FUNC.cost, self.FUNC.geq, self.FUNC.gdis )
         
+
+
+    def set_number_processes(self):
         
+        '''
+        method to redistribute the CPUs per process.
+        method can be beneficial only if the amount of processors
+        available is larger then the amount of design variables
+        '''
+
+        if self.parallelFDs is True:
+            
+            NumPrMin = self.DESIGN.Nx + 1
+            PRratio = self.PROCESSORS//NumPrMin
+            
+            if PRratio == 0:
+                # more then 1 loop required
+                self.NumCoresVM = NumPrMin*[1]
+                # check if during the last loop some processes will
+                # not be used.
+                Processes_out = self.PROCESSORS - NumPrMin%self.PROCESSORS
+                Nloops = NumPrMin//self.PROCESSORS + 1
+                ### method not optimum as
+                ###    a. in initial loop more cpus then available are required
+                ###    b. run time is reduced only if one of the loops run time
+                ###        is reduced. Having a loop with some processes running
+                ###        faster does not guarantee that overall time is cut down
+                #for pp in range(Processes_out):
+                #    self.NumCoresVM[pp] += 1 
+                ###
+                ###
+            elif PRratio > 0:
+                self.NumCoresVM = NumPrMin * [PRratio]
+                # check processes out
+                Processes_out = self.PROCESSORS - PRratio*NumPrMin 
+                # If so, use more cpu for the VLM solution
+                for pp in range(Processes_out):
+                    self.NumCoresVM[pp] += 1 
+            else:
+                raise NameError("Ratio {PROCESSORS}/{Number Design Variable} not positive!")        
         
+        else:
+            self.NumCoresVM = NumPrMin*[self.VMOPTS.NumCores]
+            

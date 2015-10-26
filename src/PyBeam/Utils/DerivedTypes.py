@@ -13,6 +13,9 @@ xbeam_shared.f90 plus extras.
 @date       08/09/2015
 @comment    Sflag for spherical BCs added
             Methods to convert class to Xbopts
+@note       Methods to set/remove ctypes specifications added to
+            Xbopts and Xbinput. These are not required to use
+            multiprocessing functionalities in python3.2
             
 '''
 
@@ -49,8 +52,11 @@ class Xbopts:
             n-th component of the angular velocity of the FoR A (expressed in 
             FoR A components) is kept constant. 
     
-    @warning If FollowerForce = ct.c_bool(True), beam forces must be applied
+    @warning 
+        - If FollowerForce = ct.c_bool(True), beam forces must be applied
     in the local FoR, B.
+        - init_from_class method unnecessary after adding set_ctypes, del_ctypes
+        
     """
 
     def __init__(self, FollowerForce = ct.c_bool(False), \
@@ -77,11 +83,19 @@ class Xbopts:
         self.DeltaCurved = DeltaCurved
         self.MinDelta = MinDelta
         self.NewmarkDamp = NewmarkDamp
-        self.EnforceAngVel_FoRA=3*[False]
+        
+        self._ctypes_links=True  
+        self._ctypes_attributes = ['FollowerForce', 'FollowerForceRig', 'PrintInfo',  
+                 'OutInBframe', 'OutInaframe', 'ElemProj', 'MaxIterations', 'NumLoadSteps',
+                 'NumGauss', 'Solution', 'DeltaCurved', 'MinDelta', 'NewmarkDamp' ]
+        self._ctypes_conversion= [ [ ct.c_int, ct.c_bool, ct.c_double ], 
+                                   [      int,      bool,       float ] ]
         
         
     def init_from_class(self,H):
         '''
+        Method unnecessary!!!
+        
         Given a class object H (containing all or part of the attributes 
         created in the  __init__ method but not defined as c_types), 
         overrides all the  values of  the attributes in self according to 
@@ -92,7 +106,7 @@ class Xbopts:
         #### If an attribute in misspelled, an error will not occur
         #
         ## extract all attributes
-        #dict=self.__dict__
+        attrdict=self.__dict__
         #for attrname in dict:
         #    ### get link to c type
         #    link=getattr(self,attrname)
@@ -102,16 +116,68 @@ class Xbopts:
         #### more robust:
         #
         # extract all attributes
-        for attrname in dict:
+        for attrname in self._ctypes_attributes:
             ### get link to c type
             link=getattr(self,attrname)
-            link.value=getattr(H,attrname)
+            if type(link) in self._ctypes_conversion[0]:
+                link.value=getattr(H,attrname)
+            else: pass # do nothing
 
+        self._ctypes_links=True
+        
         return self
-                
-                
+                             
+
+    def del_ctypes(self):
+        '''
+        converts all the ctypes attributes into normal
+        python variables. The method assumes all attributes are
+        ctypes
+        '''
+
+        if self._ctypes_links is False:
+            raise NameError('ctypes already deleted!!!')   
+
+        for attrname in self._ctypes_attributes:
+
+            link = getattr(self,attrname)
+            if type(link) in self._ctypes_conversion[0]:
+                setattr(self,attrname,link.value)
+            else: pass # nothing required
+
+        self._ctypes_links=False
         
+        return self        
         
+
+    def set_ctypes(self):
+        '''
+        Convert all the attributes into ctypes. The conversion
+        is according to self._ctypes_conversion.
+        @warning: all attributes are converted to c_types!
+        '''
+
+        if self._ctypes_links is True:
+            raise NameError('ctypes already set-up!!!')
+
+        for attrname in self._ctypes_attributes:
+            val = getattr(self,attrname)
+            #print('Setting %s'%attrname)
+            if type(val) in self._ctypes_conversion[1]:
+                # find correct c_types function/type
+                cc = self._ctypes_conversion[1].index( type(val) )
+                cfun = self._ctypes_conversion[0][cc]
+                # and overwrite the attribute
+                setattr(self,attrname,cfun(val))
+
+        self._ctypes_links=True
+        
+        return self                
+        
+
+    def print(self):
+        for attr in self.__dict__:
+            print("%s = %s" % (attr, getattr(self, attr)))
         
         
 class Xbinput:
@@ -183,6 +249,8 @@ class Xbinput:
         self.PsiA_G = PsiA_G
         #self.quat0 = quat0
         
+        self.EnforceAngVel_FoRA=3*[False]
+
         # Check number of nodes per element.
         if self.NumNodesElem != 2 and self.NumNodesElem != 3:
             sys.stderr.write('Invalid number of nodes per element\n')
@@ -201,11 +269,58 @@ class Xbinput:
         self.ForceDyn_foll = np.zeros((NumNodesTot,6),ct.c_double,'F')
         self.ForceDyn_dead = np.zeros((NumNodesTot,6),ct.c_double,'F')
         
+        self._ctypes_links=True  
+        self._ctypes_attributes = [ 'BeamStiffness', 'BeamMass',
+                'ForceStatic', 'ForceStatic_foll' 'ForceStatic_dead' 
+                'ForceDyn', 'ForceDyn_foll', 'ForceDyn_dead' ]
+        #self._ctypes_conversion= [ [ ct.c_int, ct.c_bool, ct.c_double ], 
+        #                           [      int,      bool,       float ] ] 
         
-def dump(obj):
-    """@brief Prints all attributes of an object"""
-    for attr in dir(obj):
-        print("obj.%s = %s" % (attr, getattr(obj, attr)))
+
+
+    def set_ctypes(self):
+        '''
+        Add ctypes specification to numpy.ndarray arrays
+        '''
+
+        if self._ctypes_links is True:
+            raise NameError('ctypes already set-up!!!')
+
+        for attrname in self._ctypes_attributes:
+            
+            val = getattr(self,attrname)
+            assert( type(val) is np.ndarray)
+
+            setattr(self,attrname, np.array( val, ct.c_double,'F' ) )
+
+        self._ctypes_links=True
+        
+        return self  
+    
+    
+    def del_ctypes(self):
+        '''
+        Remove ctypes specifications from numpy.ndarray
+        '''
+
+        if self._ctypes_links is False:
+            raise NameError('ctypes already deleted!!!')
+
+        for attrname in self._ctypes_attributes:
+            
+            val = getattr(self,attrname)
+            assert( type(val) is np.ndarray)
+
+            setattr(self,attrname, np.array( val ) )
+
+        self._ctypes_links=False
+        
+        return self       
+        
+        
+    def print(self):
+        for attr in self.__dict__:
+            print("%s = %s" % (attr, getattr(self, attr))) 
 
 
 class Xbelem:
@@ -284,7 +399,10 @@ class Xboutput:
         self.cputime=[]
      
     
-
+def dump(obj):
+    """@brief Prints all attributes of an object"""
+    for attr in dir(obj):
+        print("obj.%s = %s" % (attr, getattr(obj, attr)))
 
 
 
