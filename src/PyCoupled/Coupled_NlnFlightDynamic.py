@@ -122,8 +122,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         VMOPTS.Rollup.value = Rollup
         
         # sm debug
-        XBOUT.ZetaStatic=Zeta.copy()
-        XBOUT.ZetaStarStatic=ZetaStar.copy()
+        #XBOUT.ZetaStatic=Zeta.copy()
+        #XBOUT.ZetaStarStatic=ZetaStar.copy()
         
         
     elif AELAOPTS.ImpStart == True:
@@ -339,14 +339,13 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         Msys[iitrans,:] = 0.0
         Msys[iitrans,iitrans] = 1.0
         Qsys[iitrans] = 0.0
-        ### sm debug
-        XBOUT.Msysiitrans= Msys[iitrans,iitrans].copy('F')
-        XBOUT.Msysiitransdd=Msys[iitrans,:].copy('F')
-    
-    ### sm debug
-    XBOUT.Msys0=Msys.copy('F')
-    XBOUT.Qsys0=Qsys.copy('F')
-    
+
+    #store initial matrices for eigenvalues analysis
+    XBOUT.MssFull0 = MssFull.copy()
+    XBOUT.CssFull0 = CssFull.copy()
+    XBOUT.KssFull0 = KssFull.copy()
+
+
     # Initial Accel.
     dQddt[:] = np.dot(np.linalg.inv(Msys), -Qsys)
     
@@ -394,9 +393,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         ZetaStar, GammaStar = InitSteadyWake(VMOPTS,VMINPUT,Zeta,currVrel[:3])
         
     # sm save
-    XBOUT.Zeta0 = Zeta.copy('C')
-    XBOUT.ZetaStar0 = ZetaStar.copy('C')
-    XBOUT.ZetaStarList.append(np.float32( ZetaStar.copy('C') ))
+    #XBOUT.Zeta0 = Zeta.copy('C')
+    #XBOUT.ZetaStar0 = ZetaStar.copy('C')
+    #XBOUT.ZetaStarList.append(np.float32( ZetaStar.copy('C') ))
     
     # Define TecPlot stuff
     if Settings.PlotTec==True:
@@ -668,21 +667,19 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
 
             # special BCs
             if SphFlag:
-                XBOUT.MsysBefore=Msys.copy()
-                XBOUT.QsysBefore=Qsys.copy('F')
-                XBOUT.CsysBefore=Csys.copy('F')
-                XBOUT.KsysBefore=Ksys.copy('F')
-                
+                #XBOUT.MsysBefore=Msys.copy()
+                #XBOUT.QsysBefore=Qsys.copy('F')
+                #XBOUT.CsysBefore=Csys.copy('F')
+                #XBOUT.KsysBefore=Ksys.copy('F')
                 Msys[iitrans,:] = 0.0
                 Msys[iitrans,iitrans] = 1.0
                 Csys[iitrans,:] = 0.0
                 Ksys[iitrans,:] = 0.0
                 Qsys[iitrans]   = 0.0
-                
-                XBOUT.Msys=Msys.copy('F')
-                XBOUT.Qsys=Qsys.copy('F')
-                XBOUT.Csys=Csys.copy('F')
-                XBOUT.Ksys=Ksys.copy('F')
+                #XBOUT.Msys=Msys.copy('F')
+                #XBOUT.Qsys=Qsys.copy('F')
+                #XBOUT.Csys=Csys.copy('F')
+                #XBOUT.Ksys=Ksys.copy('F')
           
  
             #Calculate system matrix for update calculation

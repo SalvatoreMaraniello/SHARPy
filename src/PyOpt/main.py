@@ -34,9 +34,7 @@ Based on xbcompFD in optimiser/wrapper
         assigning an initial value to the cost function (and not None).
         The optimisation, however, does not run. The issue was found also
         for simple test cases.
-        
-
-            -   
+                -   
 '''
 
 import copy
@@ -50,9 +48,8 @@ import PyBeam.Utils.DerivedTypes
 #import PyOpt.Utils.DerivedTypes
 import PyLibs.io.save
 
-
-
-
+# for debugging
+from ipsh import *
 
 
 class OptComp:
@@ -113,11 +110,10 @@ class OptComp:
         # FD parallel
         self.PROCESSORS=1
         self.parallelFDs = False
-        # allocate 1 process for each fwd/perturbed solution
-        #self.NumCoresVM = (self.DESIGN.Nx + 1) * [1]
+        # FD processors
+        self.NumCoresVM = (self.DESIGN.Nx) * [0]
         
 
-     
     def optimise(self):
         
         # Manage performance
@@ -172,79 +168,72 @@ class OptComp:
         self.SaveDict['OutputFileRoot'] = \
             self.SaveDict['OutputFileRoot'] + '_%.3d'%self._counter    
 
-        # fwd run
-        self.run_wrap(xin)
+        # xin input from optimiser (unpacked in run_wrap)
+        self.DESIGN.x = xin
         
-        print('fwd run terminated')
-        print('cost: ', self.FUNC.cost.val)
-        # save state and functional values
-        # jacobian not available yet
-        self.save()
+        ## unpack x0
+        self.DESIGN.unpack()
+        #
+        ## Extract Design and set-up the problem
+        self.update_solver_input()
+
+        #self.run_wrap(xin)
 
         #-------------------------------------------------------------------------- compute Jacobian
  
         print('Computing FD based Jacobian')  
+        
+        # set extended delta
         self.delta = self.DESIGN.Nx * [ self.driver_options['SLSQP']['eps'] ]
         
-        # ctypes set again in pertub method
+        # ctypes were set in pertub method
         #self.XBOPTS.del_ctypes()
         
-        if self.parallelFDs is False:
-            
-            # debugging: prepare dummy input
-            #a = np.array([dd for dd in range(self.DESIGN.Nx)])
-            
-            for dd in range(self.DESIGN.Nx):
+        if self.parallelFDs is False:          
+            func_list=[]
+            func_list.append( self.perturb( copy.deepcopy( self ), dd=None) )
+            for dd in range(self.DESIGN.Nx): # Nx+1 as fwd execution has been added
+                func_list.append( self.perturb( copy.deepcopy( self ), dd) )
                 
-                ( self.FUNC.gdis.jac[:,dd], 
-                  self.FUNC.geq.jac[:,dd] , 
-                  self.FUNC.cost.jac[dd]  ) = self.perturb( copy.deepcopy( self ), dd) 
-                '''
-                ( self.FUNC.gdis.jac[:,dd], 
-                  self.FUNC.geq.jac[:,dd] , 
-                  self.FUNC.cost.jac[dd]  ) = self.dummy_perturb( a, dd, 
-                                                         sum(self.FUNC.geq.len), 
-                                                         sum(self.FUNC.gdis.len),
-                                                         copy.deepcopy(self.XBOPTS),
-                                                         copy.deepcopy(self) )
-                '''
         else:
-            
-            # debugging: prepare dummy input
-            #a = np.array([dd for dd in range(self.DESIGN.Nx)])
-            
             # create pool of processes
             pool = mpr.Pool(processes=self.PROCESSORS)  # @UndefinedVariable
             results=[]
+            # forward execution
+            results.append( pool.apply_async( self.perturb,
+                                              args=( copy.deepcopy( self ), None )
+                                            ) )   
+            # FDs jacobian
             for dd in range(self.DESIGN.Nx):     
                 results.append( pool.apply_async(
                                      self.perturb,
-                                     args=( copy.deepcopy( self ), dd ) ))   
-                '''
-                results.append( pool.apply_async( 
-                                      self.dummy_perturb, args=(a, dd, 
-                                                         sum(self.FUNC.geq.len), 
-                                                         sum(self.FUNC.gdis.len),
-                                                         copy.deepcopy(self.XBOPTS),
-                                                         copy.deepcopy(self)
-                                                         #copy.deepcopy(self.XBINPUT) 
-                                                         )))           
-                '''
+                                     args=( copy.deepcopy( self ), dd) ))
             # retrieve results
-            jac_list = [p.get() for p in results]
-            
-            for dd in range(self.DESIGN.Nx):
-                ( self.FUNC.gdis.jac[:,dd], 
-                  self.FUNC.geq.jac[:,dd] , 
-                  self.FUNC.cost.jac[dd]  ) = jac_list[dd]
+            func_list = [p.get() for p in results]
             # - 1. close the pool (memory in workers goes to zero) 
             # - 2. exit the worker processes (processes are killed)
             pool.close()
             pool.join() 
-            
             #self.XBOPTS.set_ctypes()
 
+        self.FUNC.gdis.val = func_list[0][0].copy()
+        self.FUNC.geq.val  = func_list[0][1].copy()
+        self.FUNC.cost.val = func_list[0][2]
+         
+        #ipsh() 
+        self.XBOUTPUT = copy.deepcopy(func_list[0][3])
+            
+        for dd in range(self.DESIGN.Nx):
+            
+            self.FUNC.gdis.jac[:,dd] = ( func_list[dd+1][0] - self.FUNC.gdis.val ) \
+                                         / self.delta[dd]
+            self.FUNC.geq.jac[:,dd]  = ( func_list[dd+1][1] - self.FUNC.geq.val  ) \
+                                         / self.delta[dd]
+            self.FUNC.cost.jac[dd]   = ( func_list[dd+1][2] - self.FUNC.cost.val ) \
+                                         / self.delta[dd]
+        
         print('completed iteration %.3d'%self._counter)
+        print('cost: ', self.FUNC.cost.val)
         # re-save to include jacobian
         self.save()
         self.SaveDict['OutputFileRoot'] = self.SaveDict['OutputFileRoot'][:-4]
@@ -271,22 +260,23 @@ class OptComp:
     def perturb(self, cpself, dd):
         '''
         Perform the analysis after perturbing the dd-th design parameter
+        and the forward analysis (dd=-1)
         '''
-
-        print('computing %.3d derivative'%dd)
         
-        #### set number of cores to be used
-        cpself.VMOPTS.NumCores = ct.c_int( cpself.NumCoresVM[dd+1] )
-        
-        # perturb the design
-        cpself.DESIGN.x[dd] = cpself.DESIGN.x[dd] + cpself.delta[dd]
-
-        # change a few setting...
-        cpself.SaveDict['OutputDir']=cpself.SaveDict['OutputDir']+'FD/'
-        cpself.SaveDict['OutputFileRoot']=cpself.SaveDict['OutputFileRoot']+'FD%.3d'%dd
-        cpself.SaveDict['SaveWake']=False
-        #SaveDict['SaveProgress']=False
-        
+        if dd!=None:
+            print('computing %.3d derivative'%dd) 
+            # set VLM number of cores
+            cpself.VMOPTS.NumCores = ct.c_int( cpself.NumCoresVM[dd] )
+            # perturb the design
+            cpself.DESIGN.x[dd] = cpself.DESIGN.x[dd] + cpself.delta[dd]
+            # change a few setting...            
+            cpself.SaveDict['OutputDir']=cpself.SaveDict['OutputDir']+'FD/'
+            cpself.SaveDict['OutputFileRoot']=cpself.SaveDict['OutputFileRoot']+'FD%.3d'%dd
+            cpself.SaveDict['SaveWake']=False
+            cpself.SaveDict['SaveProgress']=False
+        else:
+            print('Forward run starting')
+            
         cpself.save()
           
         # launch the wrapper...
@@ -294,17 +284,16 @@ class OptComp:
         
         # save...
         cpself.save()
-        
-        # ... and compute the jacobian
-        jdis_dd  = ( cpself.FUNC.gdis.val - self.FUNC.gdis.val )/cpself.delta[dd]
-        jeq_dd   = ( cpself.FUNC.geq.val  - self.FUNC.geq.val  )/cpself.delta[dd]
-        jcost_dd = ( cpself.FUNC.cost.val - self.FUNC.cost.val )/cpself.delta[dd]
-        
-        #del(cpself)      
-        
-        return (jdis_dd, jeq_dd, jcost_dd)          
 
-        
+        if dd !=None:
+            output=( cpself.FUNC.gdis.val , cpself.FUNC.geq.val  , cpself.FUNC.cost.val )
+        else:
+            output=( cpself.FUNC.gdis.val , cpself.FUNC.geq.val  , cpself.FUNC.cost.val,
+                       copy.deepcopy( cpself.XBOUTPUT ) )
+
+        del(cpself)
+
+        return output
         
         #---------------------------------------------------------------------- end compute Jacobian
 
@@ -315,11 +304,11 @@ class OptComp:
         '''
          
         # cost function (not list)
-        if self._counter>-100:#0: #
+        #if self._counter>-100:#0: #
             # by def. the cost will dep on the state
-            args_values = self.get_args_values(self.FUNC.cost.args)
-            self.FUNC.cost.val = self.FUNC.cost.fun( *args_values )
-            self.FUNC.cost.fun_name = self.FUNC.cost.fun.__name__   # not sure why...
+        args_values = self.get_args_values(self.FUNC.cost.args)
+        self.FUNC.cost.val = self.FUNC.cost.fun( *args_values )
+        self.FUNC.cost.fun_name = self.FUNC.cost.fun.__name__   # not sure why...
             
         # evaluate constraints
         for gset in [self.FUNC.geq, self.FUNC.gdis]:
@@ -387,22 +376,9 @@ class OptComp:
         '''
         Builds list of dictionaries to define constraints for
         scipy.optimize.minimize
-        
-        constraints : dict or sequence of dict, optional
-        Constraints definition (only for COBYLA and SLSQP). Each constraint is defined in a dictionary with fields:
-        type : str
-        Constraint type: ‘eq’ for equality, ‘ineq’ for inequality.
-        fun : callable
-        The function defining the constraint.
-        jac : callable, optional
-        The Jacobian of fun (only for SLSQP).
-        args : sequence, optional
-        Extra arguments to be passed to the function and Jacobian.  
-        
         '''
         
         self.constr_dict=[]
-        
         
         # for equalities
         base_dict = {'type': 'eq', 
@@ -429,36 +405,7 @@ class OptComp:
         for kk in range(Ng): 
             list_dis_dict.append( base_dict.copy() )
             list_dis_dict[kk]['args']=(kk,)        
-        
-        
-        '''
-        # for equalities
-        base_dict = {'type': 'eq', 
-                     'fun' :  PyOpt.Utils.DerivedTypes.get_value_from_FuncProp_class , 
-                     #'jac' : None,
-                     'args': ()    } 
-        
-        Ng = sum( self.FUNC.geq.len )
-        list_eq_dict=[]
-        
-        for kk in range(Ng): 
-            list_eq_dict.append(base_dict.copy())
-            list_eq_dict[kk]['args']=(self.FUNC.gdis,kk)
-            
-        # for inequalities
-        base_dict = {'type': 'ineq', 
-                     'fun' :  PyOpt.Utils.DerivedTypes.get_value_from_FuncProp_class , 
-                    #'jac' : None,
-                     'args': ()    } 
-        
-        Ng = sum( self.FUNC.gdis.len )
-        list_dis_dict=[]
-        
-        for kk in range(Ng): 
-            list_dis_dict.append( base_dict.copy() )
-            list_dis_dict[kk]['args']=(self.FUNC.gdis,kk)                
-        '''
-        
+
         self.constr_dict=list_eq_dict + list_dis_dict
         
            
@@ -495,11 +442,16 @@ class OptComp:
         method to redistribute the CPUs per process.
         method can be beneficial only if the amount of processors
         available is larger then the amount of design variables
+        
+        The cores to be used for the fwd execution are stored in 
+        self.VMOPTs.NumCored, while those to be used during the FDs
+        are stored in the list self.NumCoredVM
         '''
 
+        NumPrMin = self.DESIGN.Nx + 1
+        
         if self.parallelFDs is True:
             
-            NumPrMin = self.DESIGN.Nx + 1
             PRratio = self.PROCESSORS//NumPrMin
             
             if PRratio == 0:
@@ -529,5 +481,12 @@ class OptComp:
                 raise NameError("Ratio {PROCESSORS}/{Number Design Variable} not positive!")        
         
         else:
-            self.NumCoresVM = NumPrMin*[self.VMOPTS.NumCores]
+            self.NumCoresVM = NumPrMin*[self.VMOPTS.NumCores.value]
+            
+            
+        # adjust output:
+        self.VMOPTS.NumCores.value = self.NumCoresVM[0]
+        del(self.NumCoresVM[0])
+            
+            
             

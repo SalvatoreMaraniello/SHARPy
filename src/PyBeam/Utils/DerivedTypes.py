@@ -175,7 +175,7 @@ class Xbopts:
         return self                
         
 
-    def print(self):
+    def print_all(self):
         for attr in self.__dict__:
             print("%s = %s" % (attr, getattr(self, attr)))
         
@@ -318,7 +318,7 @@ class Xbinput:
         return self       
         
         
-    def print(self):
+    def print_all(self):
         for attr in self.__dict__:
             print("%s = %s" % (attr, getattr(self, attr))) 
 

@@ -48,7 +48,7 @@ def panellingFromFreq(freq,c=1.0,Umag=1.0):
     based on a frequency of interest.
     @param freq Frequency of interest.
     @param c chord of wing.
-    @param Umag mean reltive free-stream velocity magnitude.
+    @param Umag mean relative free-stream velocity magnitude.
     @returns M Number of chordwise panels for wing.
     @returns DelTime Suggested timestep [seconds.]
     """

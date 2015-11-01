@@ -326,7 +326,7 @@ module xbeam_undef
             ListFr(iNode)=NumFr
             ListSflag(iNode)=1
           case (912,932) ! treat the spherical joint as clamped
-            print *, 'Treating spherical joint as a clamp'
+            !print *, 'Treating spherical joint as a clamp'
             NumFr=NumFr+1
             ListFr(iNode)=NumFr
             ListSflag(iNode)=1

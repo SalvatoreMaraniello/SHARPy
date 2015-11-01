@@ -6,6 +6,7 @@ Created on 21 Sep 2015
 
 import h5py
 import os
+from numpy import ndarray, float32
 
 
 def h5file(savedir,h5filename, *class_inst ):
@@ -30,7 +31,7 @@ def h5file(savedir,h5filename, *class_inst ):
     return None
 
 
-def add_class_as_grp(obj,hdfile):
+def add_class_as_grp(obj,hdfile,compress=False):
     '''
     Given a class instance 'obj', the routine adds it as a group to a hdf5 file
     
@@ -38,6 +39,9 @@ def add_class_as_grp(obj,hdfile):
     class already exists, an error occurs. 
     
     Warning: multiple calls of this function will lead to a file increase
+    
+    If compress is True, numpy arrays will be saved in single precisions.
+    Not float numbers.
     
     '''
     
@@ -51,18 +55,20 @@ def add_class_as_grp(obj,hdfile):
     for attr in dictname:
         value=getattr(obj,attr)
         
-        # check is not empty...
         if value != None:
             # check for c_types
-            if type(value).__name__[:2]=='c_':
-                #print('%s is a ctype:'%attr)
-                value=value.value
+            if type(value).__name__[:2]=='c_': value=value.value
             try:
-                grp[attr]=value
+                if compress is True and type(value) is ndarray:
+                    grp[attr]=float32(value)
+                else:       
+                    grp[attr]=value
             except TypeError:
-                print ('TypeError occurred when saving %s' %attr)
+                #print ('TypeError occurred when saving %s' %attr)
+                grp[attr]='TypeError'
             except:
-                print ('unknown error occurred when saving %s' %attr)
+                #print ('unknown error occurred when saving %s' %attr)
+                grp[attr]='UnknownError'
 
     return hdfile   
 
