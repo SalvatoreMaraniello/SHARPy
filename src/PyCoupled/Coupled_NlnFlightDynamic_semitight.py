@@ -444,94 +444,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                        PosIni,PsiIni,NumDof,X,dXdt,
                                        PosDefor,PsiDefor,PosDotDef,PsiDotDef)
         
-            
-        #------------------------------------------------------- Aero Force Loop
-        # Force at current time-step. TODO: Check communication flow. 
-        if iStep > 0 and AELAOPTS.Tight == False:
-            
-            # zero aero forces.
-            AeroForces[:,:,:] = 0.0
-            
-            # Update CRV.
-            PsiA_G = xbl.quat2psi(Quat) # CRV at iStep
-            
-            # Update origin.
-            # sm: origin position projected in FoR A
-            currVrel=Vrel[iStep-1,:].copy('F')
-            OriginA_a[:] = OriginA_a[:] + currVrel[:3]*dt #sm: OriginA_a initialised to zero
-            
-            # Update control surface deflection.
-            if VMINPUT.ctrlSurf != None:
-                # open-loop control
-                for cc in range(len(VMINPUT.ctrlSurf)):
-                    VMINPUT.ctrlSurf[cc].update(Time[iStep],iStep=iStep)
-            
-            # Generate surface grid.
-            currVrel=Vrel[iStep,:].copy('F')
-            CoincidentGrid(PosDefor, PsiDefor, Section, currVrel[:3], 
-                           currVrel[3:], PosDotDef, PsiDotDef, XBINPUT,
-                           Zeta, ZetaDot, OriginA_a, PsiA_G,
-                           VMINPUT.ctrlSurf)
-            
-            # Update wake geom       
-            #'roll' data.
-            ZetaStar = np.roll(ZetaStar,1,axis = 0)
-            GammaStar = np.roll(GammaStar,1,axis = 0)
-            #overwrite grid points with TE.
-            ZetaStar[0,:] = Zeta[VMOPTS.M.value,:]
-            # overwrite Gamma with TE value from previous timestep.
-            GammaStar[0,:] = Gamma[VMOPTS.M.value-1,:]
-            
-            # Apply gust velocity.
-            if VMINPUT.gust != None:
-                Utot = Ufree + VMINPUT.gust.Vels(Zeta)
-            else:
-                Utot = Ufree
-            
-            # Solve for AeroForces
-            UVLMLib.Cpp_Solver_VLM(Zeta, ZetaDot, Utot, ZetaStar, VMOPTS, 
-                           AeroForces, Gamma, GammaStar, AIC, BIC)
-            
-            # Apply density scaling
-            AeroForces[:,:,:] = AELAOPTS.AirDensity*AeroForces[:,:,:]
-            
-            if Settings.PlotTec==True:
-                FileObject=write_TecPlot(Zeta, ZetaStar, Gamma, GammaStar, NumSteps.value, iStep, 
-                                         Time[iStep], SaveDict,FileObject=FileObject)
 
-            # map AeroForces to beam.
-            CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
-                                Force, PsiA_G)
-
-            ForceAero = Force.copy('C')  
-            
-            # Add gravity loads.
-            AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS,
-                            PsiDefor, VMINPUT.c)
-            
-            # Add thrust and other point loads
-            Force += (XBINPUT.ForceStatic + 
-                      XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
-                      
-            # sm: here to avoid crash at first time-step
-            XBOUT.ForceAeroList.append(ForceAero.copy('C')) 
-         
-        
-        #END if iStep > 0        
-            
-        # sm: save aero data
-        if ( SaveDict['SaveWake']==True and 
-                 iStep%SaveDict['SaveWakeFreq'] == 0 ):
-            nfile=iStep//SaveDict['SaveWakeFreq']
-            hdwake=h5py.File(dirwake+'%.4d.h5'%nfile,'w')
-            hdwake['iStep']=iStep
-            hdwake['Zeta']= np.float32(Zeta.copy('C'))
-            hdwake['ZetaStar']= np.float32(ZetaStar.copy('C'))            
-            hdwake.close()
-            #XBOUT.ZetaList.append( np.float32(Zeta.copy('C')) )
-            #XBOUT.ZetaStarList.append( np.float32(ZetaStar.copy('C')) )
-            #XBOUT.GammaStarList.append(GammaStar.copy('C'))
-            #XBOUT.GammaList.append(Gamma.copy('C')) 
                       
           
         #Reset convergence parameters
@@ -541,6 +454,84 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         
         #Newton-Raphson loop      
         while ( (ResLog10 > XBOPTS.MinDelta.value) & (Iter < XBOPTS.MaxIterations.value) ):
+             
+                        
+            #------------------------------------------------------- Aero Force Loop
+            # Force at current time-step. TODO: Check communication flow. 
+            if (iStep > 0 and AELAOPTS.Tight == False)  and (ResLog10>1.0 or Iter==0):
+                # - Force not computed at first time-step 
+                # - If iStep>0: 
+                #    - the aerodynamic force is always computed at least once (Iter==0)
+                #    - the aerodynamic force is update until the residual does not fall 
+                #      below a prescribed factor
+                
+                # zero aero forces.
+                AeroForces[:,:,:] = 0.0
+                
+                # Update CRV.
+                PsiA_G = xbl.quat2psi(Quat) # CRV at iStep
+                
+                # Update origin.
+                # sm: origin position projected in FoR A
+                currVrel=Vrel[iStep-1,:].copy('F')
+                OriginA_a[:] = OriginA_a[:] + currVrel[:3]*dt #sm: OriginA_a initialised to zero
+                
+                # Update control surface deflection.
+                if VMINPUT.ctrlSurf != None:
+                    # open-loop control
+                    for cc in range(len(VMINPUT.ctrlSurf)):
+                        VMINPUT.ctrlSurf[cc].update(Time[iStep],iStep=iStep)
+                
+                # Generate surface grid.
+                currVrel=Vrel[iStep,:].copy('F')
+                CoincidentGrid(PosDefor, PsiDefor, Section, currVrel[:3], 
+                               currVrel[3:], PosDotDef, PsiDotDef, XBINPUT,
+                               Zeta, ZetaDot, OriginA_a, PsiA_G,
+                               VMINPUT.ctrlSurf)
+                
+                # Update wake geom       
+                #'roll' data.
+                ZetaStar = np.roll(ZetaStar,1,axis = 0)
+                GammaStar = np.roll(GammaStar,1,axis = 0)
+                #overwrite grid points with TE.
+                ZetaStar[0,:] = Zeta[VMOPTS.M.value,:]
+                # overwrite Gamma with TE value from previous timestep.
+                GammaStar[0,:] = Gamma[VMOPTS.M.value-1,:]
+                
+                # Apply gust velocity.
+                if VMINPUT.gust != None:
+                    Utot = Ufree + VMINPUT.gust.Vels(Zeta)
+                else:
+                    Utot = Ufree
+                
+                # Solve for AeroForces
+                UVLMLib.Cpp_Solver_VLM(Zeta, ZetaDot, Utot, ZetaStar, VMOPTS, 
+                               AeroForces, Gamma, GammaStar, AIC, BIC)
+                
+                # Apply density scaling
+                AeroForces[:,:,:] = AELAOPTS.AirDensity*AeroForces[:,:,:]
+                
+                if Settings.PlotTec==True:
+                    FileObject=write_TecPlot(Zeta, ZetaStar, Gamma, GammaStar, NumSteps.value, iStep, 
+                                             Time[iStep], SaveDict,FileObject=FileObject)
+    
+                # map AeroForces to beam.
+                CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
+                                    Force, PsiA_G)
+    
+                ForceAero = Force.copy('C')  
+                
+                # Add gravity loads.
+                AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS,
+                                PsiDefor, VMINPUT.c)
+                
+                # Add thrust and other point loads
+                Force += (XBINPUT.ForceStatic + 
+                          XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
+                
+                
+                #END if iStep > 0
+
                                     
             #set tensors to zero 
             MssFull[:,:] = 0.0; CssFull[:,:] = 0.0
@@ -719,9 +710,24 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         # END Netwon-Raphson.
         
         
+        # sm: here to avoid crash at first time-step
+        if iStep > 0 and AELAOPTS.Tight == False:
+            XBOUT.ForceAeroList.append(ForceAero.copy('C')) 
+  
+        # sm: save aero data
+        if ( SaveDict['SaveWake']==True           and 
+             iStep%SaveDict['SaveWakeFreq'] == 0  and 
+             iStep==2                                 ):
+            nfile=iStep//SaveDict['SaveWakeFreq']
+            hdwake=h5py.File(dirwake+'%.4d.h5'%nfile,'w')
+            hdwake['iStep']=iStep
+            hdwake['Zeta']= np.float32(Zeta.copy('C'))
+            hdwake['ZetaStar']= np.float32(ZetaStar.copy('C'))            
+            hdwake.close()
+
+        
         # sm debug:
-        # save forcing terms:
-        XBOUT.ForceDofList.append( np.dot(FstrucFull, Force_Dof).copy() )
+        #XBOUT.ForceDofList.append( np.dot(FstrucFull, Force_Dof).copy() )
         XBOUT.ForceRigidList.append( np.dot(FrigidFull, Force_All).copy() )
               
         #update to converged nodal displacements and velocities

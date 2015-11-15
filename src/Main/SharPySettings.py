@@ -88,7 +88,7 @@ SaveDict['Format']='h5' # 'dat', 'all'
 SaveDict['SaveProgress']=True
 SaveDict['NumSavePoints']=10
 SaveDict['SaveWake']=True
-SaveDict['WaveSaveFreq']=50  # save every xx time-steps
+SaveDict['SaveWakeFreq']=50  # save every xx time-steps
 
 
 if __name__ == '__main__':

@@ -45,7 +45,7 @@ def Rot(q1):
     Remark: if A is a FoR obtained rotating a FoR G of angle fi about an axis n (remind n will be 
     invariant during the rotation), and q is the related quaternion q(fi), the function will
     return the matrix Cag such that:
-        - Cag rotated A to G
+        - Cag rotates A to G
         - Cag transforms the coordinates of a vector defined in G component to A components.
     """
     
@@ -71,8 +71,15 @@ def Rot(q1):
 
 
 def Euler2Quat(phi,theta,psi):
-    """@brief Calculate quaternions based on Euler angles.
+    """
+    @brief Calculate quaternions based on Euler angles.
     See Aircraft Control and Simulation, pag. 31, by Stevens, Lewis.
+    @var phi: roll
+    @var theta: pitch
+    @var psi: yaw
+    Euler angles are
+    @note: Euler angles are defined as a 321 sequence of rotations (i.e. about 
+    the z (yaw), y'(pitch) and x'' (roll or bank) axis (see Stevens, Lewis, sec.1.4) 
     """
     q = np.zeros(4, ct.c_double, 'F')
     
@@ -86,7 +93,27 @@ def Euler2Quat(phi,theta,psi):
     q = q/np.linalg.norm(q)
     
     return q
+
+
+def Quat2Euler(qv):
+    """
+    @brief calculate euler angles from quaternions. Euler angles are
+    defined as a 321 seuqence of rotations (i.e. about the z (yaw), 
+    y'(pitch) and x'' (roll or bank) axis (see Stevens, Lewis, sec.1.4) 
+    @var qv: quaternion vector
+    @var ev: euler angles vector [roll, pitch, yaw]
+
+    """
     
+    ev=np.array([  
+                np.arctan2( 2.0*(qv[0]*qv[1]+qv[2]*qv[3]) , 1.0-2.0*(qv[1]**2+qv[2]**2) ),
+                np.arcsin ( 2.0*(qv[0]*qv[2]-qv[3]*qv[1])                               ), 
+                np.arctan2( 2.0*(qv[0]*qv[3]+qv[1]*qv[2]) , 1.0-2.0*(qv[2]**2+qv[3]**2) )
+                 ])
+    
+    return ev
+    
+
 
 def Psi2TransMat(Psi):
     """@brief Calculates the transformation matrix associated with CRV Psi.
@@ -372,6 +399,17 @@ def a1(psi,b):
 
 if __name__ == '__main__':
     
+    # Test quat/CRV conversion
+    roll = 15.0 
+    pitch= 56.0 
+    yaw  = 24.0 
+    
+    qv = Euler2Quat(roll*np.pi/180.0, pitch*np.pi/180.0, yaw*np.pi/180.0)
+    ev = 180.0/np.pi*Quat2Euler(qv)
+
+    print('Original: (roll, pitch, yaw) = (%f,%f,%f)'%(roll, pitch, yaw))
+    print('Final: (roll, pitch, yaw) = (%f,%f,%f)'%(ev[0], ev[1], ev[2]))
+    
     # Test Cartesian rotation vector.
     
     #create matrices that correspond to Psi of nodes 1 and 2
@@ -429,3 +467,5 @@ if __name__ == '__main__':
     # Current implementation of B-frame velocity
     print('planar motion assumption implementation of B-frame velocity: ',np.dot(CBBnew2,np.dot(Skew(hingeRotDot2),leverArm)),'\n')
     print('General implementation of B-frame velocity: ',np.dot(CBBnew2,np.dot(Skew(np.dot(Tangential(hingeRot2),hingeRotDot2)),leverArm)),'\n')
+    
+    

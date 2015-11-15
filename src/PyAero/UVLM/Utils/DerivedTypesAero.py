@@ -55,7 +55,7 @@ class VMinput:
     @param alpha free-stream direction (AoA).
     @param theta root twist angle.
     @param WakeLength length of wake in chords.
-    @param ctrlSurf ControlSurf object.
+    @param ctrlSurf ControlSurf object. List of control surfaces
     """
     
     def __init__(self, c, b, U_mag, alpha, theta,
@@ -70,8 +70,19 @@ class VMinput:
         self.alpha = alpha
         self.theta = theta
         self.WakeLength = WakeLength
-        self.ctrlSurf = ctrlSurf
         self.gust = gust
+        
+        
+        # put into list
+        if ctrlSurf is not None:
+            if type(ctrlSurf) is not list:
+                self.ctrlSurf = [ctrlSurf]
+            else:
+                self.ctrlSurf = ctrlSurf
+        else:
+            self.ctrlSurf = ctrlSurf
+
+
 
         
 class ControlSurf:

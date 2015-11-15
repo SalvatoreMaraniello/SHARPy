@@ -96,6 +96,33 @@ def bound_constraint(Scf,p,Fmax,scaler=1.0):
 
 
 
+def deriv_bound_constraint(tv,Scf,p,dFmax,scaler=1.0,Nsamp=4):
+    ''' returns an array with all the constraint necessary to impose a boundary 
+    to the control. The constraints are all of the form:
+    
+    scaler**2 * ( Fmax**2 - q(Scf) ) > 0
+    
+    The function evaluates the time history of the derivative of the spline signal
+    at a number of sampling points and evaluates the constraint
+    '''
+
+    NS = len(Scf)
+    NC = NS+1-p
+    tcint = np.linspace(tv[0],tv[-1],NC)
+    
+    # Evaluate derivative on original time vector
+    (y,dy)=PyLibs.CVP.spline.build_vec(tv, tcint,Scf,p,EvalDeriv=True) 
+
+    # return constraints only at sample points
+    step = len(tv)//(NC-1)//Nsamp
+    iisamp=[ii for ii in range(1,len(tv)-1,step)]
+    
+    gv = scaler**2 * (dFmax**2 - dy[iisamp]**2)
+      
+    return gv
+
+
+
 def output_size( method, NS, p):
     '''
     Returns the size of the constraint arrays returned by the methods
@@ -124,6 +151,14 @@ def output_size( method, NS, p):
 
 
 if __name__=='__main__':
+
+    
+    import sys, os
+
+    sys.path.append( os.environ["SHARPYDIR"]+'/src' )
+    sys.path.append( os.environ["SHARPYDIR"]+'/src/Main' )
+
+    #import SharPySettings as Settings
     
     import PyLibs.CVP.spline
     import matplotlib.pyplot as plt
@@ -131,12 +166,37 @@ if __name__=='__main__':
     T=1.0
     NT=101
     p=3
-    NI=22
+    NI=9
     NS=p+NI
     tv=np.linspace(0,T,NT)
     tcint = np.linspace(0,T,NI+1)  
     
-    Scf= -np.random.rand(NS)
+    Scf= np.random.rand(NS)
+    
+    dFmax = 5.0
+    Nsamp=4
+    NC=NS+1-p
+    # return constraints only at sample points
+    step = len(tv)//NC//Nsamp
+    iisamp=[ii for ii in range(1,len(tv)-1,step)]
+    tvsamp = tv[iisamp]
+    gv=deriv_bound_constraint(tv,Scf,p,dFmax,scaler=1.0,Nsamp=Nsamp)
+    (y,dy)=PyLibs.CVP.spline.build_vec(tv, tcint,Scf,p,EvalDeriv=True) 
+    dysamp=dy[iisamp]
+    iiok=gv>0
+    iinot=gv<0
+    print('Verified values')
+    print(dysamp[iiok])
+    print('Not verified values')
+    print(dysamp[iinot])
+    
+    plt.figure('check')
+    plt.plot(tv,dy,'r')
+    plt.plot(tvsamp,dysamp,'kx')
+    plt.plot(tvsamp[iiok],dysamp[iiok],'yo')
+    plt.show()
+    
+    '''
     fv = PyLibs.CVP.spline.build_vec(tv, tcint, Scf, p, True)  
     
     vabsmax = np.max(np.abs(fv))
@@ -182,3 +242,4 @@ if __name__=='__main__':
     predicted_size = output_size(bound_constraint, NS, p)
     print('gv length: ',len(gv))
     print('predicted: ', predicted_size)
+    '''

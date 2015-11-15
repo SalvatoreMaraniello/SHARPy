@@ -290,6 +290,140 @@ def ElasticForces(XBINPUT,XBOPTS,DynOut,PsiList):
     return Smat, NodeList
         
 
+def Psi2Euler(PsiMat,
+              iiswap=[0,1,2],
+              iifact=np.array([1,1,1])):
+    '''
+    Convert rotations (given in Cartesian rotation vector) at some
+    nodes of the beam into Euler angles.
+    
+    @var PsiMat: CRV time history in the format
+         PsiMat[time,node,component]
+         and size (total time steps, nodes, 3)
+    @var iiswap, iifact: allow to swap and/or invert sign some of the 
+         component of the quaternion.
+    '''   
+    
+    NT = len(PsiMat[:,0,0])
+    Nnodes = len(PsiMat[0,:,0])
+    EulerMat = np.empty((NT,Nnodes,3))
+    
+    for ii in range(Nnodes): 
+        for tt in range(NT):
+            # convert to quaternions
+            quat = PyBeam.Utils.XbeamLib.psi2quat(PsiMat[tt,ii,:])
+            qv = quat[1:]
+            qv = iifact*qv[iiswap]
+            quat[1:] = qv
+            # convert to Euler angles
+            EulerMat[tt,ii,:] = PyBeam.Utils.XbeamLib.Quat2Euler(quat)
+            
+    return EulerMat 
+        
+    
+
+def Quat2Euler(QuatList,
+              iiswap=[0,1,2],
+              iifact=np.array([1,1,1])):
+    '''
+    Convert rotations (given in quaternions) of FoR A into Euler angles.
+    
+    @var QuatList: quaternions list
+    @var iiswap, iifact: allow to swap and/or invert sign some of the 
+         component of the quaternion.
+    '''   
+    
+    NT = len(QuatList)
+    EulerMat = np.empty((NT,3))
+    
+    for tt in range(NT):
+        # swap axis if necessary
+        quat = QuatList[tt].copy()
+        qv = quat[1:]
+        qv = iifact*qv[iiswap]
+        quat[1:] = qv
+        # convert to Euler angles
+        EulerMat[tt,:] = PyBeam.Utils.XbeamLib.Quat2Euler(quat)
+            
+    return EulerMat           
+    
+    
+    
+def GetDistrubutedForces(PosIni,ForceNodalTH):
+    '''
+    Given a distributed load time history (Force) of shape 
+    (NT,NumNodes,6), for each time step the function returns
+    the distributed loads over the beam
+    '''
+    
+    if type(ForceNodalTH) is list:
+        ForceNodalTH = np.array(ForceNodalTH)
+    
+    (NT, NumNodesTot,dofs) = ForceNodalTH.shape
+    DistLoadTH = np.zeros((NT, NumNodesTot,dofs))
+    Nseg = NumNodesTot-1
+    
+    if len(PosIni[:,0])==NumNodesTot:
+    
+        # get length of segments between nodes
+        svec = np.zeros(Nseg)
+        for ss in range(Nseg):
+            svec[ss] = np.linalg.norm(PosIni[ss+1,:]-PosIni[ss,:])
+            
+        # get area surrounding each node
+        avec = np.zeros(NumNodesTot)
+        avec[0]=0.5*svec[0]
+        avec[-1]=0.5*svec[-1]
+        for nn in range(1,NumNodesTot-1):
+            avec[nn]=0.5*(svec[nn-1]+svec[nn])
+        
+        # scale the forces
+        for nn in range(NumNodesTot):
+            DistLoadTH[:,nn,:]=ForceNodalTH[:,nn,:]/avec[nn]
+    
+    #
+    #else: 
+    # write can in which PosDef is used.
+    # The length of segments is not gonna change
+    # curvature should be accounted for
+    # not so important as distributed force is used for visualisation
+        
+    return DistLoadTH
+
+
+    
+def ProjNodalForce(QuatList,ForceNodalTH):    
+    '''
+    Given a distributed load time history (Force) of shape 
+    (NT,NumNodes,6) and a list of quaternions QuatList of
+    length NT, the function projects the forces from the
+    FoR where they are defined (A) into a For G.
+    The QuatList is such that each quaternion is associated 
+    to the rotation required to bring A over G. 
+    '''
+    
+    if type(ForceNodalTH) is list:
+        ForceNodalTH = np.array(ForceNodalTH)
+
+    (NT, NumNodesTot,dofs) = ForceNodalTH.shape
+    ForceProjTH = np.zeros((NT, NumNodesTot,dofs))
+
+    # project forces into FoR G
+    for tt in range(NT):
+        
+        Cga = PyBeam.Utils.XbeamLib.Rot(QuatList[tt]).transpose()
+        
+        for nn in range(NumNodesTot):
+            ForceProjTH[tt,nn,:3] = np.dot(Cga, ForceNodalTH[tt,nn,:3] )
+            ForceProjTH[tt,nn,3:] = np.dot(Cga, ForceNodalTH[tt,nn,3:] )
+    
+
+    return ForceProjTH
+
+    
+    
+
+
 ''' ------------------------------------------------------------------------ '''
 
 

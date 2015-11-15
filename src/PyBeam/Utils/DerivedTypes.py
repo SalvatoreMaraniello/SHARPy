@@ -207,6 +207,12 @@ class Xbinput:
     @param g acceleration due to gravity.
     @param PsiA_G CRV associated to the angle/axis that requited to rotate G over A
     
+    @param str_damping_model: None/Prop apply no or proportional damping to structure
+    @param str_damping_param: parameters for damping model. Default: alpha/beta for
+            proportional damping
+    @param sph_joint_damping if a spherical joint is in the model, this can be sued
+           to add viscous damping to the rotational degrees of freedom of FoR A origin.
+    
     """
 
     def __init__(self, NumNodesElem, NumElems,
@@ -223,7 +229,10 @@ class Xbinput:
                  ForcingType = 'Const',
                  RampTime = 0.0,
                  g = 0.0, # Leave this alone!
-                 PsiA_G = np.array([0.0,0.0,0.0])
+                 PsiA_G = np.array([0.0,0.0,0.0]),
+                 str_damping_model=None,
+                 str_damping_param={'alpha': 0.0, 'beta':0.0},
+                 sph_joint_damping=None
                  ):
         """@brief NumNodesElem and NumElems must be specified for initialisation
                   of force arrays.
@@ -276,6 +285,9 @@ class Xbinput:
         #self._ctypes_conversion= [ [ ct.c_int, ct.c_bool, ct.c_double ], 
         #                           [      int,      bool,       float ] ] 
         
+        self.str_damping_model=str_damping_model
+        self.str_damping_param=str_damping_param
+        self.sph_joint_damping = sph_joint_damping
 
 
     def set_ctypes(self):
