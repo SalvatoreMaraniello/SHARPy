@@ -308,27 +308,41 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     Qsys[:NumDof.value] = Qstruc
     Qsys[NumDof.value:NumDof.value+6] = Qrigid
     Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
-       
+     
+      
+    # -------------------------------------------------------------------   
     # special BCs
+    iiblock=[]
+    
+    # block translations
     if SphFlag:
-        # block translations
         iiblock = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
-        # block rotations
-        iifree=[] # free rotational dof 
-        for ii in range(3):
-            if XBINPUT.EnforceAngVel_FoRA[ii] is True:
-                iiblock.append(NumDof.value+3+ii)
-            else:
-                iifree.append(NumDof.value+3+ii)
-
+    
+    # block translations (redundant:)
+    for ii in range(3):
+        if XBINPUT.EnforceTraVel_FoRA[ii] is True:
+            iiblock.append(NumDof.value+ii)
+    
+    # block rotations
+    iirotfree=[] # free rotational dof 
+    for ii in range(3):
+        if XBINPUT.EnforceAngVel_FoRA[ii] is True:
+            iiblock.append(NumDof.value+3+ii)
+        else:
+            iirotfree.append(NumDof.value+3+ii)
+    
+    # modify matrices
+    if len(iiblock)>0:
         # block dof
         Msys[iiblock,:] = 0.0
         Msys[iiblock,iiblock] = 1.0
         Qsys[iiblock] = 0.0
-        
+    # ------------------------------------------------------------------
+    
         # add damp at the spherical joints
         if XBINPUT.sph_joint_damping is not None:
-            Qsys[iifree]+= XBINPUT.sph_joint_damping*dQdt[iifree]
+            Qsys[iirotfree]+= XBINPUT.sph_joint_damping*dQdt[iirotfree]
+    
             
     # add structural damping term
     if XBINPUT.str_damping_model is not None:
@@ -664,16 +678,18 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 Qsys[:NumDof.value] += np.dot(Cdamp, dQdt[:NumDof.value])
                                 
 
+            # 
             # special BCs
-            if SphFlag:
+            # if  SphFlag:
+            if len(iiblock)>0: # allow to enforce only attitude while keeping velocity free
                 Msys[iiblock,:] = 0.0
                 Msys[iiblock,iiblock] = 1.0
                 Csys[iiblock,:] = 0.0
                 Ksys[iiblock,:] = 0.0
                 Qsys[iiblock]   = 0.0
                 if XBINPUT.sph_joint_damping is not None:
-                    Csys[iifree,iifree] += XBINPUT.sph_joint_damping
-                    Qsys[iifree] += XBINPUT.sph_joint_damping*dQdt[iifree]
+                    Csys[iirotfree,iirotfree] += XBINPUT.sph_joint_damping
+                    Qsys[iirotfree] += XBINPUT.sph_joint_damping*dQdt[iirotfree]
           
             #Calculate system matrix for update calculation
             Asys = Ksys + Csys*gamma/(beta*dt) + Msys/(beta*dt**2)

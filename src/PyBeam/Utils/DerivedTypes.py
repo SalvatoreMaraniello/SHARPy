@@ -259,6 +259,7 @@ class Xbinput:
         #self.quat0 = quat0
         
         self.EnforceAngVel_FoRA=3*[False]
+        self.EnforceTraVel_FoRA=3*[False]
 
         # Check number of nodes per element.
         if self.NumNodesElem != 2 and self.NumNodesElem != 3:
