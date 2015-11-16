@@ -37,6 +37,7 @@ Based on xbcompFD in optimiser/wrapper
                 -   
 '''
 
+import os
 import copy
 import ctypes as ct
 import numpy as np
@@ -49,7 +50,7 @@ import PyBeam.Utils.DerivedTypes
 import PyLibs.io.save
 
 # for debugging
-from ipsh import *
+#from ipsh import *
 
 
 class OptComp:
@@ -240,7 +241,6 @@ class OptComp:
         
         return self.FUNC.cost.val 
                 
- 
 
     def dummy_perturb(self,a,dd,Neq,Ndis,cpXBOPTS,cpself):
         '''
@@ -274,6 +274,8 @@ class OptComp:
             cpself.SaveDict['OutputFileRoot']=cpself.SaveDict['OutputFileRoot']+'FD%.3d'%dd
             cpself.SaveDict['SaveWake']=False
             cpself.SaveDict['SaveProgress']=False
+            #cpself.SaveDict['Format']=False #'all'
+            
         else:
             print('Forward run starting')
             
@@ -291,7 +293,10 @@ class OptComp:
             output=( cpself.FUNC.gdis.val , cpself.FUNC.geq.val  , cpself.FUNC.cost.val,
                        copy.deepcopy( cpself.XBOUTPUT ) )
 
+        #os.system('rm %s%s' %( cpself.SaveDict['OutputDir'],
+        #                       cpself.SaveDict['OutputFileRoot']+'FD%.3d'%dd ) )
         del(cpself)
+
 
         return output
         

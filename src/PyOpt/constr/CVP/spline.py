@@ -8,7 +8,7 @@
 '''
 
 import numpy as np
-
+import PyLibs.CVP.spline
 
 
 def boundary_constraint(Scf,p,F0,FT,scaler=1.0):
@@ -123,7 +123,7 @@ def deriv_bound_constraint(tv,Scf,p,dFmax,scaler=1.0,Nsamp=4):
 
 
 
-def output_size( method, NS, p):
+def output_size( method, NS, p, Nsamp=4):
     '''
     Returns the size of the constraint arrays returned by the methods
     contained in this module.
@@ -141,7 +141,7 @@ def output_size( method, NS, p):
         elif p==2: outsize = (NS-2) + (NS-3)
         else: raise NameError('p=%.1d not implemented!!!')
         shape = (outsize,1)
-        
+
     return outsize
 
 

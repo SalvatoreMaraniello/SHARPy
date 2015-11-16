@@ -89,7 +89,7 @@ SaveDict['SaveProgress']=True
 SaveDict['NumSavePoints']=10
 SaveDict['SaveWake']=True
 SaveDict['SaveWakeFreq']=50  # save every xx time-steps
-
+SaveDict['SaveFD']=True      # FD 
 
 if __name__ == '__main__':
     pass

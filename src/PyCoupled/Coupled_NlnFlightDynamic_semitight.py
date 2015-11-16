@@ -118,8 +118,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         Force = np.zeros((XBINPUT.NumNodesTot,6),ct.c_double,'F')
 
 
-    if SaveDict['Format']!='h5': 
+    if SaveDict['Format']=='dat': 
         write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict)
+    
     
     
     #------------------------------------------------ Initialise Dynamic Problem
@@ -794,7 +795,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # END Time loop
     
     
-    if SaveDict['Format'] != 'h5': 
+    if SaveDict['Format'] == 'dat': 
         write_SOL912_final(Time, PosPsiTime, NumNodes_tot, DynOut, Vrel, VrelDot, SaveDict) 
         
     # Close output file if it exists.
