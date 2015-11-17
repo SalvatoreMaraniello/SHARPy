@@ -23,14 +23,18 @@ def boundary_constraint(Scf,p,F0,FT,scaler=1.0):
     gv = np.empty((2,))
 
     if p==3:
-        gv[0] = scaler*(0.25*Scf[0] +Scf[1]   +0.25*Scf[2]    - F0)
-        gv[1] = scaler*(0.25*Scf[NS-3]+Scf[NS-2]+0.25*Scf[NS-1] - FT)                 
+        if F0!=None: gv[0] = scaler*(0.25*Scf[0] +Scf[1]   +0.25*Scf[2]    - F0)
+        if FT!=None: gv[1] = scaler*(0.25*Scf[NS-3]+Scf[NS-2]+0.25*Scf[NS-1] - FT)                 
     elif p==2:
-        gv[0] = scaler*(0.666666667*(Scf[0] +Scf[1]) - F0)
-        gv[1] = scaler*(0.666666667*(Scf[NS-2] +Scf[NS-1]) - FT)
+        if F0!=None: gv[0] = scaler*(0.666666667*(Scf[0] +Scf[1]) - F0)
+        if FT!=None: gv[1] = scaler*(0.666666667*(Scf[NS-2] +Scf[NS-1]) - FT)
     else:
         raise NameError('Spline order must be either p = 2 or p = 3.')
-        
+    
+    # exceptions: delete one constraint
+    if FT==None: gv=gv[0]
+    if F0==None: gv=gv[1]
+   
     return gv
 
 

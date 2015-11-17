@@ -162,7 +162,7 @@ class OptComp:
         
         self._counter += 1       
         print('starting iteration %.3d'%self._counter)
-        print('state: ', self.DESIGN.scfv) 
+        print('state: ', self.DESIGN.x) 
         self.save()  
         
         # I/O
