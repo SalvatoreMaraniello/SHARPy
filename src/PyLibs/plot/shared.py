@@ -84,6 +84,22 @@ params = params142
 params_pres = params142_pres
 
 
+#-------------------------------------------------------------------------------------------- Colors
+
+cdict = {
+'dark-blue'    : '#003366',
+'royal-blue'   : '#4169E1', 
+'blue-violet'  : '#6666FF', 
+'clear-red'    : '#CC3333',  
+'dark-green'   : '#336633',
+'orange'       : '#FF6600'
+         }
+
+
+
+
+
+
 def update_by_font(params,fontsize):
     ''' Scale all parameters based on fontsize
         pltext is an instance for matplotlib.pyplot '''

@@ -232,8 +232,10 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     XBOUT.Time_force=Time               # ...SOL912_force.dat
     XBOUT.ForceTime_force=ForceTime
     XBOUT.Vrel_force=Vrel
-    XBOUT.VrelDot_force=VrelDot   
-    
+    XBOUT.VrelDot_force=VrelDot  
+    # debugging 
+    XBOUT.KsysList=[]
+    XBOUT.MsysList=[]
     
     #---------------------------------------------------- Start Dynamic Solution
     if XBOPTS.PrintInfo.value==True:
@@ -653,7 +655,9 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
             
         # sm I/O
         XBOUT.QuatList.append(Quat)
-
+        #XBOUT.MsysList.append(Msys)
+        #XBOUT.KsysList.append(Ksys)
+        
     
     #END Time loop
 
@@ -690,16 +694,11 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     XBOUT.VrelDot=VrelDot
     XBOUT.PosPsiTime=PosPsiTime    
     
-    try:
-        h5filename=Settings.OutputDir + Settings.OutputFileRoot + '.h5'
-        hdfile=h5py.File(h5filename,'w')
-        print ('created %s'%h5filename)
-        PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
-        PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
-        PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
-        hdfile.close()
-    except:
-        pass  
+    #try:
+    PyLibs.io.save.h5file(Settings.OutputDir,Settings.OutputFileRoot+'.h5', 
+                              *[XBOPTS, XBINPUT, XBOUT] )
+    #except:
+    #    pass  
     
     return XBOUT    
     

@@ -17,6 +17,8 @@ import SharPySettings as Settings
 import numpy as np
 import ctypes as ct
 
+import XbeamLib as xb
+
 def Setup(XBINPUT, XBOPTS):
     """@brief Check the beam input and options for inconsistencies.
     @details Initial functionality adapted from FxInput_PyFx.f90."""
@@ -116,20 +118,61 @@ def Node(XBINPUT, XBOPTS, NumNodes_tot, XBELEM):
             x_shift=-XBINPUT.BeamLength 
     if np.max(BoundConds)==0 or XBINPUT.BConds=='SS':
         raise Exception('Invalid boundary conditions string.')
-
-    
-    # Default straight beam based on BeamLength
-    PosIni = np.zeros((NumNodes_tot.value,3), dtype=ct.c_double, order='F')
-    
-    for NodeNo in range(0,NumNodes_tot.value):
-        PosIni[NodeNo,0] = x_shift + XBINPUT.BeamLength*\
-                            (float(NodeNo)/float(NumNodes_tot.value - 1))
+     
+    # define initial nodal position 
+    PosIni = BeamGeometry(XBINPUT, x_shift)                                   
         
     # Define pre-twist.
     PhiNodes = np.zeros(NumNodes_tot.value, dtype=ct.c_double, order='F')    
 
     return PosIni, PhiNodes, BoundConds
     
+    
+def BeamGeometry(XBINPUT, x_shift):
+    '''
+    returns the initial nodal position of elements. 
+    By default, the wing lies along the x-axis.
+    dihedral angle rotate the nodes in the x-z plane only.
+    '''
+    #XBINPUT.NumNodesTot=NumNodes_tot
+    # Default straight beam based on BeamLength
+    PosIni = np.zeros((XBINPUT.NumNodesTot,3), dtype=ct.c_double, order='F')
+    for NodeNo in range(0,XBINPUT.NumNodesTot):
+        PosIni[NodeNo,0] = x_shift + XBINPUT.BeamLength*\
+                            (float(NodeNo)/float(XBINPUT.NumNodesTot - 1))   
+
+    # Left dihedral
+    if np.abs( XBINPUT.dihedral_angle[0]) > 1e-6 and \
+               XBINPUT.dihedral_lambda[0] > 0      :
+        # find rotation point... 
+        xrot = x_shift + XBINPUT.dihedral_lambda[0]*XBINPUT.BeamLength
+        # and relative position of the other nodes
+        x_rel = PosIni[:,0] - xrot
+        # compute CRV/rotation matrix associated
+        CRV = np.array([ 0.0, XBINPUT.dihedral_angle[0], 0.0 ])
+        R = xb.Psi2TransMat(CRV)
+        # rotate the nodes
+        for ii in range(XBINPUT.NumNodesTot):
+            if x_rel[ii]<0.0:
+                pos_rel = np.array([x_rel[ii], 0, 0])
+                PosIni[ii,:] += np.dot(R,pos_rel) - pos_rel
+    
+    # Right dihedral
+    if np.abs( XBINPUT.dihedral_angle[1]) > 1e-6 and \
+               XBINPUT.dihedral_lambda[1] > 0      :
+        xrot = x_shift + (1.0-XBINPUT.dihedral_lambda[1])*XBINPUT.BeamLength
+        x_rel = PosIni[:,0] - xrot
+        CRV = np.array([ 0.0, -XBINPUT.dihedral_angle[0], 0.0 ])
+        R = xb.Psi2TransMat(CRV)
+        for ii in range(XBINPUT.NumNodesTot):
+            if x_rel[ii]>0.0:
+                pos_rel = np.array([x_rel[ii], 0, 0])
+                PosIni[ii,:] += np.dot(R,pos_rel) - pos_rel
+        
+    return PosIni
+
+
+
 
 if __name__ == '__main__':
     XBINPUT = DerivedTypes.Xbinput()

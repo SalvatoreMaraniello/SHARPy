@@ -144,14 +144,17 @@ def reshape_cfs(A):
     return A
 
 
-def fft(t,f,fcut=np.infty):
+def fft(t,yv,fcut=np.infty,periodic=True):
     '''
-    Returns frequency spectrum of a function f. To work properly, the inputs t 
-    and f must be such that:
-        f[0]=f[-1]
-        t[-1]=T
+    Returns frequency spectrum of a function yv:
+    - if periodic, the input signal is assumed periodic and the inputs t and 
+      yv must be such that:
+          yv[0]=yv[-1]
+          t[-1]=T
+      in this case, the last element of yv is ignored.
+    - if not periodic, the last element of yv is not discarded.
     where T is the period of simulation. The function returns the complex 
-    coefficients of the complex Fourier series associated to the function f 
+    coefficients of the complex Fourier series associated to the function yv 
     multiplied by 2, such that:
         cf = ( B - A i)
     where A and B are the coeff.s associted to the sines and cosines. The 
@@ -167,11 +170,12 @@ def fft(t,f,fcut=np.infty):
     N = len(t)  # signal length
     T=t[-1]-t[0]
     fo = 1./T
-    if N !=len(f):
-        raise NameError('t and f must have same length')
+    if N !=len(yv):
+        raise NameError('t and yv must have same length')
  
     ## find complex coefficients
-    cfs = 2.0*np.fft.rfft(f[:-1],N)/N 
+    if periodic==True: cfs = 2.0*np.fft.rfft(yv[:-1],N)/N 
+    else: cfs = 2.0*np.fft.rfft(yv,N)/N 
 
     # and related frequencies...
     fr = fo*np.arange(0,len(cfs)) 
@@ -184,6 +188,83 @@ def fft(t,f,fcut=np.infty):
     iivec = fr <= fcut
 
     return fr[iivec], cfs[iivec]
+
+
+def ifft_bkp(fr,cfs, periodic=True):
+    '''
+    Inverse of fft function defined in this module, i.e.:
+    
+    fr, cfs = fft(t,y)
+    t, v = ifft(fr, cfs)
+    
+    '''
+    
+    f0 = fr[1]-fr[0]#np.average(np.diff(fr))
+    T = 1./f0
+    if periodic==True: N = len(fr)+1
+    else: N = len(fr)
+    
+    tv = np.linspace(0.0,T,N)
+    yv = np.fft.irfft(N/2.0*cfs, N)
+    
+    return tv, yv
+
+
+def ifft(fr,cfs, tv, periodic=True):
+    '''
+    Inverse of fft function defined in this module, i.e.:
+    
+    fr, cfs = fft(t,y)
+    t, v = ifft(fr, cfs)
+    
+    where tv is the original time vecotr used for fft and
+    fr, cfs are the output of fft.
+    
+    @warning: to be verified if periodic flag is required.
+    The function works for aperiodic signals, and seem to
+    automatically work for periodic as well!
+    
+    '''
+    
+    f0 = fr[1]-fr[0]#np.average(np.diff(fr))
+    T = 1./f0
+    assert np.abs(T-tv[-1])<1e-6, ('Frequencies spacing anf total time do not match!')
+    
+    N=len(tv)
+    yv = np.fft.irfft(N/2.0*cfs, N)
+    
+    return  yv
+
+
+
+def fft_filter(tv,yv,factor=0.1,periodic=True):
+    '''
+    removes all harmonics whose amplituce is below the factor 
+    of the peak
+    '''
+    
+    # FFT
+    fr, cfs = fft(tv,yv,fcut=np.infty,periodic=periodic)
+    
+    # get harmonics amplitude
+    CF = np.abs(cfs)
+    
+    # and set to zero the small ones
+    ccvec = CF < CF.max()
+    cfs[ccvec]=0.0
+    
+    # go back in time domain
+    ysmooth = ifft(fr,cfs,tv,periodic)
+    
+    return ysmooth
+    
+    
+    
+    
+    
+    
+
+
 
 
 def get_dss(tv,yv,fcut):

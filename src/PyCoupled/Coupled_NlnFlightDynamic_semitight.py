@@ -309,7 +309,10 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     Qsys[NumDof.value:NumDof.value+6] = Qrigid
     Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
      
-      
+    #XBOUT.Msys0PreBCs = MssFull.copy() 
+    XBOUT.MsysPreBCsList=[]
+    XBOUT.KsysPreBCsList=[]
+    
     # -------------------------------------------------------------------   
     # special BCs
     iiblock=[]
@@ -473,7 +476,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                         
             #------------------------------------------------------- Aero Force Loop
             # Force at current time-step. TODO: Check communication flow. 
-            if (iStep > 0 and AELAOPTS.Tight == False)  and (ResLog10>1.0 or Iter==0):
+            if (iStep > 0 and AELAOPTS.Tight == False)  and (ResLog10>1. or Iter==0):
                 # - Force not computed at first time-step 
                 # - If iStep>0: 
                 #    - the aerodynamic force is always computed at least once (Iter==0)
@@ -660,6 +663,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
 #             Qstruc -= tmpQforces      
 #             Qrigid -= tmpQrigid
 
+            # Mass matrix debug
+            #XBOUT.MsysPreBCsList.append(Msys.copy())
+
             #Compute residual to solve update vector
             Qstruc += -np.dot(FstrucFull, Force_Dof)
             Qrigid += -np.dot(FrigidFull, Force_All)
@@ -679,6 +685,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                 
 
             # 
+            #XBOUT.MsysPreBCsList.append( Msys.copy() )
+            #XBOUT.KsysPreBCsList.append( Ksys.copy() )
             # special BCs
             # if  SphFlag:
             if len(iiblock)>0: # allow to enforce only attitude while keeping velocity free

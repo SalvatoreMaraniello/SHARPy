@@ -213,7 +213,7 @@ def hollowcirc(r, t, material):
    
     return M, K
 
-''' -------------------------------------------------------------  Testing '''
+''' -------------------------------------------------------------  Testing
 
 if __name__ == '__main__':
     
@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
     print 'Testing getprop interface'
     print getprop('titnA')
-    
+'''   
     
 
 

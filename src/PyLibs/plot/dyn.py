@@ -130,8 +130,6 @@ def beam_snapshots(THPosDef,asp_ratio='equal'):
     Note: as opposed to axis_traj, there is no need to pass in input the origin
     of the FoR time history. If the beam is moving in space, the translation
     can be applied in lib.postpr.THPosDefGlobal
-    
-    
     '''
     
     Nsnap = len(THPosDef[:,0,0])

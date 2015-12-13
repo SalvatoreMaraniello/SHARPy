@@ -421,8 +421,42 @@ def ProjNodalForce(QuatList,ForceNodalTH):
     return ForceProjTH
 
     
+ 
+def ReOrderPsi(PosIni,PsiTH):
+    '''
+    Given the CRV along the beam nodes, the function reorders
+    them. Assumes the wing is along the x axis.
     
-
+    '''    
+    
+    if type(PsiTH) is list:
+        PsiTH = np.array(PsiTH)
+        
+    # extract/check dimensions  
+    (NT, NE, NodeElem, ncoord) = PsiTH.shape
+    NumNodesTot = len(PosIni[:,0])
+    assert NumNodesTot==(NodeElem-1)*NE + 1, ('Dimensions not matching!')
+    
+    # order Psi
+    PsiMat = np.zeros((NT,NumNodesTot,3))
+    for tt in range(NT):
+        for ee in range(NE):
+            # local nodes: 0  2  1
+            PsiMat[tt,2*ee:2*(ee+1),:]=PsiTH[tt,ee,[0,2],:]
+        PsiMat[tt,-1,:]=PsiTH[tt,-1,1,:]
+        
+    return PsiMat
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
 ''' ------------------------------------------------------------------------ '''
 

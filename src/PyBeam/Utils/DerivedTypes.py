@@ -212,7 +212,9 @@ class Xbinput:
             proportional damping
     @param sph_joint_damping if a spherical joint is in the model, this can be sued
            to add viscous damping to the rotational degrees of freedom of FoR A origin.
-    
+    @param EnforceAngVel_FoRA=3*[False]: enforce angular velocity in ii direction in FoR A
+    @param EnforceTraVel_FoRA=3*[False]: enforce translational velocity in ii direction in FoR A
+    @param 
     """
 
     def __init__(self, NumNodesElem, NumElems,
@@ -260,6 +262,12 @@ class Xbinput:
         
         self.EnforceAngVel_FoRA=3*[False]
         self.EnforceTraVel_FoRA=3*[False]
+        
+        # dihedral angle left/right
+        self.dihedral_angle = [0.0, 0.0]
+        # dihedral length in % total length
+        self.dihedral_lambda = [0.0, 0.0]
+        
 
         # Check number of nodes per element.
         if self.NumNodesElem != 2 and self.NumNodesElem != 3:
