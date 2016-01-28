@@ -40,8 +40,12 @@ from PyCoupled.Coupled_NlnStatic import AddGravityLoads
 import time                                          # sm added packages
 import PyLibs.io.save
 
-from PyCoupled.Coupled_NlnFlightDynamic_utils import write_SOL912_def, write_SOL912_final, \
-                                                     write_SOL912_out, write_TecPlot
+
+
+#from PyCoupled.Coupled_NlnFlightDynamic_utils import write_SOL912_def, write_SOL912_final, \
+#                                                     write_SOL912_out, write_TecPlot
+from PyLibs.io.dat import write_SOL912_def, write_SOL912_final, \
+                          write_SOL912_out, write_TecPlot
 
 
 
@@ -93,7 +97,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     if XBNODE.Sflag.any(): SphFlag=True
     
     # Debugging Flags
-
     if 'HardCodeAero' in kwords: HardCodeAero=kwords['HardCodeAero']
     SaveExtraVariables = False  
 
@@ -116,7 +119,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         PosDefor = PosIni.copy(order='F')
         PsiDefor = PsiIni.copy(order='F')
         Force = np.zeros((XBINPUT.NumNodesTot,6),ct.c_double,'F')
-
 
     if SaveDict['Format']=='dat': 
         write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict)
@@ -314,46 +316,45 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     XBOUT.KsysPreBCsList=[]
     
     # -------------------------------------------------------------------   
-    # special BCs
+    # special BCs and damping
+    
     iiblock=[]
-    
-    # block translations
+
     if SphFlag:
-        iiblock = [ ii for ii in range(NumDof.value,NumDof.value+3) ]
-    
-    # block translations (redundant:)
-    for ii in range(3):
-        if XBINPUT.EnforceTraVel_FoRA[ii] is True:
-            iiblock.append(NumDof.value+ii)
-    
-    # block rotations
-    iirotfree=[] # free rotational dof 
-    for ii in range(3):
-        if XBINPUT.EnforceAngVel_FoRA[ii] is True:
-            iiblock.append(NumDof.value+3+ii)
-        else:
-            iirotfree.append(NumDof.value+3+ii)
-    
+
+        # block translations (redundant:)
+        for ii in range(3):
+            if XBINPUT.EnforceTraVel_FoRA[ii] == True:
+                iiblock.append(NumDof.value+ii)
+        # block rotations
+        iirotfree=[] # free rotational dof 
+        for ii in range(3):
+            if XBINPUT.EnforceAngVel_FoRA[ii] is True:
+                iiblock.append(NumDof.value+3+ii)
+            else:
+                iirotfree.append(NumDof.value+3+ii)
+
     # modify matrices
     if len(iiblock)>0:
         # block dof
         Msys[iiblock,:] = 0.0
         Msys[iiblock,iiblock] = 1.0
         Qsys[iiblock] = 0.0
-    # ------------------------------------------------------------------
     
         # add damp at the spherical joints
         if XBINPUT.sph_joint_damping is not None:
             Qsys[iirotfree]+= XBINPUT.sph_joint_damping*dQdt[iirotfree]
-    
-            
+         
     # add structural damping term
     if XBINPUT.str_damping_model is not None:
         Cdamp = XBINPUT.str_damping_param['alpha'] * MssFull + \
                 XBINPUT.str_damping_param['beta']  * KssFull
         Qsys[:NumDof.value] += np.dot( Cdamp, dQdt[:NumDof.value] )                  
         pass
-        
+     
+    # -------------------------------------------------------------------   
+
+       
     #store initial matrices for eigenvalues analysis
     XBOUT.MssFull0 = MssFull.copy()
     XBOUT.CssFull0 = CssFull.copy()
@@ -855,4 +856,19 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5', *OutList)
     
     return XBOUT
-        
+   
+   
+
+def panellingFromFreq(freq,c=1.0,Umag=1.0):
+    """@brief Calculate adequate spatial/temporal resolution on UVLM grid
+    based on a frequency of interest.
+    @param freq Frequency of interest.
+    @param c chord of wing.
+    @param Umag mean relative free-stream velocity magnitude.
+    @returns M Number of chordwise panels for wing.
+    @returns DelTime Suggested timestep [seconds.]
+    """
+    k = freq*c/(2*Umag) #get expected reduced freq
+    M = int(50.0*k/np.pi) #get adequate panelling
+    DelTime = c/(Umag*M) #get resulting DelTime
+    return M, DelTime        

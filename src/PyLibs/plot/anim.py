@@ -13,6 +13,154 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 
 
+
+
+
+
+
+
+def aero2dcomp(tv, span, Faero01, Faero02, filename='./foo', savepng=True, 
+           fps=30, ND=1.0, Nloops=1, Tdelay=1.0, 
+           lineprop = {'color'    : ['b','r'],
+                       'linewidth': [2, 2]   }  ):
+    '''
+@warning: this function requires an update of the input (pass markes and colors for the lines
+          you want to plot and generalise)
+    '''
+
+    (NT,Nnodes,six)=Faero01.shape
+    assert Faero02.shape[0] == NT, ('The number of time-steps in the time histories is not the same!')
+    assert Faero02.shape[1] == Nnodes, ('The number of nodes is not the same!')
+    assert len(span)==Nnodes, ('The number of nodes is not the same!')
+
+
+    #-------------------------------------------------------------------- Set-up animation variables
+
+    #total frames required for final video
+    NF = fps*ND*tv[-1] + 1
+    
+    # compute step for mask
+    step_ex = float(NT)/float(NF)
+    print('theoretical step: %f' %step_ex)
+    step = int(np.round(step_ex))
+    print('rounded step %f' %step)
+    ttvec = range(0,NT,step)
+    # (to ensure we always get the last time-step)
+    ttvec = np.concatenate((ttvec,np.array([NT-1]))) 
+    
+    Faero01Maskcheap=Faero01[ttvec,:,:]
+    Faero02Maskcheap=Faero02[ttvec,:,:]
+    TimeMaskcheap=tv[ttvec]
+    NTMaskcheap=len(Faero01Maskcheap)
+    
+    #interval on video mask
+    interv = 1e3*(TimeMaskcheap[1] - TimeMaskcheap[0])*float(ND) #ms
+    
+    #real slow down
+    NDreal = float(ND)*step_ex/float(step)
+    print('Input slow down: %f' %ND)
+    print('Real slow down: %f' %NDreal)
+    
+   
+    # ------------------------------------------------------------------------------- Prepare figure
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    # add final configuration
+    #line01x,       = ax.plot([], [], lw=4, color=lineprop['color'][0], marker='o', linewidth=1)
+    #line02x,       = ax.plot([], [], lw=4, color=lineprop['color'][1], marker='o', linewidth=1)
+    #line01z,       = ax.plot([], [], lw=2, color=lineprop['color'][0], marker='s', linewidth=3)
+    #line02z,       = ax.plot([], [], lw=2, color=lineprop['color'][1], marker='s', linewidth=3)
+    
+    line01x,       = ax.plot([], [], lw=2, color=lineprop['color'][0],  linewidth=1)
+    line02x,       = ax.plot([], [], lw=2, color=lineprop['color'][1],  linewidth=1)
+    line01z,       = ax.plot([], [], lw=4, color=lineprop['color'][0],  linewidth=3)
+    line02z,       = ax.plot([], [], lw=4, color=lineprop['color'][1],  linewidth=3)
+    
+    
+    time_text   = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+    vel_text = ax.text(0.02, 0.90, '', transform=ax.transAxes)
+    
+    
+    #----------------------------------------------------------------------- Create required methods
+   
+    # initialisation function (plot the background of each frame)
+    def initfun():
+        line01x.set_data([], [])
+        line02x.set_data([], [])
+        line01z.set_data([], [])
+        line02z.set_data([], [])
+        time_text.set_text('')
+        vel_text.set_text('')
+        return line01x
+    
+    # animate video
+    def animfun(tt):
+        
+        # extract data
+        fx01=Faero01Maskcheap[tt,:,0]
+        fz01=Faero01Maskcheap[tt,:,2]
+        fx02=Faero02Maskcheap[tt,:,0]
+        fz02=Faero02Maskcheap[tt,:,2]         
+        
+        line01x.set_data(span, fx01)
+        line02x.set_data(span, fx02)
+        line01z.set_data(span, fz01)
+        line02z.set_data(span, fz02)
+        
+        time_text.set_text(r'$t = %.2f  \ s$' % TimeMaskcheap[tt])
+
+        if savepng:
+            os.system('mkdir -p %s_pngdir' %filename )
+            fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
+        return line01x,
+    
+    # create a generator to save a file with Nloops
+    def GenFun(NT,NL,fps,Tdel=1.0):
+        snaps=[]
+        ll=0
+        Ndelay=np.round(Tdel*float(fps))
+        while ll<NL:
+            nn=0
+            while nn<NT:
+                snaps.append(nn)
+                nn+=1
+            ll+=1
+            if NL>1 and ll<NL: # add delay snaps
+                dd=0
+                while dd<Ndelay:
+                    snaps.append(NT-1)
+                    dd+=1
+        return snaps 
+    
+    frames = GenFun(NTMaskcheap,Nloops,fps,Tdelay)
+  
+    '''
+    # -------------------------------------------------------------------------------------- Animate
+    ### one loop
+    #animcheap = animation.FuncAnimation(fig, animfun, init_func=initfun,
+    #                                    frames=NTMaskcheap, interval=interv, 
+    #                                    blit=True, repeat=True, repeat_delay=1500)
+    ### more loops
+    animcheap = animation.FuncAnimation(fig, animfun, 
+                                        frames=GenFun(NTMaskcheap,Nloops,fps,Tdelay), 
+                                        init_func=initfun,
+                                        interval=interv, blit=True, repeat=True)
+    
+    #plt.show()
+    codecname='libx264' # good and small
+    #codecname='mpeg4'  # grains are likely to appear
+    #codecname='gif'    # fails
+    animcheap.save(filename, codec=codecname)#,fps=fps3x) #equivalent, bitrate=148kbps 
+    '''
+
+    return ax, fig, animfun, frames, initfun, interv
+
+
+
+
+
+
 def beam2d(tv, THPosDef, filename='./foo', savepng=True, 
            fps=30, ND=1.0, Nloops=1, Tdelay=1.0):
     '''
@@ -97,7 +245,7 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
         # save all the png
         if savepng:
             os.system('mkdir -p %s_pngdir' %filename )
-            fig.savefig('%s_pngdir/snap%.4d'%(filename,tt),format='png')
+            fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
         return line,
     
     # create a generator to save a file with Nloops
@@ -141,7 +289,141 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
 
     return ax, fig, animfun, frames, initfun, interv
     
+ 
+ 
+def beam2dcomp(tv, THPosDef01, THPosDef02, filename='./foo', savepng=True, 
+           fps=30, ND=1.0, Nloops=1, Tdelay=1.0, 
+           lineprop = {'color'    : ['b','r'],
+                       'linewidth': [2, 2]   }  ):
+    '''
+    @summary: Creates objects required for a 2D animation of the beam deformation
     
+    @param tv: time vector used for dynamic simulation of length NT
+    @param THPosDef01/02: 3D array containing beam deformed time history in the format:
+                         THPosDef01[time_step,node_number,(x,y)coordinates]
+                     and shape (NT,NumNodesTotal,2)
+    @param filename: file name without extension
+    @param savepng: if True, a folder containing the png of the snapshots is created
+    @param fps: frames per second
+    @param ND: slow time factor
+    @param Nloops: number of repetitions
+    @param time between consecutive loops
+    '''
+
+    NT=len(THPosDef01)
+    assert len(THPosDef02) == NT, ('The number of time-steps in the time histories is not the same!')
+
+    #-------------------------------------------------------------------- Set-up animation variables
+
+    #total frames required for final video
+    NF = fps*ND*tv[-1] + 1
+    
+    # compute step for mask
+    step_ex = float(NT)/float(NF)
+    print('theoretical step: %f' %step_ex)
+    step = int(np.round(step_ex))
+    print('rounded step %f' %step)
+    ttvec = range(0,NT,step)
+    # (to ensure we always get the last time-step)
+    ttvec = np.concatenate((ttvec,np.array([NT-1]))) 
+    
+    THPosDef01Maskcheap=THPosDef01[ttvec,:,:]
+    THPosDef02Maskcheap=THPosDef02[ttvec,:,:]
+    TimeMaskcheap=tv[ttvec]
+    NTMaskcheap=len(THPosDef01Maskcheap)
+    
+    #interval on video mask
+    interv = 1e3*(TimeMaskcheap[1] - TimeMaskcheap[0])*float(ND) #ms
+    
+    #real slow down
+    NDreal = float(ND)*step_ex/float(step)
+    print('Input slow down: %f' %ND)
+    print('Real slow down: %f' %NDreal)
+    
+   
+    # ------------------------------------------------------------------------------- Prepare figure
+    
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    # add final configuration
+    #xend=THPosDef01[-1,:,0]
+    #yend=THPosDef01[-1,:,1]
+    #ax.plot(xend,yend,color='0.8',linewidth=2)
+    line01,       = ax.plot([], [], lw=4, color=lineprop['color'][0])
+    line02,       = ax.plot([], [], lw=4, color=lineprop['color'][1])
+    time_text   = ax.text(0.02, 0.95, '', transform=ax.transAxes)
+    vel_text = ax.text(0.02, 0.90, '', transform=ax.transAxes)
+    
+    
+    #----------------------------------------------------------------------- Create required methods
+   
+    # initialisation function (plot the background of each frame)
+    def initfun():
+        line01.set_data([], [])
+        line02.set_data([], [])
+        time_text.set_text('')
+        vel_text.set_text('')
+        return line01
+    
+    # animate video
+    def animfun(tt):
+        
+        # extract data
+        x01=THPosDef01Maskcheap[tt,:,0]
+        y01=THPosDef01Maskcheap[tt,:,1]
+        x02=THPosDef02Maskcheap[tt,:,0]
+        y02=THPosDef02Maskcheap[tt,:,1]         
+        
+        line01.set_data(x01, y01)
+        line02.set_data(x02, y02)
+        
+        time_text.set_text(r'$t = %.2f  \ s$' % TimeMaskcheap[tt])
+
+        if savepng:
+            os.system('mkdir -p %s_pngdir' %filename )
+            fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
+        return line01,
+    
+    # create a generator to save a file with Nloops
+    def GenFun(NT,NL,fps,Tdel=1.0):
+        snaps=[]
+        ll=0
+        Ndelay=np.round(Tdel*float(fps))
+        while ll<NL:
+            nn=0
+            while nn<NT:
+                snaps.append(nn)
+                nn+=1
+            ll+=1
+            if NL>1 and ll<NL: # add delay snaps
+                dd=0
+                while dd<Ndelay:
+                    snaps.append(NT-1)
+                    dd+=1
+        return snaps 
+    
+    frames = GenFun(NTMaskcheap,Nloops,fps,Tdelay)
+  
+    '''
+    # -------------------------------------------------------------------------------------- Animate
+    ### one loop
+    #animcheap = animation.FuncAnimation(fig, animfun, init_func=initfun,
+    #                                    frames=NTMaskcheap, interval=interv, 
+    #                                    blit=True, repeat=True, repeat_delay=1500)
+    ### more loops
+    animcheap = animation.FuncAnimation(fig, animfun, 
+                                        frames=GenFun(NTMaskcheap,Nloops,fps,Tdelay), 
+                                        init_func=initfun,
+                                        interval=interv, blit=True, repeat=True)
+    
+    #plt.show()
+    codecname='libx264' # good and small
+    #codecname='mpeg4'  # grains are likely to appear
+    #codecname='gif'    # fails
+    animcheap.save(filename, codec=codecname)#,fps=fps3x) #equivalent, bitrate=148kbps 
+    '''
+
+    return ax, fig, animfun, frames, initfun, interv
     
 
 def beam_proj(tv, THPosDef, filename='./foo', savepng=True, 
@@ -241,7 +523,7 @@ def beam_proj(tv, THPosDef, filename='./foo', savepng=True,
         # save all the png
         if savepng:
             os.system('mkdir -p %s_pngdir' %filename )
-            fig.savefig('%s_pngdir/snap%.4d'%(filename,tt),format='png')
+            fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
         return line_xz, line_yz
     
     # create a generator to save a file with Nloops
@@ -287,7 +569,27 @@ def beam_proj(tv, THPosDef, filename='./foo', savepng=True,
 
 
 
-
+def GenFun(NT,NL,fps,Tdel=1.0):
+    '''
+    Create a generator when saving an animation with Nloops.
+    
+    This is an utility function
+    '''
+    snaps=[]
+    ll=0
+    Ndelay=np.round(Tdel*float(fps))
+    while ll<NL:
+        nn=0
+        while nn<NT:
+            snaps.append(nn)
+            nn+=1
+        ll+=1
+        if NL>1 and ll<NL: # add delay snaps
+            dd=0
+            while dd<Ndelay:
+                snaps.append(NT-1)
+                dd+=1
+    return snaps 
 
 
 

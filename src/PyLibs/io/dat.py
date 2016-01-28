@@ -1,15 +1,11 @@
-'''@package PyCoupled.Coupled_NlnFlightDynamic
-@brief      NonlinearDynamic Beam + Rigid-body dynamics + UVLM.
-@author     S. Maraniello
-@contact    salvatore.maraniello10@imperial.ac.uk
-@version    0.0
-@date       14/10/2015
-@pre        None
-@summary    I/O required by Coupled_NlnFlightDynamic are wrapped in this module
+'''
+Created on 20 Jan 2016
 
-            !!! Moved to PiLibs.io.dat: remove after testing !!!
+@brief: dump here all obsolete output methods (dat files)
+@author: sm6110
 
 '''
+
 #----------------------------------------------------------------------- Packages
 import sys
 import Main.SharPySettings as Settings
@@ -43,19 +39,6 @@ import PyLibs.io.save
 
         
 
-def panellingFromFreq(freq,c=1.0,Umag=1.0):
-    """@brief Calculate adequate spatial/temporal resolution on UVLM grid
-    based on a frequency of interest.
-    @param freq Frequency of interest.
-    @param c chord of wing.
-    @param Umag mean relative free-stream velocity magnitude.
-    @returns M Number of chordwise panels for wing.
-    @returns DelTime Suggested timestep [seconds.]
-    """
-    k = freq*c/(2*Umag) #get expected reduced freq
-    M = int(50.0*k/np.pi) #get adequate panelling
-    DelTime = c/(Umag*M) #get resulting DelTime
-    return M, DelTime
 
 
 def write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict):
@@ -76,6 +59,14 @@ def write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDi
                        PosDefor, PsiDefor, ofile, WriteMode)
     return None
     
+
+def write_SOL912_force(XBOPTS,XBINPUT,XBELEM,Time, ForceTime, Vrel, VrelDot):
+
+    ofile = SaveDict['OutputDir'] + SaveDict['OutputFileRoot'] + '_SOL912_force.dat'
+    fp = open(ofile,'w')
+    BeamIO.Write_force_File(fp, Time, ForceTime, Vrel, VrelDot)
+    fp.close() 
+
 
 def write_SOL912_final(Time, PosPsiTime, NumNodes_tot, DynOut, Vrel, VrelDot, SaveDict):
 
