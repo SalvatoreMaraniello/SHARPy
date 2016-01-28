@@ -103,11 +103,12 @@ def nodal_force(NumNodes, Time, NodeForce, TCint, Scf, p ):
     NumSteps = len(Time)-1
     if NodeForce > NumNodes-1: raise NameError("NodeForce can't be higher then NumNodes-1!")
     
-    Fdyn = np.zeros( (NumNodes,6,NumSteps+1), dtype=float, order='F')
+    Fdyn = np.zeros( (NumSteps+1,NumNodes,6), dtype=float, order='F')
      
     # build F-time matrix
     for comp in range(6):
-        Fdyn[NodeForce,comp,:]=build_vec(Time,TCint[:,comp],Scf[:,comp],p, True)
+        if np.max(np.abs(Scf[:,comp]))>0.0:
+            Fdyn[:,NodeForce,comp]=build_vec(Time,TCint[:,comp],Scf[:,comp],p, True)
     
     return Fdyn
 

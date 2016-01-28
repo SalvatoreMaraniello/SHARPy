@@ -1,11 +1,12 @@
 '''@package PyBeam.Utils.BeamInit
 @brief      For initialising variables required for beam simulations.
-@author     Rob Simpson
+@author     Rob Simpson, Salvatore Maraniello
 @contact    r.simpson11@imperial.ac.uk
 @version    0.0
-@date       10/12/2012
+@date       10/12/2012 -> Jan 2016
 @pre        None
-@warning    None'''
+@warning    ForceTime term in Dynamic method obsolete. To be removed
+'''
 
 import sys
 import DerivedTypes
@@ -14,6 +15,8 @@ import numpy as np
 import ctypes as ct
 import BeamIO
 import BeamLib
+import PyLibs.CVP.fourier, PyLibs.CVP.spline
+
 
 def Static(XBINPUT,XBOPTS, moduleName = None):
     """@brief Initialise everything needed for Static beam simulation."""
@@ -145,6 +148,12 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
     #Calculate number of timesteps.
     NumSteps = ct.c_int(len(Time) - 1)
     
+    
+    # sm: set dynamic loads
+    XBINPUT = DynLoads(XBINPUT)
+    
+    
+    # ------------------------------------------------------------- sm: move into DynLoads
     #Create force-amp-in-time array.
     ForceTime = np.zeros(NumSteps.value+1,ct.c_double,'F')
     if XBINPUT.ForcingType == 'Const':
@@ -211,7 +220,7 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
             
     else:
         raise ValueError('ForcingType not recognised')
-        
+    # ------------------------------------------------------------- sm: move into DynLoads    
     
     # Create default forced velocities and accelerations if not specified.
     if hasattr(XBINPUT, 'ForcedVel'):
@@ -250,6 +259,48 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
             OutGrids, PosPsiTime, VelocTime, DynOut
     
     
+def DynLoads(XBINPUT):
+    '''
+    Compute forcing terms for beam model based on a collection of methods
+    
+    @todo: move here the loads methods inside Dynamic function
+    '''
+    
+    # pre-allocate...
+    Time = np.arange(XBINPUT.t0,XBINPUT.tfin  + XBINPUT.dt, XBINPUT.dt,
+                     ct.c_double)
+    shape = (len(Time),XBINPUT.NumNodesTot,6)
+    XBINPUT.ForceDyn = np.zeros(shape,ct.c_double,'F')
+    XBINPUT.ForceDyn_foll = np.zeros(shape,ct.c_double,'F')
+    XBINPUT.ForceDyn_dead = np.zeros(shape,ct.c_double,'F')
+    
+    
+    # ... and fill
+    if XBINPUT.ForceDynType=='dss': 
+        print('NumNodesTot is %f'%XBINPUT.NumNodesTot)
+        params = XBINPUT.ForceDynDict['dss']
+        #assert params['Node']<XBINPUT.NumNodesTot-1 ("params[Node] can't be higher then NumNodes-1!")
+
+        for comp in range(6):
+            XBINPUT.ForceDyn[:,params['Node'],comp] = \
+                    PyLibs.CVP.fourier.sin_series_vec( Time                  ,  
+                                                       params['Acf'][:,comp] ,
+                                                       params['Fcf'][:,comp] )
+       
+         
+    if XBINPUT.ForceDynType=='spline': 
+        params = XBINPUT.ForceDynDict['spline']
+        XBINPUT.ForceDyn =  PyLibs.CVP.spline.nodal_force(
+                                    XBINPUT.NumNodesTot, Time, 
+                                    params['Node'],
+                                    params['TCint'], 
+                                    params['Scf'], 
+                                    params['order'])   
+
+    return XBINPUT
+
+
+
 
 if __name__ == '__main__':
     XBINPUT = DerivedTypes.Xbinput(2,1)

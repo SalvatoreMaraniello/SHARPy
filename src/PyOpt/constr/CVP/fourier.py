@@ -13,7 +13,7 @@ import numpy as np
 import PyLibs.CVP.fourier
 
 
-def bound_constraint_DSseries(acfv,fcfv,Ymax,Nsamp=4,scaler=1.0):
+def bound_constraint_DSS(acfv,fcfv,Ymax,Nsamp=4,scaler=1.0):
     ''' 
     Returns an array with all the constraint necessary to impose a boundary 
     to a control discretised using a DS series. The constraints are all of the 

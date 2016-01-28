@@ -181,7 +181,9 @@ class Xbopts:
         
         
 class Xbinput:
-    """@brief Contains inputs for PyBeam functions.
+    """
+    @brief Contains inputs for PyBeam functions.
+    @warning ForcingType, RampTime to be moved in dictionary under 'modal' key 
     
     @param NumNodesElem Number of nodes in each beam element, either 2 or 3.
     @param NumElems Number of elements in the beam model.
@@ -190,6 +192,11 @@ class Xbinput:
     @param BeamStiffness 6-by-6 sectional stiffness matrix.
     @param BeamMass 6-by-6 sectional mass matrix.
     @param BConds 2-char string with boundary condition, 'CF' = Clamped-Free.
+        C = clamp
+        S = spherical
+        F = free
+        when 'S' is set, the dof to block can be specified via the Enforce{Ang/Tra}Vel
+        parameters.
     @param Sigma Stiffness parameter. Not Implemented.
     @param iOut Output file.
     @param t0 Initial time.
@@ -214,7 +221,8 @@ class Xbinput:
            to add viscous damping to the rotational degrees of freedom of FoR A origin.
     @param EnforceAngVel_FoRA=3*[False]: enforce angular velocity in ii direction in FoR A
     @param EnforceTraVel_FoRA=3*[False]: enforce translational velocity in ii direction in FoR A
-    @param 
+    @param ForceDynType: parametrisation used for dynamic loads: 'dss', 'spline', 'modal' (future)
+    @param ForceDynDict: for each type of parametrisation, 
     """
 
     def __init__(self, NumNodesElem, NumElems,
@@ -228,15 +236,16 @@ class Xbinput:
                  tfin = 0.0,
                  dt = 0.0,
                  Omega = 0.0,
-                 ForcingType = 'Const',
-                 RampTime = 0.0,
+                 ForcingType = 'Const', # to be removed
+                 RampTime = 0.0,        # to be removed
                  g = 0.0, # Leave this alone!
                  PsiA_G = np.array([0.0,0.0,0.0]),
                  str_damping_model=None,
                  str_damping_param={'alpha': 0.0, 'beta':0.0},
                  sph_joint_damping=None
                  ):
-        """@brief NumNodesElem and NumElems must be specified for initialisation
+        """
+        @brief NumNodesElem and NumElems must be specified for initialisation
                   of force arrays.
         
         @param NumNodes Local variable storing number of nodes in model for
@@ -283,13 +292,38 @@ class Xbinput:
         self.ForceStatic = np.zeros((NumNodesTot,6),ct.c_double,'F')
         self.ForceStatic_foll = np.zeros((NumNodesTot,6),ct.c_double,'F')
         self.ForceStatic_dead = np.zeros((NumNodesTot,6),ct.c_double,'F')
-        self.ForceDyn = np.zeros((NumNodesTot,6),ct.c_double,'F')
-        self.ForceDyn_foll = np.zeros((NumNodesTot,6),ct.c_double,'F')
-        self.ForceDyn_dead = np.zeros((NumNodesTot,6),ct.c_double,'F')
         
+        
+        
+        ### sm: changed standard for dynamic force input
+        self.ForceDynType = None # 'dss', 'spline', 'modal'
+        self.ForceDynDict = {
+                'dss'      : # DSS
+                           {'Acf' : np.zeros((0,6)), # waves amplitude (no. waves,6)
+                            'Fcf' : np.zeros((0,6)), # waves frequency (no. waves,6)
+                            'Node': 0                # node applied force
+                                                     },
+                'spline'  : # splines based parametrisation
+                           {'order': 3              , # splines order
+                            'Scf'  : np.zeros((0,6)), # splines amplitude no.splines     ,6)
+                            'TCint': np.zeros((0,6)), # waves frequency ( no.splines+p-1,6)
+                            'Node' : 0                # node applied force
+                                                     },
+                'modal'   : # modal based parametrisation
+                            { 'future' : 'move_here_required_fields' }
+                             }
+        
+        # loads can be set using BeamInit.DynLoads
+        #self.ForceDyn = np.zeros((NumNodesTot,6),ct.c_double,'F')
+        #self.ForceDyn_foll = np.zeros((NumNodesTot,6),ct.c_double,'F')
+        #self.ForceDyn_dead = np.zeros((NumNodesTot,6),ct.c_double,'F')
+        self.ForceDyn = np.zeros((0,NumNodesTot,6),ct.c_double,'F')
+        self.ForceDyn_foll = np.zeros((0,NumNodesTot,6),ct.c_double,'F')
+        self.ForceDyn_dead = np.zeros((0,NumNodesTot,6),ct.c_double,'F')
+
         self._ctypes_links=True  
         self._ctypes_attributes = [ 'BeamStiffness', 'BeamMass',
-                'ForceStatic', 'ForceStatic_foll' 'ForceStatic_dead' 
+                'ForceStatic', 'ForceStatic_foll', 'ForceStatic_dead' ,
                 'ForceDyn', 'ForceDyn_foll', 'ForceDyn_dead' ]
         #self._ctypes_conversion= [ [ ct.c_int, ct.c_bool, ct.c_double ], 
         #                           [      int,      bool,       float ] ] 

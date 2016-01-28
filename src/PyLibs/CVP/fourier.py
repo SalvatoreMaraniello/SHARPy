@@ -236,7 +236,6 @@ def ifft(fr,cfs, tv, periodic=True):
     return  yv
 
 
-
 def fft_filter(tv,yv,factor=0.1,periodic=True):
     '''
     removes all harmonics whose amplituce is below the factor 
@@ -259,13 +258,6 @@ def fft_filter(tv,yv,factor=0.1,periodic=True):
     return ysmooth
     
     
-    
-    
-    
-    
-
-
-
 
 def get_dss(tv,yv,fcut):
     # create yv signal for FFT (with only sines in output)

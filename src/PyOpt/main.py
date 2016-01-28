@@ -24,10 +24,12 @@ Based on xbcompFD in optimiser/wrapper
               - adding as in put to the method the numerical values
               of the variables required to evaluate the functionals 
         - improve step choice for FD  
+        - improve solver selection method. Add new variable
 
 
 
-@note: Original methods xbcompFD
+@note: solver import in __init__ method
+
 
 @warning: bug found when running without Jacobian for the equality 
         inequality constraints. In this case, crash is avoided by
@@ -46,46 +48,63 @@ import multiprocessing as mpr
 
 import Main.SharPySettings as Settings
 import PyBeam.Utils.DerivedTypes
+import PyAero.UVLM.Utils.DerivedTypesAero
 #import PyOpt.Utils.DerivedTypes
 import PyLibs.io.save
 
 # for debugging
 #from ipsh import *
 
+from PyBeam.Solver.NonlinearFlexBodyDynamic import Solve_Py as SolNnlFlxBodyDyn
+from PyCoupled.Coupled_NlnFlightDynamic import Solve_Py as SolNnlFlightDyn
+
+
 
 class OptComp:
     
 
-    
-    def __init__(self, DESIGN, FUNC, PARAM,                   # optimisation
-                 XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS,  # solution
+    def __init__(self, 
+                 DESIGN, FUNC, PARAM,                         # optimisation
+                 XBINPUT, XBOPTS,                             # structural solution
+                 VMOPTS=None, VMINPUT=None, AELAOPTS=None,    # aero   
                  **kwargs):                                   # other
         
-        # attach input classes
+        # attach optimisation classes
         self.DESIGN = DESIGN
         self.FUNC   = FUNC
         self.PARAM  = PARAM
         
+        # attach str solution classes
         self.XBINPUT  = XBINPUT
         self.XBOPTS   = XBOPTS
-        self.VMOPTS   = VMOPTS
-        self.VMINPUT  = VMINPUT
-        self.AELAOPTS = AELAOPTS
         
+        # attach aero classes
+        self.AELAOPTS = AELAOPTS
+        self.VMINPUT  = VMINPUT
+        if VMOPTS   == None : 
+            # dummy
+            self.VMOPTS = PyAero.UVLM.Utils.DerivedTypesAero.VMopts(M=2,N=2,NumCores=1)
+        else:  
+            self.VMOPTS   = VMOPTS
+
+        # create output class
         self.XBOUTPUT = PyBeam.Utils.DerivedTypes.Xboutput()
         
         # saving
+        self._counter=-1
         self.SaveDict=Settings.SaveDict
         if 'SaveDict' in kwargs: self.SaveDict=kwargs['SaveDict']
-        self._counter=-1
-        #self.SaveDict['OutputFileRoot']=self.SaveDict['OutputFileRoot']+'%.3d'%self._counter 
-        
-        # fwd run
-        if XBOPTS.Solution.value == 912:
-            from PyCoupled.Coupled_NlnFlightDynamic import Solve_Py
-            self.fwd_run=Solve_Py
+
+        # Set solver/input
+        if self.AELAOPTS==None and self.VMINPUT==None:
+            self.fwd_run = SolNnlFlxBodyDyn
+            self.input_list = [  self.XBINPUT, self.XBOPTS ] 
         else:
-            raise NameError('Solution not supported!')
+            self.fwd_run = SolNnlFlightDyn
+            self.input_list = [  self.XBINPUT, self.XBOPTS, 
+                                 self.VMOPTS , self.VMINPUT, self.AELAOPTS  ]
+        #else:
+        #    raise NameError('Solution not supported!')
         
         #optimiser options:
         self.driver_options={'SLSQP': {'disp': False, # True to print convergence message
@@ -141,13 +160,16 @@ class OptComp:
         # Extract Design and set-up the problem
         self.update_solver_input()
         
-        # solve aeroelastic analysis
+        ### solve aeroelastic analysis
+        #self.XBOUTPUT=self.fwd_run(self.XBINPUT, self.XBOPTS, 
+        #                  self.VMOPTS, self.VMINPUT, self.AELAOPTS,
+        #                   SaveDict=self.SaveDict)
+
         
-        #self.XBOPTS.set_ctypes()
-        self.XBOUTPUT=self.fwd_run(self.XBINPUT, self.XBOPTS, 
-                           self.VMOPTS, self.VMINPUT, self.AELAOPTS,
-                           SaveDict=self.SaveDict)
-        #self.XBOPTS.del_ctypes()
+        #self.XBOUTPUT=self.fwd_run(*self.input_list, SaveDict=self.SaveDict)
+        
+        self.XBOUTPUT = self.fwd_run(self.XBINPUT, self.XBOPTS,SaveDict=self.SaveDict)
+
         
         # evaluate functionals
         self.eval_functionals()
@@ -292,7 +314,6 @@ class OptComp:
         else:
             output=( cpself.FUNC.gdis.val , cpself.FUNC.geq.val  , cpself.FUNC.cost.val,
                        copy.deepcopy( cpself.XBOUTPUT ) )
-
         #os.system('rm %s%s' %( cpself.SaveDict['OutputDir'],
         #                       cpself.SaveDict['OutputFileRoot']+'FD%.3d'%dd ) )
         del(cpself)
@@ -320,7 +341,9 @@ class OptComp:
             
             gsetval_list=[]
             gset.fun_name=[]
-            Ng = len(gset.fun)
+            
+            if gset.fun == None: Ng=0
+            else: Ng = len(gset.fun)
             
             for gg in range(Ng):
                 
@@ -444,13 +467,16 @@ class OptComp:
     def set_number_processes(self):
         
         '''
-        method to redistribute the CPUs per process.
-        method can be beneficial only if the amount of processors
-        available is larger then the amount of design variables
+        Method to redistribute the CPUs per process when the aeroelastic 
+        solution run: cpu usage in improved only if the amount of processors
+        available is larger then the amount of design variables.
         
         The cores to be used for the fwd execution are stored in 
         self.VMOPTs.NumCored, while those to be used during the FDs
         are stored in the list self.NumCoredVM
+        
+        If a rigid-flexible body only solution is used, a single processor
+        is used for each design variable.
         '''
 
         NumPrMin = self.DESIGN.Nx + 1
