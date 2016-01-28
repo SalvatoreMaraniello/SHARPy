@@ -747,10 +747,10 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     XBOUT.VrelDot=VrelDot
     XBOUT.PosPsiTime=PosPsiTime    
     
-    # save h5
+    # save h5 
     XBINPUT.ForceDyn = XBINPUT.ForceDyn + XBINPUT.ForceDyn_foll +  XBINPUT.ForceDyn_dead
-    del(xbsol.Xbinput.ForceDyn_dead)
-    del(xbsol.Xbinput.ForceDyn_foll)
+    del(XBINPUT.ForceDyn_dead)
+    del(XBINPUT.ForceDyn_foll)
     PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5', *OutList)
      
     
