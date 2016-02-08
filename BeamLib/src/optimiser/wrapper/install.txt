@@ -155,5 +155,19 @@ this setting has been proven to work for the compilations required in the OpenMD
 
 
 
+Installation with anaconda 2:
+- tested with Anaconda-2.3.0-Linux-x86_64.sh
+- install anaconda 2. If another version of anaconda exists you can:
+    - either set-up a python 2 environment from this installation
+    - manually install the anaconda2
+    - to avoid conflict, do not add the export PATH command but add it manually as an alias, such as:
+      alias goanac2="export PATH=/home/xxx_path_to_anaconda2_xxx/anaconda2/bin:$PATH"
+- compile code (see above, 'make wrapso')
+- install openmdao (see above)
+- compile the f2py files (see above). It is suggested to use the anaconda 2 provided f2py (which is in the bin area under the anaconda installaiton directory), so modify the *.sh file accordingly
+
+
+
+
 
 

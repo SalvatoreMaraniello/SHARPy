@@ -157,12 +157,14 @@ class XBeamSolver(ComponentWithDerivatives):
     ExtMomntDyn = Array(default_value=np.zeros((3),order='F'), # order='F' is not necessary
                      iotype='in', dtype=float, shape=(3,) ,
                      desc='Nodal applied moments - single node or distributed according to self.AppDynLoadType (load.set_***_ForceDynAmp)')   
+    DynForceSpecialOptions = {'reverse':False,'smooth':False,'Twin':0.0}
     '''# spline control
     DynFrc_spline_order=Int(3, iotype='in', desc='order of B-spline control parametrisation')
     TCint = Array( iotype='in', dtype=float, desc='TCint[:,cc] contains the NC+1 knots points for generating the spline representation over the cc-th force/moment component')
     Scf = Array( iotype='in', dtype=float, desc='spline weights related to the NS = spline_order+NC')  
     '''  
     '''# fourier control
+    DynForceSpecialOptions = {'reverse':False,'smooth':False,'Twin':0.0}
     Acf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Sin related to Fourier coefficients (see design.load.fourier)')   
     Bcf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Cin related to Fourier coefficients (see design.load.fourier)')
     Fcf = Array(default_value=np.zeros((6),order='F'), iotype='in', dtype=float, desc='Frequencies related to Fourier coefficients (see design.load.fourier)')
@@ -846,11 +848,13 @@ class XBeamSolver(ComponentWithDerivatives):
         
 
         if self.DynForceParam=='fourier': 
+            # detect special options
+            
             self.ForceDynAmp = np.zeros( (self.NumNodes,6), dtype='float', order='F')
             self.ForceTime = np.ones( (self.NumSteps+1), dtype='float', order='F' )
             self.ForceDynamic =  input.load.fourier.glsin_nodal(
                                 self.NumNodes, self.Time, self.NodeAppDynForce, 
-                                self.Acf, self.Fcf)
+                                self.Acf, self.Fcf, optdict=self.DynForceSpecialOptions)
             
         if self.DynForceParam=='spline': 
             self.ForceDynAmp = np.zeros( (self.NumNodes,6), dtype='float', order='F')

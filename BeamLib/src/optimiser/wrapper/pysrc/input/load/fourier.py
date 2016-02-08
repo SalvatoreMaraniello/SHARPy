@@ -11,7 +11,7 @@ import numpy as np
 
 
 
-def glsin_nodal(NumNodes, Time, NodeForce, A, F ):
+def glsin_nodal(NumNodes, Time, NodeForce, A, F , optdict={}):
     '''
     Given a set of amplitudes coefficient and related frequencies, the function
     reconstructs a signal over the time-domain Time creates overlapping 
@@ -30,6 +30,8 @@ def glsin_nodal(NumNodes, Time, NodeForce, A, F ):
     nodeForce: node where to apply the force. The nodes numbering is such that:
             root: NodeForce =  0
             tip:  NodeForce = -1 or NumNodes-1
+            
+    optdict: see 'sin_series_vec' method
     '''
     
     NumSteps = len(Time)-1
@@ -43,18 +45,25 @@ def glsin_nodal(NumNodes, Time, NodeForce, A, F ):
     
     # build F-time matrix
     for comp in range(6):
-        Fdyn[NodeForce,comp,:]=sin_series_vec(Time,Acp[:,comp],Fcp[:,comp])
+        Fdyn[NodeForce,comp,:]=sin_series_vec(Time,Acp[:,comp],Fcp[:,comp], optdict=optdict)
     
     return Fdyn
 
 
 
-def sin_series_vec(Time, av, fv):
+def sin_series_vec(Time, av, fv, optdict={}):
     '''
     Given a time vector Time, and a set of coefficients av and fv, the function
     builds the sines series signal:
     
         y(ii) = sin( 2*pi*Time[ii]*fv[ii] )
+        
+    the optdict dictionary allows to specify extra properties:
+        - reverse: flip left/right the signal
+        - smooth: allows to apply a smoothing factor to avoid non zero signals
+        at time t=0 when frequencies that are not in the group fn = 1/(2 Time[-1])
+        are used with a reverse option true (see smooth_factor method)
+        - Twin: specify the window where to apply the smoothing
     '''
 
     NumSteps = len(Time)-1
@@ -65,6 +74,15 @@ def sin_series_vec(Time, av, fv):
 
     for jj in range(cfmax):
         y = y + av[jj]*np.sin(2.0*np.pi*fv[jj]*Time)
+    
+    if 'reverse' in optdict:
+        if optdict['reverse'] == True: y = y[::-1]
+    if 'smooth' in optdict:
+        if optdict['smooth'] == True:
+            if 'Twin' in optdict:
+                y = y*smooth_factor(Time,optdict['Twin'])
+            else:
+                raise NameError('Specify time window Twin in which apply the smoothing!')
     
     return y
 
@@ -126,7 +144,6 @@ def myfft(t,f,fcut=np.infty):
     return fr[iivec], cfs[iivec]
 
 
-
 def get_dss(tv,yv,fcut):
     # create yv signal for FFT (with only sines in output)
     yvext = np.concatenate( (yv[:-1] ,-yv[-1::-1]) )  
@@ -138,11 +155,48 @@ def get_dss(tv,yv,fcut):
     return fr,cf,acf
 
 
+def smooth_factor(tv,Twin):
+    '''
+    Returns a smoothing functions having values:
+        0 _> 1 for t<Twin - cubic trend, zero first derivative at 0 and Twin
+        1 constant for t > Twin
+    Can be used to smooth a DSS series when non zero values occur at t=0    
+    '''
+    
+    pvec = np.zeros(4)
+    pvec[0] = -2.0/Twin**3
+    pvec[1] = 3.0/Twin**2
+    
+    fsmooth = np.ones(len(tv))
+    iiwin = tv<Twin
+    fsmooth[iiwin]=np.polyval(pvec,tv[iiwin])
+    
+    return fsmooth
+
 
 
 if __name__=='__main__':
     
     import matplotlib.pyplot as plt
+    
+    acfv=np.array([1.7, .5])
+    fv=np.array([0.75, 2.45])
+    tv=np.linspace(0.0,2.0,1000)
+    yv=sin_series_vec(tv, acfv, fv )
+    yvrev=sin_series_vec(tv, acfv, fv, {'reverse':True })
+    
+    #smooth=smooth_factor(tv,Twin=0.05)
+    #yvrevsm=smooth*yvrev
+    yvrevsm=sin_series_vec(tv, acfv, fv, {'reverse':True,'smooth':True,'Twin':0.05} )
+    
+    plt.plot(tv,yv,'b')
+    plt.plot(tv,yvrev,'r')
+    plt.plot(tv,yvrevsm,'k')
+    
+    plt.show()
+    
+    
+    '''
     
     NodeForce=0
     NumNodes=3
@@ -199,7 +253,7 @@ if __name__=='__main__':
         print 'Max abs value for node %d is %f' %(ii,M)
     
     
-    
+    '''
     
     
     
