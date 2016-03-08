@@ -98,11 +98,10 @@ class OptComp:
         # Set solver/input
         if self.AELAOPTS==None and self.VMINPUT==None:
             self.fwd_run = SolNnlFlxBodyDyn
-            self.input_list = [  self.XBINPUT, self.XBOPTS ] 
+            self.input_list = [  'XBINPUT', 'XBOPTS' ] 
         else:
             self.fwd_run = SolNnlFlightDyn
-            self.input_list = [  self.XBINPUT, self.XBOPTS, 
-                                 self.VMOPTS , self.VMINPUT, self.AELAOPTS  ]
+            self.input_list = [  'XBINPUT', 'XBOPTS', 'VMOPTS' , 'VMINPUT', 'AELAOPTS'  ]
         #else:
         #    raise NameError('Solution not supported!')
         
@@ -165,11 +164,14 @@ class OptComp:
         #                  self.VMOPTS, self.VMINPUT, self.AELAOPTS,
         #                   SaveDict=self.SaveDict)
 
-        
+        # crash
         #self.XBOUTPUT=self.fwd_run(*self.input_list, SaveDict=self.SaveDict)
         
-        self.XBOUTPUT = self.fwd_run(self.XBINPUT, self.XBOPTS,SaveDict=self.SaveDict)
+        # structural solution
+        #self.XBOUTPUT = self.fwd_run(self.XBINPUT, self.XBOPTS,SaveDict=self.SaveDict)
 
+        intuple = tuple([ getattr(self,aa) for aa in self.input_list ])
+        self.XBOUTPUT=self.fwd_run(*intuple, SaveDict=self.SaveDict)
         
         # evaluate functionals
         self.eval_functionals()
