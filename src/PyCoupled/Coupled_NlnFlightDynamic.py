@@ -241,8 +241,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     dQdt[NumDof.value+6:]= Quat.copy('F')
     
     #Force at the first time-step
-    Force += (XBINPUT.ForceDyn*ForceTime[0]).copy('F')
-    
+    #Force += (XBINPUT.ForceDyn*ForceTime[0]).copy('F')
+    Force += (XBINPUT.ForceDyn[0,:,:]).copy('F')
 
     #Assemble matrices and loads for structural dynamic analysis
     currVrel=Vrel[0,:].copy('F')
@@ -510,8 +510,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                             PsiDefor, VMINPUT.c)
             
             # Add thrust and other point loads
-            Force += (XBINPUT.ForceStatic + 
-                      XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
+            #Force += (XBINPUT.ForceStatic + XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
+            Force += (XBINPUT.ForceStatic + XBINPUT.ForceDyn[iStep+1,:,:]).copy('F')
                       
             # sm: here to avoid crash at first time-step
             XBOUT.ForceAeroList.append(ForceAero.copy('C')) 
