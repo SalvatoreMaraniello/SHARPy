@@ -228,7 +228,7 @@ def ifft(fr,cfs, tv, periodic=True):
     
     f0 = fr[1]-fr[0]#np.average(np.diff(fr))
     T = 1./f0
-    assert np.abs(T-tv[-1])<1e-6, ('Frequencies spacing anf total time do not match!')
+    #assert np.abs(T-tv[-1])<1e-6, ('Frequencies spacing and total time do not match!')
     
     N=len(tv)
     yv = np.fft.irfft(N/2.0*cfs, N)
