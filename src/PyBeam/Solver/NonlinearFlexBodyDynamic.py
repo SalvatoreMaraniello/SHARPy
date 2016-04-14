@@ -186,16 +186,13 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     SphFlag=False
     if XBNODE.Sflag.any(): SphFlag=True
      
-    #Solve static
-    ### sm commented
+    #Solve static ?
     PosDefor = PosIni.copy(order='F')
     PsiDefor = PsiIni.copy(order='F')
-    print('STATIC SOLUTION COMMENTED OUT!!!')
-    solve_static=False
-    if solve_static:
+
+    if XBOPTS.ImpStart==False:
         XBOPTS.Solution.value = 112 
         PosDefor, PsiDefor = Solve_Py_Static(XBINPUT,XBOPTS)
-    
     XBOPTS.Solution.value = 912 
 
     if SaveDict['Format']=='dat': 
@@ -432,7 +429,11 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
         pass
      
     # -------------------------------------------------------------------  
-
+    
+    #store initial matrices for eigenvalues analysis
+    XBOUT.Msys0 = Msys.copy()
+    XBOUT.Csys0 = Csys.copy()
+    XBOUT.Ksys0 = Ksys.copy()
 
     #Initial Accel
     #dQddt[:] = np.dot(np.linalg.inv(Msys), -Qsys)
@@ -474,10 +475,14 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
         dt = Time[iStep+1] - Time[iStep]
         
 
-        #Predictor step
+        ###Predictor step
         Q += dt*dQdt + (0.5-beta)*dQddt*dt**2
         dQdt += (1.0-gamma)*dQddt*dt
-        dQddt[:] = 0.0
+        ### Corrector
+        #dQddt[:] = 0.0 # initial guess for acceleration at next time-step is zero
+        Q += beta*dQddt*dt**2
+        dQdt += gamma*dQddt*dt
+
         
         ### sm: removed ForceTime and increased rank of ForceDyn 
         #Force at current time-step
@@ -597,7 +602,7 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
             
           
             #Separate assembly of follower and dead loads   
-            tmpForceTime=ForceTime[iStep+1].copy('F') 
+            #tmpForceTime=ForceTime[iStep+1].copy('F') 
             tmpQforces,Dummy,tmpQrigid = XbeamLib.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \
                                             PosIni, PsiIni, PosDefor, PsiDefor, \
                                             ### sm: increased rank of ForceDyn_*
@@ -613,7 +618,16 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
             #Compute residual
             Qstruc += -np.dot(FstrucFull, Force_Dof)
             Qrigid += -np.dot(FrigidFull, Force_All)
-              
+            
+            # final of last iter
+            XBOUT.Qstruc=Qstruc.copy()
+            XBOUT.Qrigid=Qrigid.copy()
+            # final of initial iter
+            if iStep==0:
+                XBOUT.Qstruc0=Qstruc.copy()
+                XBOUT.Qrigid0=Qrigid.copy()    
+  
+  
             Qsys[:NumDof.value] = Qstruc
             Qsys[NumDof.value:NumDof.value+6] = Qrigid
             Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])

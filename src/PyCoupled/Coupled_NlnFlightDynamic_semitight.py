@@ -5,9 +5,13 @@
 @version    0.0
 @date       07/11/2013
 @pre        None
-@warning    None
+@warning    Follower and dead forces are only modelled as external forces that
+            follow the FoR A or not. In the second case, forces are defined in 
+            FoR G components. No structural deformation is followed!
 
 Modified S. Maraniello, 25 Sep 2015
+
+
 
 '''
 #----------------------------------------------------------------------- Packages
@@ -83,8 +87,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             os.system('mkdir -p %s' %dirwake)
             XBOUT.dirwake=dirwake  
             
-    XBOUT.cputime.append(time.clock()) # time.processor_time more appropriate but equivalent
-    # for debugging
+    XBOUT.cputime.append(time.clock()) # time.processor_time more appropriate 
     XBOUT.ForceDofList=[]
     XBOUT.ForceRigidList=[]
 
@@ -95,7 +98,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # special BCs
     SphFlag=False
     if XBNODE.Sflag.any(): SphFlag=True
-    
     # Debugging Flags
     if 'HardCodeAero' in kwords: HardCodeAero=kwords['HardCodeAero']
     SaveExtraVariables = False  
@@ -110,19 +112,35 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         Rollup = VMOPTS.Rollup.value
         VMOPTS.Rollup.value = False
         # Solve Static Aeroelastic.
+        # Note: output force includes gravity loads
         PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
-                    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+                    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)          
         XBOPTS.Solution.value = 912 # Reset options.
         VMOPTS.Steady = ct.c_bool(False)
         VMOPTS.Rollup.value = Rollup
+        # isolate aerodynamic force for saving
+        NonAeroForce = XBINPUT.ForceStatic.copy('F')
+        AddGravityLoads(NonAeroForce, XBINPUT, XBELEM, AELAOPTS,
+                               PsiDefor, VMINPUT.c)
+        ForceAero = (Force-NonAeroForce).copy('C')
+        del NonAeroForce
     elif AELAOPTS.ImpStart == True:
         PosDefor = PosIni.copy(order='F')
         PsiDefor = PsiIni.copy(order='F')
-        Force = np.zeros((XBINPUT.NumNodesTot,6),ct.c_double,'F')
-
+        Force = XBINPUT.ForceStatic.copy('F')
+        ForceAero = 0.0*Force.copy('C')
     if SaveDict['Format']=='dat': 
         write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict)
-    
+    else:
+        # aerodynamic force at first time-step
+        XBOUT.ForceAeroList.append( ForceAero )
+        XBOUT.PosDeforStatic=PosDefor.copy()
+        XBOUT.PsiDeforStatic=PsiDefor.copy()
+        XBOUT.ForceTotStatic = Force.copy()    # includes weight/static/aero
+        XBOUT.PosIni=PosIni
+        XBOUT.PsiIni=PsiIni  
+        PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5', 
+                                      *OutList)
     
     
     #------------------------------------------------ Initialise Dynamic Problem
@@ -182,8 +200,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     fr = ct.c_int()
     
     Mrr = np.zeros((6,6), ct.c_double, 'F')
-    Crr = np.zeros((6,6), ct.c_double, 'F')
-        
+    Crr = np.zeros((6,6), ct.c_double, 'F')   
     Qrigid = np.zeros(6, ct.c_double, 'F')
     
     #Initialise full system tensors
@@ -207,14 +224,14 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     #Initialise rotation operators. TODO: include initial AOA here
     currVrel=Vrel[0,:].copy('F')
     
-    
     # Initialise attitude:
     Quat =  xbl.psi2quat(XBINPUT.PsiA_G)
-    #Quat=   XBINPUT.quat0
-    
-    #### sm debug
     XBOUT.Quat0=Quat
     XBOUT.currVel0=currVrel
+    
+    # Force allocated in aerodynamic solution if ImpStart is True. 
+    # They include the weight and static contribution.
+    Force += XBINPUT.ForceDyn[0,:,:].copy('F')      
     
     Cao  = xbl.Rot(Quat)
     ACoa = np.zeros((6,6), ct.c_double, 'F')
@@ -242,14 +259,11 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     dQdt[:NumDof.value]=dXdt.copy('F')
     dQdt[NumDof.value:NumDof.value+6] = Vrel[0,:].copy('F')
     dQdt[NumDof.value+6:]= Quat.copy('F')
-    
-    #Force at the first time-step
-    #Force += (XBINPUT.ForceDyn*ForceTime[0]).copy('F')
-    Force += (XBINPUT.ForceDyn[0,:,:]).copy('F')
 
     #Assemble matrices and loads for structural dynamic analysis
     currVrel=Vrel[0,:].copy('F')
     tmpQuat=Quat.copy('F')
+    
     BeamLib.Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,
                          PosIni, PsiIni, PosDefor, PsiDefor,
                          PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,
@@ -289,16 +303,21 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
 
     Qrigid -= np.dot(FrigidFull, Force_All)
          
-#     #Separate assembly of follower and dead loads   
-#     tmpForceTime=ForceTime[0].copy('F') 
-#     tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, 
-#                                  PosIni, PsiIni, PosDefor, PsiDefor, 
-#                                  (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll*tmpForceTime), 
-#                                  (XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead*tmpForceTime), 
-#                                   Cao,1)
-#                            
-#     Qstruc -= tmpQforces      
-#     Qrigid -= tmpQrigid
+    #Separate assembly of follower and dead loads   
+    #tmpForceTime=ForceTime[0].copy('F') 
+    tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, 
+                                  PosIni, PsiIni, PosDefor, PsiDefor, 
+                                  #(XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll*tmpForceTime), 
+                                  #(XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead*tmpForceTime), 
+                                  (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll[0,:,:]), \
+                                  (XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead[0,:,:]), \
+                                  Cao,1)
+                            
+    Qstruc -= tmpQforces      
+    Qrigid -= tmpQrigid
+    
+    XBOUT.Force_All0 = Force_All.copy()
+    XBOUT.Force_Dof0 = Force_Dof.copy()
     
     #Assemble system matrices
     Msys[:NumDof.value,:NumDof.value] = MssFull.copy('F')
@@ -319,9 +338,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # special BCs and damping
     
     iiblock=[]
-
     if SphFlag:
-
         # block translations (redundant:)
         for ii in range(3):
             if XBINPUT.EnforceTraVel_FoRA[ii] == True:
@@ -336,8 +353,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
 
     # modify matrices
     if len(iiblock)>0:
-        # block dof
         Msys[iiblock,:] = 0.0
+        Msys[:,iiblock] = 0.0 # <--- ensures symmetry. Not big impact
         Msys[iiblock,iiblock] = 1.0
         Qsys[iiblock] = 0.0
     
@@ -353,18 +370,13 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         pass
      
     # -------------------------------------------------------------------   
-
        
     #store initial matrices for eigenvalues analysis
-    XBOUT.MssFull0 = MssFull.copy()
-    XBOUT.CssFull0 = CssFull.copy()
-    XBOUT.KssFull0 = KssFull.copy()
-
-    # Initial Accel.
-    ###dQddt[:] = np.dot(np.linalg.inv(Msys), -Qsys)
-    dQddt[:] = np.linalg.solve(Msys,-Qsys)
-    
-    XBOUT.dQddt0=dQddt.copy()
+    XBOUT.Msys0 = Msys.copy()
+    XBOUT.Csys0 = Csys.copy()
+    XBOUT.Ksys0 = Ksys.copy()
+    XBOUT.Ksys0[:NumDof.value,:NumDof.value] = KssFull.copy('F')
+    XBOUT.Ksys0[NumDof.value:NumDof.value+6,:NumDof.value] = KrsFull.copy('F')
     
     #Record position of all grid points in global FoR at initial time step
     DynOut[0:NumNodes_tot.value,:] = PosDefor
@@ -372,11 +384,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     #Position/rotation of the selected node in initial deformed configuration
     PosPsiTime[0,:3] = PosDefor[-1,:]
     PosPsiTime[0,3:] = PsiDefor[-1,XBELEM.NumNodes[-1]-1,:]
-    
-    
-    #Get gamma and beta for Newmark scheme
-    gamma = 0.5 + XBOPTS.NewmarkDamp.value
-    beta = 0.25*(gamma + 0.5)**2
     
     
     #---------------------------------------------- Initialise Aerodynamic Force
@@ -432,7 +439,21 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     XBOUT.CsysList=[]
     XBOUT.KsysList=[]
     
-
+    #Get gamma and beta for Newmark scheme
+    gamma = 0.5 + XBOPTS.NewmarkDamp.value
+    beta = 0.25*(gamma + 0.5)**2 
+    
+    # Initial Accel.
+    lagsol=True
+    if lagsol==True: dQddt[:] = lagsolver(Msys,-Qsys,MaxIter=1)
+    else: dQddt[:] = np.linalg.solve(Msys,-Qsys)
+    
+    
+    
+    XBOUT.dQddt0=dQddt.copy()
+    XBOUT.Msys0 = Msys.copy()
+    XBOUT.Qsys0 = Qsys.copy()
+    
     #---------------------------------------------------------------- Time loop
     for iStep in range(NumSteps.value):
         
@@ -449,7 +470,11 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         #Predictor step
         Q       += dt*dQdt + (0.5-beta)*dQddt*np.power(dt,2.0)
         dQdt    += (1.0-gamma)*dQddt*dt
-        dQddt[:] = 0.0
+        ### Corrector
+        # uncomment to get previous approach
+        #dQddt[:] = 0.0 # initial guess for acceleration at next time-step is zero
+        Q += beta*dQddt*dt**2
+        dQdt += gamma*dQddt*dt
         
         # Quaternion update for orientation.
         Quat = dQdt[NumDof.value+6:].copy('F')
@@ -463,13 +488,10 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                        PosIni,PsiIni,NumDof,X,dXdt,
                                        PosDefor,PsiDefor,PosDotDef,PsiDotDef)
         
-
-                      
-          
         #Reset convergence parameters
         Iter = 0
         ResLog10 = 1.0
-        
+        AELAMinRes=0.0 # initialisation
         
         #Newton-Raphson loop      
         while ( (ResLog10 > XBOPTS.MinDelta.value) & (Iter < XBOPTS.MaxIterations.value) ):
@@ -477,12 +499,18 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                         
             #------------------------------------------------------- Aero Force Loop
             # Force at current time-step. TODO: Check communication flow. 
-            if (iStep > 0 and AELAOPTS.Tight == False)  and (ResLog10>1. or Iter==0):
+            #if (iStep > 0 and AELAOPTS.Tight == False)  and (ResLog10>AELAOPTS.MinRes or Iter==0):
+            if Iter==1:
+                AELAMinRes = set_res_tight(ResLog10, ResLogMin=AELAOPTS.MinRes,
+                                           ResLogMax=1e3, ResLogLim=1e-1*AELAOPTS.MinRes)
+            if (iStep >= 0 and AELAOPTS.Tight == False)  and (ResLog10>AELAMinRes or Iter==0):
                 # - Force not computed at first time-step 
                 # - If iStep>0: 
                 #    - the aerodynamic force is always computed at least once (Iter==0)
                 #    - the aerodynamic force is update until the residual does not fall 
                 #      below a prescribed factor
+                #    - The prescribed factor is lower when the initial residual is large: this is
+                #      evaluated after Iter=0 is completed, to have the info about the inital residual
                 
                 # zero aero forces.
                 AeroForces[:,:,:] = 0.0
@@ -542,12 +570,25 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 
                 # Add gravity loads.
                 AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS,
-                                PsiDefor, VMINPUT.c)
+                               PsiDefor, VMINPUT.c)
                 
+
                 # Add thrust and other point loads
-                #Force += (XBINPUT.ForceStatic + XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
                 Force += (XBINPUT.ForceStatic + XBINPUT.ForceDyn[iStep+1,:,:]).copy('F')
+                # Dead forces are defined in FoR G, follower in FoR A.
+                # None follows the structure as it deforms
                 
+                #### Add follower forces - REMOVE
+                ###Force += (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll[iStep+1,:,:]).copy('F')
+                #### Add dead forces:
+                ###Cag = xbl.Rot(Quat)
+                ###for ii in range( NumNodes_tot.value ):
+                ###    Force[ii,:3] += np.dot(Cag, XBINPUT.ForceStatic_dead[ii,:3] + 
+                ###                               XBINPUT.ForceDyn_dead[iStep+1,ii,:3] )
+                ###    Force[ii,3:] += np.dot(Cag, XBINPUT.ForceStatic_dead[ii,3:] + 
+                ###                              XBINPUT.ForceDyn_dead[iStep+1,ii,3:] )                
+                
+
                 #END if iStep > 0
 
                                     
@@ -572,7 +613,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                         
             # Nodal displacements and velocities from state vector
             X=Q[:NumDof.value].copy('F') 
-            dXdt=dQdt[:NumDof.value].copy('F'); 
+            dXdt=dQdt[:NumDof.value].copy('F')
             BeamLib.Cbeam3_Solv_State2Disp(XBINPUT, NumNodes_tot,
                                            XBELEM, XBNODE,
                                            PosIni, PsiIni,
@@ -652,16 +693,18 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             Ksys[:NumDof.value,:NumDof.value] = KssFull.copy('F')
             Ksys[NumDof.value:NumDof.value+6,:NumDof.value] = KrsFull.copy('F')
                      
-#             #Separate assembly of follower and dead loads   
-#             tmpForceTime=ForceTime[iStep+1].copy('F') 
-#             tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \
-#                                             PosIni, PsiIni, PosDefor, PsiDefor, \
-#                                             (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll*tmpForceTime), \
-#                                             (XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead*tmpForceTime), \
-#                                             Cao,1)
-#                                    
-#             Qstruc -= tmpQforces      
-#             Qrigid -= tmpQrigid
+            #Separate assembly of follower and dead loads   
+            #tmpForceTime=ForceTime[iStep+1].copy('F') 
+            tmpQforces,Dummy,tmpQrigid = xbl.LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \
+                                             PosIni, PsiIni, PosDefor, PsiDefor, \
+                                             ### sm: increased rank of ForceDyn_*
+                                            #(XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll*tmpForceTime), \
+                                            #(XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead*tmpForceTime), \
+                                            (XBINPUT.ForceStatic_foll + XBINPUT.ForceDyn_foll[iStep+1,:,:] ), \
+                                            (XBINPUT.ForceStatic_dead + XBINPUT.ForceDyn_dead[iStep+1,:,:] ), \
+                                            Cao,1)                                
+            Qstruc -= tmpQforces      
+            Qrigid -= tmpQrigid
 
             # Mass matrix debug
             #XBOUT.MsysPreBCsList.append(Msys.copy())
@@ -669,6 +712,16 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             #Compute residual to solve update vector
             Qstruc += -np.dot(FstrucFull, Force_Dof)
             Qrigid += -np.dot(FrigidFull, Force_All)
+            
+            
+            # final of last iter
+            XBOUT.Qstruc=Qstruc.copy()
+            XBOUT.Qrigid=Qrigid.copy()
+            # final of initial iter
+            if iStep==0:
+                XBOUT.Qstruc0=Qstruc.copy()
+                XBOUT.Qrigid0=Qrigid.copy()    
+
             
             Qsys[:NumDof.value] = Qstruc
             Qsys[NumDof.value:NumDof.value+6] = Qrigid
@@ -682,15 +735,12 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                         XBINPUT.str_damping_param['beta']  * KssFull
                 Csys[:NumDof.value,:NumDof.value] += Cdamp
                 Qsys[:NumDof.value] += np.dot(Cdamp, dQdt[:NumDof.value])
-                                
 
-            # 
-            #XBOUT.MsysPreBCsList.append( Msys.copy() )
-            #XBOUT.KsysPreBCsList.append( Ksys.copy() )
             # special BCs
             # if  SphFlag:
             if len(iiblock)>0: # allow to enforce only attitude while keeping velocity free
                 Msys[iiblock,:] = 0.0
+                Msys[:,iiblock] = 0.0 
                 Msys[iiblock,iiblock] = 1.0
                 Csys[iiblock,:] = 0.0
                 Ksys[iiblock,:] = 0.0
@@ -702,23 +752,35 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             #Calculate system matrix for update calculation
             Asys = Ksys + Csys*gamma/(beta*dt) + Msys/(beta*dt**2)
             
+            # debug time-marching solution
+            Nsteps, Nq = 8, len(Qsys)
+            shq = (Nsteps,XBOPTS.MaxIterations.value+1,Nq)
+            if iStep<Nsteps:
+                if iStep==0 and Iter==1:
+                    XBOUT.QsysMat=np.zeros(shq)
+                    XBOUT.CorrAccelMat=np.zeros(shq)
+                    XBOUT.PredAccelMat=np.zeros(shq)
+                XBOUT.QsysMat[iStep,Iter,:]=Qsys.copy()   
+                XBOUT.PredAccelMat[iStep,Iter,:]=dQddt.copy()
+                    
             #Compute correction
-            
-            ###DQ[:] = np.dot(np.linalg.inv(Asys), -Qsys)
+            #DQ[:] = np.dot(np.linalg.inv(Asys), -Qsys)
             DQ[:] = np.linalg.solve(Asys,-Qsys)
-
             Q += DQ
             dQdt += DQ*gamma/(beta*dt)
             dQddt += DQ/(beta*dt**2)
             
-            
+            # debug time-marching solution
+            if iStep<Nsteps:
+                XBOUT.CorrAccelMat[iStep,Iter,:]=dQddt.copy()
+                
+
             #Update convergence criteria
             if XBOPTS.PrintInfo.value==True:                 
                 sys.stdout.write('%-10.4e ' %(max(abs(Qsys))))
             
             Res_Qglobal = max(abs(Qsys))
             Res_DeltaX  = max(abs(DQ))
-            
             ResLog10 = max(Res_Qglobal/Res0_Qglobal,Res_DeltaX/Res0_DeltaX)
             
             if XBOPTS.PrintInfo.value==True:
@@ -736,7 +798,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         
         
         # sm: here to avoid crash at first time-step
-        if iStep > 0 and AELAOPTS.Tight == False:
+        #if iStep > 0 and AELAOPTS.Tight == False:
+        if AELAOPTS.Tight == False:
             XBOUT.ForceAeroList.append(ForceAero.copy('C')) 
   
         # sm: save aero data
@@ -870,4 +933,83 @@ def panellingFromFreq(freq,c=1.0,Umag=1.0):
     k = freq*c/(2*Umag) #get expected reduced freq
     M = int(50.0*k/np.pi) #get adequate panelling
     DelTime = c/(Umag*M) #get resulting DelTime
-    return M, DelTime        
+    return M, DelTime      
+
+
+
+def lagsolver(M,Q,MinTol=1e-3, MaxIter=1):
+    '''
+    Lagged solution of couple rigid-flexible body dynamics
+    
+    solves M x = Q
+    
+    where M = [ [Mstr , Msr],
+                [ Mrs, Mrig ] ]
+    Q = [Qstr, Qrig]
+    
+    @warning: no criterion for checking tolerance implemented: use for
+    single iteration only!
+    '''
+
+    NumTot = M.shape[0]
+    NumDof = NumTot-10
+    
+    iistr=[ii for ii in range(NumDof)]
+    iirig=[ii for ii in range(NumDof,NumTot)]
+    
+    Mstr=M[:NumDof,:NumDof]
+    Mrig=M[NumDof:,NumDof:]
+    
+    x=np.zeros((NumTot,))
+    xstr = np.zeros((NumDof,))
+    xrig = np.zeros((10,))
+    
+    tol=1
+    Iter=0
+    
+    while tol>MinTol and Iter<MaxIter:
+        # compute inertia due to structural vibrations
+        qinertia = np.dot(M[iirig,:NumDof],xstr)
+        # solve rigid-body dynamics
+        xrig=np.linalg.solve(Mrig, Q[iirig] - qinertia)
+        # compute inertia due rigid-body dynamics
+        qinertia = np.dot(M[iistr,NumDof:], xrig)
+        # solve for structure
+        xstr = np.linalg.solve(Mstr, Q[iistr] - qinertia)
+        # update
+        Iter += 1
+    
+    x[:NumDof]=xstr
+    x[NumDof:]=xrig
+    
+    return x
+
+
+
+def set_res_tight(ResLog0,ResLogMin=1e1,ResLogMax=1e3,ResLogLim=1e-1):
+    '''
+    Returns an adaptive form of the residual R such that, if
+        ResLog < R
+    the aeroelastic wake is frozen.
+    
+    ResLogMin: limit value below which the wake is frozen.
+    ResLogMax: value above which the residual R is kept constant to ResLogLim
+    '''
+
+    LogMax=np.log10(ResLogMax)
+    LogMin=np.log10(ResLogMin)
+    Log0 = np.log10(ResLog0)
+    LogLim=np.log10(ResLogLim)
+    
+    if Log0 <=LogMin: 
+        R=ResLogMin
+    elif Log0 > LogMax: 
+        R= np.power(10,LogLim)
+    else:
+        L = LogMin + (Log0 - LogMin)/(LogMax - LogMin)*(LogLim - LogMin)
+        R = np.power(10.0,L)
+    
+    return R
+    
+    
+    

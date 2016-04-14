@@ -51,6 +51,10 @@ class Xbopts:
     @param EnforceAngVel_FoRA: if the n-th element of the list is True, the
             n-th component of the angular velocity of the FoR A (expressed in 
             FoR A components) is kept constant. 
+    @param ImpStart: in a structural dynamic solution determines whether a 
+            static solution is performed at the start (ImpStart=False). If 
+            an aeroelastic solution is performed, this option is overridden
+            by the AeroelasticOps.ImpStart option 
     
     @warning 
         - If FollowerForce = ct.c_bool(True), beam forces must be applied
@@ -67,7 +71,8 @@ class Xbopts:
                  NumGauss = ct.c_int(1), Solution = ct.c_int(111), \
                  DeltaCurved = ct.c_double(1.0e-5), \
                  MinDelta = ct.c_double(1.0e-8), \
-                 NewmarkDamp = ct.c_double(1.0e-4) ):
+                 NewmarkDamp = ct.c_double(1.0e-4),
+                 ImpStart = True ):
         """@brief Default initialisation is as defined in the original fortran
         derived type."""
         self.FollowerForce = FollowerForce
@@ -83,6 +88,7 @@ class Xbopts:
         self.DeltaCurved = DeltaCurved
         self.MinDelta = MinDelta
         self.NewmarkDamp = NewmarkDamp
+        self.ImpStart=ImpStart
         
         self._ctypes_links=True  
         self._ctypes_attributes = ['FollowerForce', 'FollowerForceRig', 'PrintInfo',  
@@ -90,7 +96,11 @@ class Xbopts:
                  'NumGauss', 'Solution', 'DeltaCurved', 'MinDelta', 'NewmarkDamp' ]
         self._ctypes_conversion= [ [ ct.c_int, ct.c_bool, ct.c_double ], 
                                    [      int,      bool,       float ] ]
-        
+        #self.MinDeltaDict = { 'F'   : 1e0  ,
+        #                      'M'   : 1e-2 , 
+        #                      'Vtr' : 1e-4 ,
+        #                      'Vang': 1e-5 ,
+        #                      'quat': 1e-5 }
         
     def init_from_class(self,H):
         '''
@@ -223,6 +233,10 @@ class Xbinput:
     @param EnforceTraVel_FoRA=3*[False]: enforce translational velocity in ii direction in FoR A
     @param ForceDynType: parametrisation used for dynamic loads: 'dss', 'spline', 'modal' (future)
     @param ForceDynDict: for each type of parametrisation, 
+    
+    @param RBMass: list of dictionaries, one per rigid non-structural mass. 
+           This list can be populated using self.addRBMass
+    
     """
 
     def __init__(self, NumNodesElem, NumElems,
@@ -331,6 +345,29 @@ class Xbinput:
         self.str_damping_model=str_damping_model
         self.str_damping_param=str_damping_param
         self.sph_joint_damping = sph_joint_damping
+        
+        # list of non-structural added masses
+        self.RBMass=[]
+        
+        
+    def addRBMass(self,node,Mmat):
+        '''
+        Utility to add a rigid non-structural mass.
+        
+        @param node: node to which the mass is attached
+        @param Mmat: 6x6 mass matrix for the rigid mass
+        
+        @note: note numbering as in python, ie starting from 0 !
+        '''
+        
+        # create dictionary
+        D = {'node' : node,
+             'Mass' : Mmat}
+        
+        # attach to list
+        self.RBMass.append( D )
+        
+        return self
 
 
     def set_ctypes(self):

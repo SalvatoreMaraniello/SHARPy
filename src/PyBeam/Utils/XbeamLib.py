@@ -43,7 +43,7 @@ def Rot(q1):
     See Aircraft Control and Simulation, pag. 31, by Stevens, Lewis.
     
     Remark: if A is a FoR obtained rotating a FoR G of angle fi about an axis n (remind n will be 
-    invariant during the rotation), and q is the related quaternion q(fi), the function will
+    invariant during the rotation), and q is the related quaternion q(fi,n), the function will
     return the matrix Cag such that:
         - Cag rotates A to G
         - Cag transforms the coordinates of a vector defined in G component to A components.
@@ -114,7 +114,6 @@ def Quat2Euler(qv):
     return ev
     
 
-
 def Psi2TransMat(Psi):
     """@brief Calculates the transformation matrix associated with CRV Psi.
     @details This gives the transformation from B to a, or the rotation from
@@ -152,6 +151,7 @@ def Skew(Vector):
     
     return SkewMat
 
+
 def VectofSkew(Skew):
     """@brief Returns the vector defining skew-symmetric matrix Skew."""
     
@@ -176,6 +176,7 @@ def Tangential(Psi):
     
     return Tang
 
+
 def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
                       chord = 1.0):
     """@brief Apply nodal gravity loads.
@@ -191,7 +192,7 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
              are analogous to that used by Theodorsen. It therefore assumes the 
              aerofoil section is defined on the y-axis and hence the moment arm
              points in the B-frame y-direction.
-    @warning Assumes even distribution of nodes along beam.
+    @warning Assumes evenly spaced distribution of nodes along beam.
     @warning Not valid for twisted aerofoil sections, i.e those that are defined
              with some theta angle.
     """
@@ -216,11 +217,16 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
     Root = 0
     Tip = BeamForces.shape[0]-1
     
-    # Apply forces.
+    # Apply forces.   CHANGE HERE
     BeamForces[Root+1:Tip,:3] += Force_a
     BeamForces[Root,:3] += 0.5*Force_a
     BeamForces[Tip,:3] += 0.5*Force_a
     
+    # Add RB masses contribution
+    for RBM in XBINPUT.RBMass:
+        ForceRBM_a = -XBINPUT.g*RBM['Mass'][0,0]
+        BeamForces[RBM['node'],:3]+=np.dot(CaG,np.array([0.0,0.0,ForceRBM_a]))
+
     # Get number of nodes per beam element.
     NumNodesElem = XBINPUT.NumNodesElem
     
@@ -257,11 +263,21 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
         armY = -(AELAOPTS.InertialAxis - AELAOPTS.ElasticAxis)*chord/2.0
         armY_a = np.dot(CaB,np.array([0.0, armY, 0.0]))
         
-        # Calculate moment
-        if (iNode == Root or iNode == Tip):
-            BeamForces[iNode,3:] += np.cross(armY_a, 0.5*Force_a)
-        else:
-            BeamForces[iNode,3:] += np.cross(armY_a, Force_a)
+        ### Calculate moment
+        BeamForces[iNode,3:] += np.cross( armY_a, BeamForces[iNode,:3] )     
+        #if (iNode == Root or iNode == Tip):
+        #    BeamForces[iNode,3:] += np.cross(armY_a, 0.5*Force_a)
+        #else:
+        #    BeamForces[iNode,3:] += np.cross(armY_a, Force_a)
+    
+  
+        
+
+    
+        
+
+    
+    
 
     
 def LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \

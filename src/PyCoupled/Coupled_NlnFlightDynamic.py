@@ -111,7 +111,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                     Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
         XBOPTS.Solution.value = 912 # Reset options.
         VMOPTS.Steady = ct.c_bool(False)
-        VMOPTS.Rollup.value = Rollup
+        VMOPTS.Rollup.value = Rollup 
     elif AELAOPTS.ImpStart == True:
         PosDefor = PosIni.copy(order='F')
         PsiDefor = PsiIni.copy(order='F')
@@ -120,6 +120,11 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
 
     if SaveDict['Format']!='h5': 
         write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict)
+    else:
+        XBOUT.PosDeforStatic=PosDefor.copy()
+        XBOUT.PsiDeforStatic=PsiDefor.copy()
+        XBOUT.ForceTotStatic = Force.copy()
+        
     
     
     #------------------------------------------------ Initialise Dynamic Problem

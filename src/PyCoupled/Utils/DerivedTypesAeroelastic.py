@@ -1,7 +1,7 @@
 '''
 Created on 15 Feb 2013
 
-@author: rjs10
+@author: rjs10 + sm6110
 '''
 
 class AeroelasticOps:
@@ -11,11 +11,12 @@ class AeroelasticOps:
     @param Tight Attempt tightly-coupled aeroelastic simulation (untested)
     @param ImpStart Start nonlinear aeroelastic simulation with impulsive
                     start in aero solver. TODO: move to aero inputs.
+    @param MinRes: residual below which the aerodynamic force is freezed
     """
     
     def __init__(self, ElasticAxis = 0.0, InertialAxis = 0.0, 
                   AirDensity = 1.0,
-                  Tight = False, ImpStart = False):
+                  Tight = False, ImpStart = False, MinRes=1e1):
         
         assert (-1.0 <= ElasticAxis and ElasticAxis <= 1.0),\
                 'Elastic axis prescribed outside section'
@@ -28,6 +29,7 @@ class AeroelasticOps:
         self.AirDensity = AirDensity
         self.Tight = Tight
         self.ImpStart = ImpStart
+        self.MinRes=MinRes
 
 if __name__ == '__main__':
     AeroelasticOps(0.2,0.4,1.20)

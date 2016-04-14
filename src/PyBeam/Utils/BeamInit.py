@@ -114,6 +114,23 @@ def Static(XBINPUT,XBOPTS, moduleName = None):
     if XBOPTS.PrintInfo==True:
         sys.stdout.write('done\n')
     
+    # Add RBMasses
+    # - this is added only to the master nodes (XBNODE.Master), otherwise
+    # is double accounted for.
+    Master = XBNODE.Master.reshape((len(XBNODE.Master)//2,2))
+    for RBM in XBINPUT.RBMass:
+        # Find elements associated to the node
+        #  - node numbering starts from 1 in XBELEM.Conn
+        #  - numbering of ee and ll starts from 1
+        #  - len(ccvec)>1 if the node is at the edge of more then 1 element
+        ccvec = np.where(XBELEM.Conn == RBM['node']+1)[0]
+        for cc in ccvec:
+            # Check if node is a master
+            ee = cc//3 + 1  # element to which node belongs
+            ll =  cc%3 + 1  # local position in element
+            if ll in Master[Master[:,0]==ee,1]:
+                XBELEM.RBMass[cc,:,:] = RBM['Mass']
+    
     return XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni,\
             XBNODE, NumDof
             
