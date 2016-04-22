@@ -1,6 +1,6 @@
 '''@package PyBeam.Utils.XbeamLib
 @brief      Functions found in lib_xbeam.f90, lib_rotvect.f90
-@author     Rob Simpson
+@author     Rob Simpson, Salvatore Maraniello
 @contact    r.simpson11@imperial.ac.uk 
 @version    0.0
 @date       15/01/2013
@@ -178,7 +178,7 @@ def Tangential(Psi):
 
 
 def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
-                      chord = 1.0):
+                      chord = 1.0, PsiA_G=None):
     """@brief Apply nodal gravity loads.
     @param BeamForces Nodal forces to update.
     @param XBINPUT Xbeam inputs.
@@ -207,7 +207,8 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
     ForcePerNode = -NodeSpacing * MassPerLength * XBINPUT.g 
     
     # Obtain transformation from Earth to a-frame.
-    CGa = Psi2TransMat(XBINPUT.PsiA_G)
+    if PsiA_G == None: CGa = Psi2TransMat(XBINPUT.PsiA_G)
+    else: CGa = Psi2TransMat(PsiA_G)
     CaG = CGa.T
     
     # Force in a-frame.

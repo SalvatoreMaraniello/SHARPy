@@ -489,6 +489,16 @@ class Xboutput:
         self.CRVList=[]
         # for performance
         self.cputime=[]
+        
+    def drop(self, **kwargs):
+        '''
+        Attach random variables to this class
+        '''
+        for ww in kwargs:
+            setattr(self, ww, kwargs[ww])
+        
+        return self
+    
      
     
 def dump(obj):

@@ -16,7 +16,7 @@ class AeroelasticOps:
     
     def __init__(self, ElasticAxis = 0.0, InertialAxis = 0.0, 
                   AirDensity = 1.0,
-                  Tight = False, ImpStart = False, MinRes=1e1):
+                  Tight = False, ImpStart = False, MinRes=1e10):
         
         assert (-1.0 <= ElasticAxis and ElasticAxis <= 1.0),\
                 'Elastic axis prescribed outside section'
@@ -29,7 +29,11 @@ class AeroelasticOps:
         self.AirDensity = AirDensity
         self.Tight = Tight
         self.ImpStart = ImpStart
+        
+        # residuals
         self.MinRes=MinRes
+        self.MaxRes=1e0*MinRes
+        self.LimRes=1e0*MinRes
 
 if __name__ == '__main__':
     AeroelasticOps(0.2,0.4,1.20)

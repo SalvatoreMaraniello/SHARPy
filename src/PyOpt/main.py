@@ -56,7 +56,7 @@ import PyLibs.io.save
 #from ipsh import *
 
 from PyBeam.Solver.NonlinearFlexBodyDynamic import Solve_Py as SolNnlFlxBodyDyn
-from PyCoupled.Coupled_NlnFlightDynamic import Solve_Py as SolNnlFlightDyn
+from PyCoupled.Coupled_NlnFlightDynamic_lag import Solve_Py as SolNnlFlightDyn
 
 
 

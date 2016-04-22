@@ -45,7 +45,7 @@ import time                                          # sm added packages
 import PyLibs.io.save
 
 
-
+from PyCoupled.Coupled_NlnFlightDynamic_support import set_res_tight
 #from PyCoupled.Coupled_NlnFlightDynamic_utils import write_SOL912_def, write_SOL912_final, \
 #                                                     write_SOL912_out, write_TecPlot
 from PyLibs.io.dat import write_SOL912_def, write_SOL912_final, \
@@ -501,8 +501,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             # Force at current time-step. TODO: Check communication flow. 
             #if (iStep > 0 and AELAOPTS.Tight == False)  and (ResLog10>AELAOPTS.MinRes or Iter==0):
             if Iter==1:
-                AELAMinRes = set_res_tight(ResLog10, ResLogMin=AELAOPTS.MinRes,
-                                           ResLogMax=1e3, ResLogLim=1e-1*AELAOPTS.MinRes)
+                AELAMinRes = set_res_tight(ResLog10, AELAOPTS.MinRes, AELAOPTS.MaxRes, AELAOPTS.LimRes)
             if (iStep >= 0 and AELAOPTS.Tight == False)  and (ResLog10>AELAMinRes or Iter==0):
                 # - Force not computed at first time-step 
                 # - If iStep>0: 
@@ -569,7 +568,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 ForceAero = Force.copy('C')  
                 
                 # Add gravity loads.
-                AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS,
+                AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS,   ### <--- fix it! PsiA_G not passed!!!
                                PsiDefor, VMINPUT.c)
                 
 
@@ -776,15 +775,12 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 
 
             #Update convergence criteria
-            if XBOPTS.PrintInfo.value==True:                 
-                sys.stdout.write('%-10.4e ' %(max(abs(Qsys))))
-            
             Res_Qglobal = max(abs(Qsys))
             Res_DeltaX  = max(abs(DQ))
             ResLog10 = max(Res_Qglobal/Res0_Qglobal,Res_DeltaX/Res0_DeltaX)
-            
             if XBOPTS.PrintInfo.value==True:
-                sys.stdout.write('%-10.4e %8.4f\n' %(max(abs(DQ)),ResLog10))
+                #sys.stdout.write('%-10.4e %-10.4e %8.4f\n' %(max(abs(Qsys)), max(abs(DQ)), ResLog10))
+                sys.stdout.write('%-10.4e %-10.4e %8.4f %-10.4e %-10.4e\n' %(max(abs(Qsys)), max(abs(DQ)), ResLog10, Res0_Qglobal, Res0_DeltaX))
 
             if SaveExtraVariables is True:
                 if Iter == 1:
@@ -986,30 +982,7 @@ def lagsolver(M,Q,MinTol=1e-3, MaxIter=1):
 
 
 
-def set_res_tight(ResLog0,ResLogMin=1e1,ResLogMax=1e3,ResLogLim=1e-1):
-    '''
-    Returns an adaptive form of the residual R such that, if
-        ResLog < R
-    the aeroelastic wake is frozen.
-    
-    ResLogMin: limit value below which the wake is frozen.
-    ResLogMax: value above which the residual R is kept constant to ResLogLim
-    '''
 
-    LogMax=np.log10(ResLogMax)
-    LogMin=np.log10(ResLogMin)
-    Log0 = np.log10(ResLog0)
-    LogLim=np.log10(ResLogLim)
-    
-    if Log0 <=LogMin: 
-        R=ResLogMin
-    elif Log0 > LogMax: 
-        R= np.power(10,LogLim)
-    else:
-        L = LogMin + (Log0 - LogMin)/(LogMax - LogMin)*(LogLim - LogMin)
-        R = np.power(10.0,L)
-    
-    return R
-    
-    
-    
+
+
+   
