@@ -70,7 +70,9 @@ Thus:
 '''
 
 import numpy as np
+import scipy as sc
 from warnings import warn
+
 
 import PyLibs.numerics.diff
 
@@ -526,9 +528,64 @@ def reconstruct(tcint,tv,fv,p=3,method='zero'):
     
 
 
+def laplacian_smoothing(tcint, Scf, p, alpha, tc_uniform_flag=True):
+    '''
+    Given a set of coefficients Scf representing a p order spline curve over a 
+    set of knot points tc, the function returns the coeffients corresponding to 
+    a smoothed spline.
+    
+    The smoothing is performed through a laplacian operator such that:
+    
+        fs(t) - alpha dfs/dt2 = f(t)
+        fs(0) = f(0)
+        fs(T) = f(T)
+ 
+    where fs(t) and f(t) are the smoothed and original signal
+    '''
 
-   
+    NS=len(Scf)
+    
+    # time vector for numerical evaluation
+    tv = np.linspace( tcint[0], tcint[-1], 50*NS )
 
+    
+    tcext = extended_knots_vector(tcint, p, tv)
+    
+    # get spline base
+    S = p_basis(tv,tcext,p)
+    
+    # normalise base
+    S = normalise_uniform_base(p,S,tc_uniform_flag)
+    
+    # numerical differentiation of basis functions
+    dS, ddS=0.0*S, 0.0*S
+    for ss in range(NS):
+        dS[ss,:]=PyLibs.numerics.diff.difffun(S[ss,:], tv)
+        ddS[ss,:]=PyLibs.numerics.diff.difffun(dS[ss,:], tv)
+    
+    # build system:
+    Is=np.empty((NS,NS))
+    Ls=np.empty((NS,NS))
+    
+    for ii in range(NS):
+        # generate test function
+        ftests = S[ii,:]
+        
+        for jj in range(NS):
+            Is[ii,jj]=sc.integrate.trapz(S[jj,:]*ftests, tv)
+            Ls[ii,jj]=sc.integrate.trapz(ddS[jj,:]*ftests, tv)  
+            
+    As = Is - alpha*Ls
+    Fs = np.dot( Is, Scf ) 
+    
+    # add BCs:
+    As[0,:]=S[:,0]
+    As[NS-1,:]= S[:,-1]
+    Fs[0] =np.dot( S[:,0] , Scf )  
+    Fs[NS-1]=np.dot( S[:,-1], Scf )
+    
+    return np.linalg.solve(As, Fs)
+    
     
     
     

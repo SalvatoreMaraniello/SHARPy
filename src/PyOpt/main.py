@@ -257,6 +257,10 @@ class OptComp:
             self.FUNC.cost.jac[dd]   = ( func_list[dd+1][2] - self.FUNC.cost.val ) \
                                          / self.delta[dd]
         
+        
+        # smooth gradient
+        self.smooth_gradient()
+        
         print('completed iteration %.3d'%self._counter)
         print('cost: ', self.FUNC.cost.val)
         # re-save to include jacobian
@@ -398,6 +402,22 @@ class OptComp:
         ''' 
         Problem specific. Redefine this method in the optimisation 
         input file!
+        '''
+        pass
+    
+    def smooth_gradient(self):
+        ''' 
+        Problem specific. Use this method to:
+            a. read gradients from:
+                self.FUNC.cost.jac
+                self.FUNC.gdis.jac[ii,:]
+                self.FUNC.geq.jac[ii,:]
+            b. smooth/correct them
+        
+        E.g.:
+            self.FUNC.cost.jac = xxx
+            self.FUNC.gdis.jac[ii,:] = xxx
+            self.FUNC.geq.jac[ii,:] = xxx
         '''
         pass
     
