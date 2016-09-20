@@ -90,7 +90,7 @@ def h5file(filename,ReadList=None):
   
 
   
-def h5series(rootname,ReadList=None):
+def h5series(rootname,ReadList=None,N0=0):
     ''' 
     Given a list of datasets, creates a list of lists for all the solutions
     run for a DOE or optimisation. the output is in a list of classes, each
@@ -101,7 +101,7 @@ def h5series(rootname,ReadList=None):
     
     outlist=[]
     
-    cc=0
+    cc=N0
     go_on=True
     
     while go_on is True:

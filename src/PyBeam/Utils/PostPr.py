@@ -222,7 +222,7 @@ def THPosDefGlobal(DynOut,Time,RefVel,set_origin='a',**kwargs): #xi0=np.array([1
     return THPosDefGlobal
         
   
-def ElasticForces(XBINPUT,XBOPTS,DynOut,PsiList): 
+def ElasticForcesOLD(XBINPUT,XBOPTS,DynOut,PsiList): 
     '''
     Given the results of a simulation computes the stresses along
     the beam at each time step.
@@ -290,6 +290,153 @@ def ElasticForces(XBINPUT,XBOPTS,DynOut,PsiList):
     return Smat, NodeList
         
 
+def ElasticForces(XBINPUT,XBOPTS,DynOut,PsiList): 
+    '''
+    Given the results of a simulation computes the stresses along
+    the beam at each time step.
+    
+    - PsiList is a list of CRV at each step of the simulation. 
+    - DynOut is an array containing all the displacements.
+    - XBINPUT & XBOPTS are either:
+        1. objects of the Xbinput/Xbopts classes (see PyBeam.Utils.DerivedTypes)
+           with attributes defined as c_types
+        2. objects from a class having the same attributes (but not defined 
+           as c_types)
+    
+    The elastic forces are returned in the format:
+        S = [ time_step, Node, component ]
+        
+           
+    Remark:
+    - PsiList and DynOut are equivalent (one for displ one for rotation)
+      but the format is inconsistent!
+    '''
+    
+    # Prepare classes
+    if not(isinstance(XBOPTS,PyBeam.Utils.DerivedTypes.Xbopts)):
+        H=copy.deepcopy(XBOPTS)
+        XBOPTS=PyBeam.Utils.DerivedTypes.Xbopts()
+        XBOPTS.init_from_class(H)
+    
+    # Initialise beam
+    XBINPUT, XBOPTS, NumNodes_tot, \
+    XBELEM, PosIni, PsiIni, XBNODE, NumDof = BeamInit.Static(XBINPUT,XBOPTS)
+    
+    # Extract Elements Type
+    if isinstance(XBINPUT,PyBeam.Utils.DerivedTypes.Xbinput):
+        NumNodesElem=XBINPUT.NumNodesElem.value 
+    else:
+        NumNodesElem=XBINPUT.NumNodesElem
+    
+    # Prepare Node List
+    if NumNodesElem == 2:
+        NodeList=[ii for ii in range(int(NumNodes_tot.value))] 
+    elif NumNodesElem == 3:
+        # midpoint nodes not supported
+        NodeList=[2*ii for ii in range(int(0.5*NumNodes_tot.value))]
+    else:
+        raise NameError('Incorrect Number of Nodes per Element in XBINPUT!')
+    
+    # get number of steps
+    NumSteps = int( DynOut.shape[0]/NumNodes_tot.value ) - 1
+    
+    print('dynout shape', DynOut.shape       )
+    print('NumNodes'    , NumNodes_tot.value )
+    print('NumSteps'    , NumSteps           )
+    
+    PosDef=PyBeam.Utils.PostPr.reshape_DynOut(DynOut,NumSteps)
+    
+    # compute stresses
+    Fmat=np.empty(( NumSteps, len(NodeList), 6 ))
+    for tt in range(NumSteps):
+        
+        #### as per function ElasticForces
+        #Fmat[tt,:,:]=BeamIO.localElasticForces(PosDef[tt,:,:], PsiList[tt], 
+        #                                         PosIni,  PsiIni, 
+        #                                         XBELEM, NodeList)
+        
+        #### copied from BeamIO.localElasticForces
+        # same as per function ElasticForces    
+        F = np.zeros((len(NodeList),6))
+        
+        #strains = BeamIO.localStrains(PosDef[tt,:,:], PsiList[tt], 
+        #                      PosIni, PsiIni,
+        #                       XBELEM, NodeList)
+        #iOut = 0 # Output index
+        #for iNode in NodeList:
+        #    iElem, iiElem = BeamIO.iNode2iElem(iNode, PosDef.shape[0]-1, XBELEM.NumNodes[0])
+        #    del iiElem
+        #    elemStrain = strains[iOut,:]
+        #    elemK = XBELEM.Stiff[iElem*6:(iElem+1)*6,:]
+        #    F[iOut,:] = np.dot(elemK,elemStrain)
+        #    iOut += 1
+        
+        F = BeamIO.localFstifz(PosDef[tt,:,:], PsiList[tt], 
+                              PosIni, PsiIni,
+                               XBELEM, NodeList)
+        
+        #print('Fstiff z size')
+        #print(F.shape)
+        #print('Expected')
+        #print((len(NodeList), 6))
+        
+        # END of iElem
+        Fmat[tt,:,:]=F.copy()
+        
+        
+    
+    return Fmat, NodeList
+
+
+def ElasticForcesStatic(XBINPUT,XBOPTS,PosDeforStatic,PsiDeforStatic): 
+    '''
+    Given the results of a static simulation computes the stresses 
+    along the beam
+    
+    - XBINPUT & XBOPTS are either:
+        1. objects of the Xbinput/Xbopts classes (see PyBeam.Utils.DerivedTypes)
+           with attributes defined as c_types
+        2. objects from a class having the same attributes (but not defined 
+           as c_types)
+    
+    The elastic forces are returned in the format:
+        S = [  Node, component ]
+    '''
+    
+    # Prepare classes
+    if not(isinstance(XBOPTS,PyBeam.Utils.DerivedTypes.Xbopts)):
+        H=copy.deepcopy(XBOPTS)
+        XBOPTS=PyBeam.Utils.DerivedTypes.Xbopts()
+        XBOPTS.init_from_class(H)
+    
+    # Initialise beam
+    XBINPUT, XBOPTS, NumNodes_tot, \
+    XBELEM, PosIni, PsiIni, XBNODE, NumDof = BeamInit.Static(XBINPUT,XBOPTS)
+    del XBNODE, NumDof
+    
+    # Extract Elements Type
+    if isinstance(XBINPUT,PyBeam.Utils.DerivedTypes.Xbinput):
+        NumNodesElem=XBINPUT.NumNodesElem.value 
+    else:
+        NumNodesElem=XBINPUT.NumNodesElem
+    
+    # Prepare Node List
+    if NumNodesElem == 2:
+        NodeList=[ii for ii in range(int(NumNodes_tot.value))] 
+    elif NumNodesElem == 3:
+        # midpoint nodes not supported
+        NodeList=[2*ii for ii in range(int(0.5*NumNodes_tot.value))]
+    else:
+        raise NameError('Incorrect Number of Nodes per Element in XBINPUT!')
+
+    Fmat = BeamIO.localFstifz(PosDeforStatic, PsiDeforStatic, 
+                              PosIni, PsiIni,
+                            XBELEM, NodeList)
+
+    return Fmat, NodeList
+
+
+
 def Psi2Euler(PsiMat,
               iiswap=[0,1,2],
               iifact=np.array([1,1,1])):
@@ -345,7 +492,35 @@ def Quat2Euler(QuatList,
         # convert to Euler angles
         EulerMat[tt,:] = PyBeam.Utils.XbeamLib.Quat2Euler(quat)
             
-    return EulerMat           
+    return EulerMat     
+
+
+
+def Euler2Quat(EuList,
+              iiswap=[0,1,2],
+              iifact=np.array([1,1,1])):
+    '''
+    Convert rotations (given in euler angle) of FoR A into quaternions.
+    
+    @var QuatList: quaternions list
+    @var iiswap, iifact: allow to swap and/or invert sign some of the 
+         component of the quaternion.
+    '''   
+    
+    NT = len(EuList)
+    QuatMat = np.empty((NT,4))
+    
+    for tt in range(NT):
+        # swap axis if necessary
+        euler=EuList[tt]
+        quat = PyBeam.Utils.XbeamLib.Euler2Quat(euler[0],euler[1],euler[2])
+        qv = quat[1:]
+        qv = iifact*qv[iiswap]
+        quat[1:] = qv
+        # convert to Euler angles
+        QuatMat[tt,:] = quat
+            
+    return QuatMat        
     
     
     

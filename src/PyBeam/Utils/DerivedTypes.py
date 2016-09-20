@@ -51,10 +51,13 @@ class Xbopts:
     @param EnforceAngVel_FoRA: if the n-th element of the list is True, the
             n-th component of the angular velocity of the FoR A (expressed in 
             FoR A components) is kept constant. 
-    @param ImpStart: in a structural dynamic solution determines whether a 
+    @param ImpStart: in an only structural dynamics solution determines whether a 
             static solution is performed at the start (ImpStart=False). If 
             an aeroelastic solution is performed, this option is overridden
-            by the AeroelasticOps.ImpStart option 
+            by the AeroelasticOps.ImpStart option
+    @param: RigidDynamics: assumes the wing to be rigid during the dynamic solution
+            but not for the static solution. If ImpStart is False, therefore, the 
+            deformed wing deflection is computed and, afterward, frozen.
     
     @warning 
         - If FollowerForce = ct.c_bool(True), beam forces must be applied
@@ -72,7 +75,7 @@ class Xbopts:
                  DeltaCurved = ct.c_double(1.0e-5), \
                  MinDelta = ct.c_double(1.0e-8), \
                  NewmarkDamp = ct.c_double(1.0e-4),
-                 ImpStart = True ):
+                 ImpStart = True, RigidDynamics=False ):
         """@brief Default initialisation is as defined in the original fortran
         derived type."""
         self.FollowerForce = FollowerForce
@@ -89,6 +92,7 @@ class Xbopts:
         self.MinDelta = MinDelta
         self.NewmarkDamp = NewmarkDamp
         self.ImpStart=ImpStart
+        self.RigidDynamics=RigidDynamics
         
         self._ctypes_links=True  
         self._ctypes_attributes = ['FollowerForce', 'FollowerForceRig', 'PrintInfo',  
@@ -222,8 +226,11 @@ class Xbinput:
     @param ForceDyn_dead Numnodes dynamic forces of dead loads at nodes.
     @param ForcingType Type of dynamic forcing.
     @param g acceleration due to gravity.
-    @param PsiA_G CRV associated to the angle/axis that requited to rotate G over A
-    
+    @param PsiA_G CRV associated to the angle/axis that requited to rotate G over A. This is
+        used to define the initial wing orientation for static (and dynamic, see PsiA_G_dyn) 
+        solutions
+    @param PsiA_G_dyn value used to define the initial orientation of the FoR A wrt G during
+        dynamic simulation. By default, this is taken to be equal to PsiA_G.
     @param str_damping_model: None/Prop apply no or proportional damping to structure
     @param str_damping_param: parameters for damping model. Default: alpha/beta for
             proportional damping
@@ -254,6 +261,7 @@ class Xbinput:
                  RampTime = 0.0,        # to be removed
                  g = 0.0, # Leave this alone!
                  PsiA_G = np.array([0.0,0.0,0.0]),
+                 PsiA_G_dyn = None,
                  str_damping_model=None,
                  str_damping_param={'alpha': 0.0, 'beta':0.0},
                  sph_joint_damping=None
@@ -281,6 +289,7 @@ class Xbinput:
         self.RampTime = RampTime
         self.g = g
         self.PsiA_G = PsiA_G
+        self.PsiA_G_dyn = PsiA_G_dyn
         #self.quat0 = quat0
         
         self.EnforceAngVel_FoRA=3*[False]

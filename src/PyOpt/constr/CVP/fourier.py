@@ -100,7 +100,7 @@ if __name__=='__main__':
     yabsred = 3.3#0.90*yabsmax
     
     # evaluate cosntraints and find active ones
-    gv = bound_constraint_DSseries(acfv,fcfv,yabsred,Nsamp=4,scaler=1.0)
+    gv = bound_constraint_DSS(acfv,fcfv,yabsred,Nsamp=4,scaler=1.0)
     ggvec = gv<0.0
     
 

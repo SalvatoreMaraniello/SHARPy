@@ -9,9 +9,9 @@ for design, analysis, and control law synthesis.
 Install
 -------
 
-Clone this git repository onto your local machine at location
+1. Clone this git repository onto your local machine at location
 [SharPyProjectDir].
-Edit the file [SharPyProjectDir]/src/Main/SharPySettings.py so that
+2. Edit the file [SharPyProjectDir]/src/Main/SharPySettings.py so that
 
 	SharPyProjectDir = [SharPyProjectDir]
 
@@ -29,6 +29,7 @@ Then build a Debug configuration of the project.
 * Python 3.2
 * numpy (1.7.x+)
 * scipy
+* h5py
 * slycot (routines for preditive controller design)
 * muAO-MPC (MPC controller design and C-code generation)
 * Eigen (C++ libraries)
@@ -48,6 +49,8 @@ solver scripts.
 
 
 ### Installation Troubleshot ###
+
+- Anaconda3-2.3.0-Linux-x86-64 (https://repo.continuum.io/archive/) contains all the required python packages
 
 - ensure paths to all python files are set-up correctly. This is achieved adding this path:
     ./SHARPy/src/Main/

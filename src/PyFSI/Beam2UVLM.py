@@ -103,7 +103,9 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
                         # Use a CRV to define rotation in sectional frame
                         hingeRot = np.array([ctrlSurf[cc].beta, 0.0, 0.0])
                         hingeRotDot = np.array([ctrlSurf[cc].betaDot, 0.0, 0.0])
-                        
+                        #print('Beta detected static: %f' %ctrlSurf[cc].beta)
+                        #print('BetaDot detected static: %f' %ctrlSurf[cc].betaDot)
+                        #1/0
                         # Find lever arm from hinge point
                         leverArm = Section[jSection,:] - hingePoint
                         
