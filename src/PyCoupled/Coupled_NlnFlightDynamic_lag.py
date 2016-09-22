@@ -101,6 +101,13 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         VMOPTS.Rollup.value = False
         # Solve Static Aeroelastic.
         # Note: output force includes gravity loads
+        
+        if VMINPUT.ctrlSurf != None:
+            # open-loop control
+            for cc in range(len(VMINPUT.ctrlSurf)):
+                VMINPUT.ctrlSurf[cc].update(0.0,iStep=0)
+        
+        
         PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
                     Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)          
         XBOPTS.Solution.value = 912 # Reset options.
@@ -166,7 +173,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     #  1. extract variables used twice or more (Quat, currVel)
     #  2. update Force
     #  3. Populate state vectors (Q, dQdt)
-    Quat=xbl.psi2quat(XBINPUT.PsiA_G)
+    if XBINPUT.PsiA_G_dyn != None: PsiA_G = XBINPUT.PsiA_G_dyn.copy()
+    else: PsiA_G = XBINPUT.PsiA_G.copy()
+    Quat=xbl.psi2quat(PsiA_G)
     currVrel=Vrel[0,:].copy('F')   # also shared by aero initialisation
     
     Force += XBINPUT.ForceDyn[0,:,:].copy('F')  
@@ -206,7 +215,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 AsysListStart =[], AsysListEnd=[], 
                 MsysList=[], CsysList=[], KsysList=[])
     XBOUT.QuatList.append(Quat.copy())
-    XBOUT.CRVList.append( XBINPUT.PsiA_G.copy())
+    XBOUT.CRVList.append( PsiA_G.copy())
     XBOUT.drop( Msys0 = Msys.copy(), Csys0 = Csys.copy(), Ksys0 = Ksys.copy(), Qsys0 = Qsys.copy())
     
     
@@ -225,7 +234,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     # Initialise A-frame location and orientation to be zero.
     OriginA_a = np.zeros(3,ct.c_double,'C')
-    PsiA_G=XBINPUT.PsiA_G.copy()
+    #PsiA_G=XBINPUT.PsiA_G.copy()
     
     # Init external velocities.  
     Ufree = InitSteadyExternalVels(VMOPTS,VMINPUT)
@@ -266,9 +275,15 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # structure has an initially undeformed/statically-deformed configuration, with zero velocities
     # but accelerations are non-zero).
     #   2. lagged solution compensates for Msys mal-conditioned
-    lagsol=True
-    if lagsol==True: dQddt[:] = lagsolver(Msys,-Qsys,MaxIter=1)
-    else: dQddt[:] = np.linalg.solve(Msys,-Qsys)
+    if XBOPTS.RigidDynamics==False:
+        lagsol=True
+        if lagsol==True: dQddt[:] = lagsolver(Msys,-Qsys,MaxIter=1)
+        else: dQddt[:] = np.linalg.solve(Msys,-Qsys)
+    else:
+        # solve only rigid body dynamics
+        dQddt[:NumDof.value]=0.0
+        dQddt[NumDof.value:]=np.linalg.solve( Msys[NumDof.value:,NumDof.value:],
+                                             -Qsys[NumDof.value:] ) 
     XBOUT.dQddt0=dQddt.copy()
 
 
@@ -307,8 +322,10 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         # Residual at previous time-step
         # warning: the convergence check is not well implemented: these variables are going to be 
         #  equal to 1 always.
-        Res0_Qglobal = max(max(abs(Qsys)),1)
-        Res0_DeltaX  = max(max(abs(DQ)),1)
+        if XBOPTS.RigidDynamics==False: iicheck=[ii for ii in range(NumDof.value+10)]
+        else: iicheck=[ii for ii in range(NumDof.value, NumDof.value+10)]
+        Res0_Qglobal = max(max(abs(Qsys[iicheck])),1)
+        Res0_DeltaX  = max(max(abs(DQ[iicheck])),1)
         
         #---------------------------------------------------------------------------- Newton-Raphson 
         while ( (ResLog10 > XBOPTS.MinDelta.value) & (Iter < XBOPTS.MaxIterations.value) ):
@@ -383,14 +400,23 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             Asys = Ksys + Csys*gamma/(beta*dt) + Msys/(beta*dt**2)
        
             #Compute correction
-            DQ[:]  = np.linalg.solve(Asys,-Qsys)
+            if XBOPTS.RigidDynamics==False:
+                DQ[:]  = np.linalg.solve(Asys,-Qsys)
+            else:    
+                DQ[:NumDof.value]=0.0
+                ### correction is zero, no need of this
+                #Qsys[NumDof.value:NumDof.value+6]+=np.dot(
+                #                        Ksys[NumDof.value:NumDof.value+6,:NumDof.value],
+                #                        DQ[:NumDof.value] )
+                DQ[NumDof.value:]=np.linalg.solve( Asys[NumDof.value:,NumDof.value:],
+                                                  -Qsys[NumDof.value:])  
             Q     += DQ
             dQdt  += DQ*gamma/(beta*dt)
             dQddt += DQ/(beta*dt**2)
 
             #Update convergence criteria
-            Res_Qglobal = max(abs(Qsys))
-            Res_DeltaX  = max(abs(DQ))
+            Res_Qglobal = max(abs(Qsys[iicheck]))
+            Res_DeltaX  = max(abs(DQ[iicheck]))
             ResLog10 = max(Res_Qglobal/Res0_Qglobal, Res_DeltaX/Res0_DeltaX)
             
             # Update counter.
@@ -400,7 +426,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                   %(Iter, max(abs(Qsys)), max(abs(DQ)), ResLog10) )             
         # END Netwon-Raphson.
         
-        
+
         
         #----------------------------------------------------------------------- Terminate time-Loop
         
@@ -418,11 +444,10 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         # sm: here to avoid crash at first time-step
         if AELAOPTS.Tight == False:
             XBOUT.ForceAeroList.append(ForceAero.copy('C'))
-  
+
         # sm: save aero data
         if ( SaveDict['SaveWake']==True           and 
-             iStep%SaveDict['SaveWakeFreq'] == 0  and 
-             iStep==2                                 ):
+             iStep%SaveDict['SaveWakeFreq'] == 0  ):
             nfile=iStep//SaveDict['SaveWakeFreq']
             hdwake=h5py.File(dirwake+'%.4d.h5'%nfile,'w')
             hdwake['iStep']=iStep

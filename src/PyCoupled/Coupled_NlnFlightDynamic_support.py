@@ -345,6 +345,9 @@ def lagsolver(M,Q,MinTol=1e-3, MaxIter=1):
     @warning: no criterion for checking tolerance implemented: use for
     single iteration only!
     '''
+    
+    assert MaxIter==1, 'No criterion for checking tolerance implemented: use for single '\
+                       'iteration only!'
 
     NumTot = M.shape[0]
     NumDof = NumTot-10

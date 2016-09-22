@@ -7,6 +7,9 @@
 @pre        None
 @warning    None
 '''
+import sys, os
+sys.path.append( os.environ["SHARPYDIR"]+'/src' )
+sys.path.append( os.environ["SHARPYDIR"]+'/src/Main' )
 
 import numpy as np
 import ctypes as ct
@@ -15,6 +18,45 @@ from scipy import linalg
 from PyBeam.Utils.Misc import isodd
 import BeamLib
 import lib_rotvect
+
+
+
+def RotCRV(Psi):
+    '''
+    Calculates the rotation matrix from CRV. 
+    - Psi is the CRV that defines the rotation required to move a frame A over a frame B.
+    - C will be the rotation matrix from A to B or, alternatively, the projection matrix 
+    from B to A
+    '''
+    
+    C = np.zeros((3,3))
+    I = np.eye(3)
+    PsiSkew=Skew(Psi)
+    Psival = np.linalg.norm(Psi)
+    
+    if Psival>1e-6:
+       C = I + np.sin(Psival)/Psival * PsiSkew \
+             + (1.-np.cos(Psival))/Psival**2 * np.dot(PsiSkew,PsiSkew)
+    else: 
+        Cadd=I
+        PsiPower = np.eye(3)
+        tol=1e-8
+        kk=0
+        while np.max(np.abs(Cadd))>tol:
+            # add current
+            C+=Cadd
+            # new term
+            kk+=1
+            PsiPower = np.dot(PsiPower,PsiSkew)
+            Cadd = 1./np.math.factorial(kk) * PsiPower
+        
+    return C
+            
+        
+        
+    
+
+
 
 def QuadSkew(Omega):
     """@brief Calculate incremental update operator for Quaternion based on Omega.
@@ -271,13 +313,6 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
         #else:
         #    BeamForces[iNode,3:] += np.cross(armY_a, Force_a)
     
-  
-        
-
-    
-        
-
-    
     
 
     
@@ -484,5 +519,12 @@ if __name__ == '__main__':
     # Current implementation of B-frame velocity
     print('planar motion assumption implementation of B-frame velocity: ',np.dot(CBBnew2,np.dot(Skew(hingeRotDot2),leverArm)),'\n')
     print('General implementation of B-frame velocity: ',np.dot(CBBnew2,np.dot(Skew(np.dot(Tangential(hingeRot2),hingeRotDot2)),leverArm)),'\n')
+    
+
+
+    Psival = np.pi*30./180.
+    nv=np.array([1.,0.,0.])
+    Psi = Psival*nv
+    C=RotCRV(Psi)
     
     
