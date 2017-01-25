@@ -113,6 +113,7 @@ def aero2dcomp(tv, span, Faero01, Faero02, filename='./foo', savepng=True,
         if savepng:
             os.system('mkdir -p %s_pngdir' %filename )
             fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
+            fig.savefig('%s_pngdir/snap%.4d.pdf'%(filename,tt),format='pdf')
         return line01x,
     
     # create a generator to save a file with Nloops
@@ -246,6 +247,7 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
         if savepng:
             os.system('mkdir -p %s_pngdir' %filename )
             fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
+            fig.savefig('%s_pngdir/snap%.4d.pdf'%(filename,tt),format='pdf')
         return line,
     
     # create a generator to save a file with Nloops
@@ -382,6 +384,7 @@ def beam2dcomp(tv, THPosDef01, THPosDef02, filename='./foo', savepng=True,
         if savepng:
             os.system('mkdir -p %s_pngdir' %filename )
             fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
+            fig.savefig('%s_pngdir/snap%.4d.pdf'%(filename,tt),format='pdf')
         return line01,
     
     # create a generator to save a file with Nloops

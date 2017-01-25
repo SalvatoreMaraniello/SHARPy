@@ -186,7 +186,7 @@ class XBeamSolver(ComponentWithDerivatives):
     ZDisp     =  Float(  iotype='out', desc='z displacement of NNode')
     YDisp     =  Float(  iotype='out', desc='y displacement of NNode')
     XDisp     =  Float(  iotype='out', desc='x displacement of NNode')
-    NNode     =    Int(-1,iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')    
+    NNode     =  Int(-1,iotype='in', desc='Node at which monitor the displacement. If negative, the last node is picked up')    
      
  
      
@@ -273,10 +273,10 @@ class XBeamSolver(ComponentWithDerivatives):
         # append code version
         self._version = shared.CodeVersion()    
         
-        
         # Parallel FDs
         self.PROCESSORS = 1       # number of processors
         self.parallelFDs = False # FLAG to set parallel calculations
+        self._gradmode=False # if true, only computes gradient and then stops
         
         #------------------------------------------------------------------ Cost
         # dummy arguments for generic cost function
@@ -551,6 +551,11 @@ class XBeamSolver(ComponentWithDerivatives):
         
         # counter: for multiple executions
         self._counter = self._counter+1
+        # special exit (FD convergence test) 
+        if self._counter > 2 and self._gradmode==True:
+            print('!!! Gradient mode finished! !!!') 
+            1/0 # only way to exit from OpenMDAO. Use try/except in main file
+            
         
 
     def call_fwd_run(self):
@@ -563,6 +568,9 @@ class XBeamSolver(ComponentWithDerivatives):
         memory errors.
         
         '''
+        
+        if self._gradmode == True and self._counter>1: 1/0
+        
         self.fwd_run(ct.byref(self.ct_NumElems), ct.byref(self.ct_NumNodes),
                      ct.byref(self.ct_NumNodesElem), self.ct_ElemType, self.ct_TestCase, self.ct_BConds,
                      self.BeamSpanStiffness.ctypes.data_as(ct.c_void_p),        # Properties along the span
