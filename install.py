@@ -14,7 +14,7 @@ prerequisites:
 
 import os
 
-CloneRep = False
+CloneRepo = False
 
 # clone repository
 if CloneRepo: os.system('git clone https://github.com/SalvatoreMaraniello/SHARPy')

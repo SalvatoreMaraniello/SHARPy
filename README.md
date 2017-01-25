@@ -61,7 +61,7 @@ solver scripts.
         /home/sm6110/git/SHARPy/BeamLib/src/wrapper
     2. type:
         make all
-
+  
 - Run the shell script:
     /home/sm6110/git/SHARPy/BeamLib/src/wrapper/f2py/runf2py.sh
   The script relies on the F2PY, which is installed with numpy. If multiple python installations are icluded, ensure 
