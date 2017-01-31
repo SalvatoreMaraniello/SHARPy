@@ -34,8 +34,11 @@ class Xbopts:
     @param OutInaframe Print velocities in a-frame (if not, use inertial frame)
     @param ElemProj Element info computed in (1) global frame (2) fixed element
                     frame (3) moving element frame.
-    @param MaxIterations Maximum number of iterations, int.
-    @param NumLoadSteps Number of load increments, int.
+    @param MaxIterations Maximum number of Newton-Raphson iterations in dynamic
+            solution, int.; In static nonlinear coupled solution 
+            (PyCoupled.Coupled_NlnStatic.py), controls the number of iterations 
+            after full loading conditions (see NumLoadSteps) are reached 
+    @param NumLoadSteps Number of load increments for static solution, int.
     @param NumGauss Number of Gauss points in element integration
     @param Solution Solution process 
                 = 102/112: cbeam3 linear/nonlinear static

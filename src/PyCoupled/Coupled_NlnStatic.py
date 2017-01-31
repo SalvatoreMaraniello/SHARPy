@@ -109,8 +109,16 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                                 Variables)
     
     # Start Load Loop.
-    #for iLoadStep in range(XBOPTS.NumLoadSteps.value):  #BUG!!!
-    for iLoadStep in range(XBOPTS.MaxIterations.value):
+    for iLoadStep in range(XBOPTS.NumLoadSteps.value + XBOPTS.MaxIterations.value):
+        # The loads are applied at increements. When 
+        #     iLoadStep=XBOPTS.NumLoadSteps.value
+        # further XBOPTS.MaxIterations.value iterations are run to the 
+        # aerodynamic loads to settle.
+        # @warning: the number of for loops should be larger then 
+        #           XBOPTS.NumLoadSteps.value, or full loading conditions will
+        #           not be reached
+
+
         # Reset convergence parameters and loads.
         Iter = 0
         ResLog10 = 0.0
