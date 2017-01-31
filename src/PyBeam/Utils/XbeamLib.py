@@ -20,13 +20,13 @@ import BeamLib
 import lib_rotvect
 
 
-
 def RotCRV(Psi):
     '''
     Calculates the rotation matrix from CRV. 
-    - Psi is the CRV that defines the rotation required to move a frame A over a frame B.
-    - C will be the rotation matrix from A to B or, alternatively, the projection matrix 
-    from B to A
+    - Psi is the CRV that defines the rotation required to move a frame A over a 
+      frame B.
+    - C will be the rotation matrix from A to B or, alternatively, the projection 
+      matrix from B to A
     '''
     
     C = np.zeros((3,3))
@@ -51,11 +51,6 @@ def RotCRV(Psi):
             Cadd = 1./np.math.factorial(kk) * PsiPower
         
     return C
-            
-        
-        
-    
-
 
 
 def QuadSkew(Omega):
@@ -144,7 +139,6 @@ def Quat2Euler(qv):
     y'(pitch) and x'' (roll or bank) axis (see Stevens, Lewis, sec.1.4) 
     @var qv: quaternion vector
     @var ev: euler angles vector [roll, pitch, yaw]
-
     """
     
     ev=np.array([  
@@ -154,6 +148,7 @@ def Quat2Euler(qv):
                  ])
     
     return ev
+
     
 
 def Psi2TransMat(Psi):
@@ -448,9 +443,125 @@ def a1(psi,b):
     """
     return(lib_rotvect.lib_rotvect.rotvect_a1(psi,b))
 
+    
+def LoadAssembly(XBINPUT, XBELEM, XBNODE, XBOPTS, NumDof, \
+                 PosIni, PsiIni, PosDefor, PsiDefor, \
+                 Force_foll, Force_dead, CAG, iFactor):
+    """@brief Assemble separate follower and dead loads.
+    @param XBINPUT Xbeam inputs.
+    @param XBELEM Xbeam element information.
+    @param XBNODE Xbeam nodal information.
+    @param XBOPTS Xbeam simulation options.
+    @param NumDof numbers of DoF in the problem.
+    @param PosInI nodal position at reference configuration.
+    @param PsiIni nodal CRV at reference configuration.
+    @param PosDefor nodal position at reference configuration.
+    @param PsiDefor nodal CRV at reference configuration.
+    @param Force_foll Matrix of applied nodal follower forces.
+    @param Force_dead Matrix of applied nodal dead forces.
+    @param CAG transformation matrix from inertial (G) to body-fixed frame (A).
+    @param iFactor factor to account for optional load stepping.
+    """
+    
+    # Initialise function variables
+    NumNodes_tot=ct.c_int((XBINPUT.NumNodesElem - 1)*XBINPUT.NumElems + 1)
+    
+    KglobalFull_foll = np.zeros((NumDof.value,NumDof.value),\
+                            ct.c_double, 'F'); ksf = ct.c_int()
+                            
+    FglobalFull_foll = np.zeros((NumDof.value,NumDof.value),\
+                            ct.c_double, 'F'); fsf = ct.c_int()
+                            
+    FglobalFull_dead = np.zeros((NumDof.value,NumDof.value),\
+                            ct.c_double, 'F'); fsd = ct.c_int()
+                            
+    Force_foll_Dof = np.zeros(NumDof.value, ct.c_double, 'F')
+    Force_dead_Dof = np.zeros(NumDof.value, ct.c_double, 'F')
+    
+    
+    # Assemble separate force coefficient matrices
+    BeamLib.Cbeam3_Asbly_Fglobal(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
+                        PosIni, PsiIni, PosDefor, PsiDefor,\
+                        Force_foll*iFactor,NumDof,\
+                        ksf, KglobalFull_foll, fsf, FglobalFull_foll,\
+                        fsd, FglobalFull_dead, CAG)
+    
+    # Get follower and dead forces on constrained nodes
+    BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),\
+                      ct.byref(ct.c_int(6)),\
+                      Force_foll.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                      ct.byref(NumDof),\
+                      Force_foll_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                      XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)) )
+    BeamLib.f_fem_m2v(ct.byref(NumNodes_tot),\
+                      ct.byref(ct.c_int(6)),\
+                      Force_dead.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                      ct.byref(NumDof),\
+                      Force_dead_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                      XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)) )
+    
+    # Project follower and dead forces
+    Qforces = np.dot(FglobalFull_foll, Force_foll_Dof*iFactor) + np.dot(FglobalFull_dead, Force_dead_Dof*iFactor)  
+
+    #--------------------------------------
+    # Repeat in case of rigid-body dynamics
+    if XBOPTS.Solution.value == 912:
+        FrigidFull_foll = np.zeros((6,NumDof.value+6), ct.c_double, 'F'); frf = ct.c_int()
+        FrigidFull_dead = np.zeros((6,NumDof.value+6), ct.c_double, 'F'); frd = ct.c_int()
+        
+        Force_foll_All = np.zeros(NumDof.value+6, ct.c_double, 'F')
+        Force_dead_All = np.zeros(NumDof.value+6, ct.c_double, 'F')
+        
+        # Assemble separate force coefficient matrices
+        BeamLib.Xbeam_Asbly_Frigid(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
+                                     PosIni, PsiIni, PosDefor, PsiDefor,\
+                                     NumDof, frf, FrigidFull_foll,\
+                                     frd, FrigidFull_dead, CAG)
+    
+        # Get follower and dead forces on unconstrained nodes
+        BeamLib.f_fem_m2v_nofilter(ct.byref(NumNodes_tot),\
+                                   ct.byref(ct.c_int(6)),\
+                                   Force_foll.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                                   ct.byref(ct.c_int(NumDof.value+6)),\
+                                   Force_foll_All.ctypes.data_as(ct.POINTER(ct.c_double)) )
+        BeamLib.f_fem_m2v_nofilter(ct.byref(NumNodes_tot),\
+                                   ct.byref(ct.c_int(6)),\
+                                   Force_dead.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                                   ct.byref(ct.c_int(NumDof.value+6)),\
+                                   Force_dead_All.ctypes.data_as(ct.POINTER(ct.c_double)) )
+        
+        # Project follower and dead forces
+        Qrigid = np.dot(FrigidFull_foll,Force_foll_All*iFactor) + np.dot(FrigidFull_dead,Force_dead_All*iFactor) 
+    
+    else:
+        Qrigid = 0.0
+
+    #------------------
+    # Return everything
+    return Qforces, KglobalFull_foll, Qrigid
+
+def quat2psi(quat):
+    """@brief Convert quaternion into Cartesian rotation vector.
+    
+    @param quat Quaternion.
+    @returns Cartesian rotation vector.
+    """
+    return(lib_rotvect.lib_rotvect.rotvect_quat2psi(quat))
+
+def a1(psi,b):
+    """@brief Calculates the A1 operator: delta(T)*b=a1(psi,b)*Delta(psi))
+    @param psi cartesian rotation vector.
+    @param b vector in R^3.
+    @returns A1 matrix (which is size R^3x3)
+    @details If magnitude of psi is less than 1e-3 a linearized
+    approximation is used to avoid numerical issues.
+    """
+    return(lib_rotvect.lib_rotvect.rotvect_a1(psi,b))
+
 
 if __name__ == '__main__':
     
+
     # Test quat/CRV conversion
     roll = 15.0 
     pitch= 56.0 
@@ -462,6 +573,7 @@ if __name__ == '__main__':
     print('Original: (roll, pitch, yaw) = (%f,%f,%f)'%(roll, pitch, yaw))
     print('Final: (roll, pitch, yaw) = (%f,%f,%f)'%(ev[0], ev[1], ev[2]))
     
+
     # Test Cartesian rotation vector.
     
     #create matrices that correspond to Psi of nodes 1 and 2
@@ -521,10 +633,7 @@ if __name__ == '__main__':
     print('General implementation of B-frame velocity: ',np.dot(CBBnew2,np.dot(Skew(np.dot(Tangential(hingeRot2),hingeRotDot2)),leverArm)),'\n')
     
 
-
     Psival = np.pi*30./180.
     nv=np.array([1.,0.,0.])
     Psi = Psival*nv
     C=RotCRV(Psi)
-    
-    

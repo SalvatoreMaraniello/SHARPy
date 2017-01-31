@@ -8,7 +8,6 @@
 @warning    Follower and dead forces are only modelled as external forces that
             follow the FoR A or not. In the second case, forces are defined in 
             FoR G components. No structural deformation is followed!
-
 Modified S. Maraniello, 25 Sep 2015
 
 
@@ -166,8 +165,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         sys.stdout.write('Solve nonlinear dynamic case in Python ... \n')
     
     
-    
     #------------------------------------------------------ Initialise Variables
+
     #Initialise structural system tensors
     MssFull = np.zeros((NumDof.value,NumDof.value), ct.c_double, 'F')
     CssFull = np.zeros((NumDof.value,NumDof.value), ct.c_double, 'F') 
@@ -217,7 +216,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     Qsys = np.zeros(NumDof.value+6+4, ct.c_double, 'F')
     
-
     
     #---------------------------------------------------- Start Dynamic Solution
     
@@ -232,7 +230,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # Force allocated in aerodynamic solution if ImpStart is True. 
     # They include the weight and static contribution.
     Force += XBINPUT.ForceDyn[0,:,:].copy('F')      
-    
+
     Cao  = xbl.Rot(Quat)
     ACoa = np.zeros((6,6), ct.c_double, 'F')
     ACoa[:3,:3] = np.transpose(Cao)
@@ -279,6 +277,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                               Force.ctypes.data_as(ct.POINTER(ct.c_double)),
                               ct.byref(NumDof),
                               Force_Dof.ctypes.data_as(ct.POINTER(ct.c_double)),
+
                               XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)) )
 
     Qstruc -= np.dot(FstrucFull, Force_Dof)
@@ -385,8 +384,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     PosPsiTime[0,:3] = PosDefor[-1,:]
     PosPsiTime[0,3:] = PsiDefor[-1,XBELEM.NumNodes[-1]-1,:]
     
-    
+
     #---------------------------------------------- Initialise Aerodynamic Force
+
     # Initialise Aero       
     Section = InitSection(VMOPTS,VMINPUT,AELAOPTS.ElasticAxis)
     
@@ -455,6 +455,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     XBOUT.Qsys0 = Qsys.copy()
     
     #---------------------------------------------------------------- Time loop
+
     for iStep in range(NumSteps.value):
         
         if XBOPTS.PrintInfo.value==True:
@@ -470,6 +471,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         #Predictor step
         Q       += dt*dQdt + (0.5-beta)*dQddt*np.power(dt,2.0)
         dQdt    += (1.0-gamma)*dQddt*dt
+
         ### Corrector
         # uncomment to get previous approach
         #dQddt[:] = 0.0 # initial guess for acceleration at next time-step is zero
@@ -480,7 +482,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         Quat = dQdt[NumDof.value+6:].copy('F')
         Quat = Quat/np.linalg.norm(Quat)
         Cao  = xbl.Rot(Quat)
-        
+
         #nodal displacements and velocities from state vector
         X=Q[:NumDof.value].copy('F') 
         dXdt=dQdt[:NumDof.value].copy('F'); 
@@ -589,7 +591,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 
 
                 #END if iStep > 0
-
                                     
             #set tensors to zero 
             MssFull[:,:] = 0.0; CssFull[:,:] = 0.0
@@ -619,7 +620,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                            NumDof, X, dXdt,
                                            PosDefor, PsiDefor,
                                            PosDotDef, PsiDotDef)
-
 
             #rigid-body velocities and orientation from state vector
             Vrel[iStep+1,:]    = dQdt[NumDof.value:NumDof.value+6].copy('F')
@@ -711,7 +711,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             #Compute residual to solve update vector
             Qstruc += -np.dot(FstrucFull, Force_Dof)
             Qrigid += -np.dot(FrigidFull, Force_All)
-            
             
             # final of last iter
             XBOUT.Qstruc=Qstruc.copy()
@@ -842,7 +841,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             
             Vrel[iStep,:] = np.dot(ACoa,dQdt[NumDof.value:NumDof.value+6].copy('F'))
             VrelDot[iStep,:] = np.dot(ACoa,dQddt[NumDof.value:NumDof.value+6].copy('F'))
-        
+ 
         
         if 'writeDict' in kwords and Settings.WriteOut == True:
             fp= write_SOL912_out(Time[iStep+1], PosDefor, PsiDefor, PosIni, PsiIni, XBELEM, 
@@ -876,7 +875,6 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                                       *OutList)
         
     # END Time loop
-    
     
     if SaveDict['Format'] == 'dat': 
         write_SOL912_final(Time, PosPsiTime, NumNodes_tot, DynOut, Vrel, VrelDot, SaveDict) 
@@ -915,7 +913,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     return XBOUT
    
-   
+ 
 
 def panellingFromFreq(freq,c=1.0,Umag=1.0):
     """@brief Calculate adequate spatial/temporal resolution on UVLM grid
@@ -979,10 +977,3 @@ def lagsolver(M,Q,MinTol=1e-3, MaxIter=1):
     x[NumDof:]=xrig
     
     return x
-
-
-
-
-
-
-   

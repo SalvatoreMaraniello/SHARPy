@@ -70,8 +70,23 @@ void dAgamma0_dZeta(const double* zetaSrc_,
 					 const double* zetaTgt_,
 					 const unsigned int mTgt,
 					 const unsigned int nTgt,
+//<<<<<<< HEAD
+//					 double* dX_);
+//=======
+					 const bool imageMeth,
 					 double* dX_);
 
+void dAgamma0_dZeta_num(const double* zetaSrc_,
+					 	   const unsigned int mSrc,
+					 	   const unsigned int nSrc,
+					 	   const double* gamma0_,
+					 	   const double* zetaTgt_,
+					 	   const unsigned int mTgt,
+					 	   const unsigned int nTgt,
+					 	   const bool imageMeth,
+					 	   double* dX_);
+
+//>>>>>>> rob/master
 void AIC(const double* zetaSrc_,
 		  const unsigned int mSrc,
 		  const unsigned int nSrc,
@@ -120,6 +135,10 @@ void AIC3s(const double* zetaSrc_,
 		  	const double* zetaTgt_,
 		  	const unsigned int mTgt,
 		  	const unsigned int nTgt,
+//<<<<<<< HEAD
+//=======
+		  	const bool imageMeth,
+//>>>>>>> rob/master
 		  	double* dX_);
 
 void AIC3s_noTE(const double* zetaSrc_,
@@ -176,6 +195,10 @@ void dAs3gam0_dZeta_numerical(const double* zetaSrc_,
 								const double* zetaTgt_,
 								const unsigned int mTgt,
 								const unsigned int nTgt,
+//<<<<<<< HEAD
+//=======
+								const bool imageMeth,
+//>>>>>>> rob/master
 								double* dX_);
 
 #endif /* AICMATS_HPP_ */

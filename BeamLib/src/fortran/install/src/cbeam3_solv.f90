@@ -52,7 +52,6 @@ module cbeam3_solv
 &                                  PosDefor,PsiDefor,Options)
   use lib_fem
   use lib_sparse
-!<<<<<<< HEAD
   use lib_solv
 !#ifdef NOLAPACK
   use lib_lu
@@ -386,7 +385,7 @@ TaPsi =           Psisc *Options%MinDelta
 
 ! Assembly matrices and functional.
   Qglobal=0.d0
-  call sparse_zero (ks,Kglobal) ! sm BUG: isn't this repeated?
+  call sparse_zero (ks,Kglobal) ! sm: possible BUG: isn't this repeated?
   call sparse_zero (fs,Fglobal)
 
   call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,AppForces, & ! input
@@ -401,7 +400,7 @@ TaPsi =           Psisc *Options%MinDelta
   end do
 
 ! Forces on the unconstrained nodes.
-! sm: AppForces has shape (Nodes,6), where the columns contain forces and moments.
+! AppForces has shape (Nodes,6), where the columns contain forces and moments.
 ! fem_m2v reorders them into a vector (i.e. for node ii, (ii-1)+1 will be the x
 ! force and (ii-1)+6 the z moment. Nodes for which the solution has not to be
 ! found will not be counted.
@@ -410,15 +409,15 @@ TaPsi =           Psisc *Options%MinDelta
 !stop 'sparse_matvmul ok!'
 
 ! Solve equation and update the global vectors.
-! Kglobal * deltaX = Qglobal
-!#ifdef NOLAPACK
-!  call lu_sparse(ks,Kglobal,Qglobal,DeltaX)
-!#else
-!  call lapack_sparse (ks,Kglobal,Qglobal,DeltaX)
-!#endif
+!  Kglobal * deltaX = Qglobal
+!  #ifdef NOLAPACK
+!    call lu_sparse(ks,Kglobal,Qglobal,DeltaX)
+!  #else
+!    call lapack_sparse (ks,Kglobal,Qglobal,DeltaX)
+!  #endif
   call lu_sparse(ks,Kglobal,Qglobal,DeltaX)
 
-  ! sm: PosDefor and PsiDefor are the only one being updated
+! Update PosDefor and PsiDefor
   call cbeam3_solv_update_static (Elem,Node,Psi0,DeltaX,PosDefor,PsiDefor)
 
   deallocate (Kglobal,Qglobal,DeltaX)
@@ -610,12 +609,6 @@ TaPsi =           Psisc *Options%MinDelta
 ! Compute system information at initial condition.
   allocate (Veloc(NumN,6)); Veloc=0.d0
   allocate (Displ(NumN,6)); Displ=0.d0
-
-! sm:
-  !allocate( Fdyn(NumN,6,size(Time)) ) ! temporary
-  !do iStep=1,size(Time)
-  !  Fdyn(:,:,iStep)=Ftime(iStep)*Fa
-  !end do
 
 ! Allocate quaternions and rotation operator for initially undeformed system
   Quat = (/1.d0,0.d0,0.d0,0.d0/); Cao = Unit; Temp = Unit4
@@ -852,24 +845,12 @@ TaPsi =           Psisc *Options%MinDelta
   allocate (Veloc(NumN,6)); Veloc=0.d0
   allocate (Displ(NumN,6)); Displ=0.d0
 
-! sm:
-  !allocate( Fdyn(NumN,6,size(Time)) ) ! temporary
-  !do iStep=1,size(Time)
-  !  Fdyn(:,:,iStep)=Ftime(iStep)*Fa
-  !end do
-
 ! Allocate quaternions and rotation operator for initially undeformed system
   Quat = (/1.d0,0.d0,0.d0,0.d0/); Cao = Unit; Temp = Unit4
 
 ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
 
-! sm: substitute applied force term with Fdyn
-! Compute initial acceleration (we are neglecting qdotdot in Kmass).
-!  call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,           &
-!&                            0.d0*PosDefor,0.d0*PsiDefor,F0+Ftime(1)*Fa,Vrel(1,:),VrelDot(1,:),         &
-!&                            ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
-!
 !  Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Ftime(1)*Fa,NumDof,Filter=ListIN))
   call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,           &
 &                            0.d0*PosDefor,0.d0*PsiDefor,F0+Fdyn(:,:,1),Vrel(1,:),VrelDot(1,:),         &
@@ -921,10 +902,6 @@ TaPsi =           Psisc *Options%MinDelta
       call sparse_zero (ks,Kglobal)
       call sparse_zero (fs,Fglobal)
 
- ! sm: substitute applied force term with Fdyn
- !      call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,                  &
- !&                                0.d0*PosDefor,0.d0*PsiDefor,F0+Ftime(iStep+1)*Fa,Vrel(iStep+1,:),VrelDot(iStep+1,:),    &
- !&                                ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
       call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,                  &
 &                                0.d0*PosDefor,0.d0*PsiDefor,F0+Fdyn(:,:,iStep+1),Vrel(iStep+1,:),VrelDot(iStep+1,:),    &
 &                                ms,Mglobal,Mvel,cs,Cglobal,Cvel,ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
@@ -934,8 +911,6 @@ TaPsi =           Psisc *Options%MinDelta
 
 ! Compute the residual.
       Qglobal= Qglobal + sparse_matvmul(ms,Mglobal,NumDof,dXddt) + matmul(Mvel,Vreldot(iStep+1,:))
-      ! sm: substitute applied force term with Fdyn
-      ! Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Ftime(iStep+1)*Fa,NumDof,Filter=ListIN))
       Qglobal= Qglobal - sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(F0+Fdyn(:,:,iStep+1),NumDof,Filter=ListIN))
 
 ! Check convergence.

@@ -24,6 +24,121 @@ f_fem_glob2loc_extract = BeamLib.__test_MOD_wrap_fem_glob2loc_extract
 
 f_fem_glob2loc_extract.restype = None
 
+
+def localFstifz(PosDef, PsiDef,
+                   PosIni, PsiIni,
+                   XBELEM, NodeList,
+                   SO3 = False):
+    """@brief Approximate element stiffness force
+    
+    @param PosDef Deformed nodal coordinates.
+    @param PsiDef Deformed nodal rotation vectors.
+    @param PosIni Initial (undeformed) nodal coordinates.
+    @param PsiIni Initial (undeformed) nodal rotation vectors.
+    @param XBELEM Xbeam element derived type containing element data.
+    @param NodeList List of node numbers for strain approximation at adjacent
+            midpoint in the direction of increasing node index,
+            starts from zero:
+            0---x---1---x---2---x---3-- ... --(NumNodes-1)
+            Strains are calculated at the x to the right of selected nodes.
+    @param SO3 Flag for use of the SO(3) manifold in CRV interpolation.
+    
+    @details Assumes that all nodes are either two- or three- noded. 
+    @warning Untested.
+    """
+    
+    
+    from PyBeam.Utils.BeamLib import Cbeam3_fstifz
+    
+    Fstiff = np.zeros((len(NodeList),6))
+    NumNodes = PosDef.shape[0]-1
+    NumNodesElem = XBELEM.NumNodes[0]
+    iOut = 0 # Output index
+    for iNode in NodeList:
+        if iNode == NumNodes or iNode == -1:
+            raise ValueError("Midpoint strain requested beyond final node.")
+        
+        iElem, iiElem = iNode2iElem(iNode, NumNodes, NumNodesElem)
+        elemK = XBELEM.Stiff[iElem*6:(iElem+1)*6,:]
+        
+        if NumNodesElem == 2:
+            if SO3 == True:
+                # Consistent calculation of midpoint strains using SO(3) manifold.
+                raise NotImplementedError("SO(3) manifold strains.")
+            else:
+                # Using fortran routines
+                R0 = np.zeros((2,6))
+                R0[0,:3] = PosIni[iNode,:]
+                R0[0,3:] = PsiIni[iElem,iiElem,:]
+                R0[1,:3] = PosIni[iNode+1,:]
+                R0[1,3:] = PsiIni[iElem,iiElem+1,:]
+                
+                Ri = np.zeros((2,6))
+                Ri[0,:3] = PosDef[iNode,:]
+                Ri[0,3:] = PsiDef[iElem,iiElem,:]
+                Ri[1,:3] = PosDef[iNode+1,:]
+                Ri[1,3:] = PsiDef[iElem,iiElem+1,:]
+            
+                # Midpoint
+                z = 0.0
+                
+                fstifz = Cbeam3_fstifz(R0, Ri, elemK, z)
+            # END if SO3            
+            
+        elif NumNodesElem == 3:
+            if SO3 == True:
+                raise NotImplementedError("Only available for 2-noded just now.")
+            else:
+                # Using fortran routines
+                R0 = np.zeros((3,6))
+                R0[0,:3] = PosIni[2*iElem,:]
+                R0[1,:3] = PosIni[2*iElem+2,:]
+                R0[2,:3] = PosIni[2*iElem+1,:]
+                R0[:,3:] = PsiIni[iElem]
+                
+                Ri = np.zeros((3,6))
+                Ri[0,:3] = PosDef[2*iElem,:]
+                Ri[1,:3] = PosDef[2*iElem+2,:]
+                Ri[2,:3] = PosDef[2*iElem+1,:]
+                Ri[:,3:] = PsiDef[iElem]
+                
+                if iiElem == 0:
+                    z = -0.5 # mid-point adjacent to node iNode
+                elif iiElem == 1:
+                    z = 0.5 # mid-point adjacent to node iNode
+                elif iiElem == 2:
+                    raise ValueError("iiElem only 0, 1 for adjacent midpoint" +
+                                     "calculation.")
+                else:
+                    raise ValueError("iiElem can only take 0, 1 or 2 for " +
+                                     "3-noded elements.")
+                
+                #----------------------- sm: working only for moments.
+                fstifz = Cbeam3_fstifz(R0, Ri, elemK, z)
+                
+                # link top function
+                #cbeam3_fstif = BeamLib.__lib_cbeam3_MOD_cbeam3_fstif
+                #
+                # prepare I/O
+                #ctNNE = ct.c_int(NumNodesElem)
+                #ctR0 = np.zeros((,),ct.c_double,'F')
+                #ctRi
+                #ctKelem
+                #ctQstiff = np.zeros( () )
+                
+                # --------------------- sm end
+                
+            # END if SO(3)
+        else:
+            raise ValueError("Only 2- or 3-noded elements are supported.")
+        
+        Fstiff[iOut,:] = fstifz
+        
+        iOut += 1
+    # END for iElem
+    return Fstiff
+
+
 def localStrains(PosDef, PsiDef,
                    PosIni, PsiIni,
                    XBELEM, NodeList,
@@ -131,6 +246,8 @@ def localElasticForces(PosDef, PsiDef,
     @param NodeList List of element numbers for strain approximation,
             starts from zero.
     @warning Untested.
+    
+    @ warning: 
     """
     
     F = np.zeros((len(NodeList),6))

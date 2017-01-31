@@ -7,8 +7,7 @@
 @pre        None
 @warning    None
 
-
---------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 Modified: 25 Feb 2015 by S. Maraniello
 
 Change list: 
@@ -29,10 +28,10 @@ import os
 # Directories.
 userid = getpass.getuser()
 
-try:
-    SharPyProjectDir = os.environ["SHARPYDIR"]+'/' # requires to setup an environmental variable
+try: # if environmental variable is set-up
+    SharPyProjectDir = os.environ["SHARPYDIR"]+'/' 
 except:
-    #SharPyProjectDir = '/home/' + userid + '/git/SHARPy/' # works on ubuntu
+    #SharPyProjectDir = '/home/' + userid + '/git/SHARPy/'
     SharPyProjectDir = os.path.expanduser('~') + '/git/SHARPy/'    
 
 BeamLibDir = SharPyProjectDir + 'BeamLib/bin/'

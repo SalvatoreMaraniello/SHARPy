@@ -2,9 +2,6 @@
 # ---------------- Makefile for UVLMLib: S.M. 06/09/2015 -----------------------
 #-------------------------------------------------------------------------------
 #
-# Reference: 
-# http://oreilly.com/catalog/make3/book/
-# 
 # Prerequisites:
 # - update the path to eigen and boost libraries (EIGENDIR & BOOSTDIR variable).
 #   Note that, in general, these do not require to be precompiled.
@@ -19,6 +16,9 @@
 # - compiler, compiling and linking options can be changed via the CPPCOMP, 
 #   LINKOPT and COMPOOPT. A summary of the option used with explainations is 
 #   provided
+# 
+# Reference: 
+# http://oreilly.com/catalog/make3/book/
 # 
 #-------------------------------------------------------------------------------
 
@@ -166,9 +166,6 @@ OBJS=\
 	$(OBJDIR)/wrapper.o
 
 
-
-
-
 ################################################################################
 ## Define make targets
 #
@@ -189,8 +186,6 @@ UVLMLib: buildfolder $(OBJS)
 
 #	g++ -fopenmp -shared  -o ./Debug/UVLMLib.so ./Debug/main.o  ./Debug/lib/PanelTools.o ./Debug/lib/VLM.o ./Debug/lib/aicMats.o ./Debug/lib/datatypesx.o ./Debug/lib/indices.o ./Debug/lib/triads.o ./Debug/lib/vorticity.o ./Debug/lib/wrapper.o 
 #	$(CPPCOMP)               $(LINKOPT) -o $(BUILDDIR)/UVLMLib.so $(OBJS) ./Debug/main.o
-
-
 
 mainexe: buildfolder  $(OBJS)
 	$(CPPCOMP) $(INCLOPT) $(COMPOPT) -c -o ./Debug/main.o ./main/main.cpp  

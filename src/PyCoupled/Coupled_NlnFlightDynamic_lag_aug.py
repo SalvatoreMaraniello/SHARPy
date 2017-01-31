@@ -106,10 +106,19 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             # open-loop control
             for cc in range(len(VMINPUT.ctrlSurf)):
                 VMINPUT.ctrlSurf[cc].update(0.0,iStep=0)
-        
-        
-        PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
-                    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)          
+    
+        #PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
+        #    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        XBSTA=Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        PosDefor=XBSTA.PosDeforStatic,
+        PsiDefor=XBSTA.PsiDeforStatic,
+        Zeta=XBSTA.ZetaStatic,
+        ZetaStar=XBSTA.ZetaStarStatic,
+        Gamma=XBSTA.GammaStatic,
+        GammaStar=XBSTA.GammaStarStatic,
+        Force=XBSTA.ForceTotStatic
+        del XBSTA
+
         XBOPTS.Solution.value = 912 # Reset options.
         VMOPTS.Steady = ct.c_bool(False)
         VMOPTS.Rollup.value = Rollup

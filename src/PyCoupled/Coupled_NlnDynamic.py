@@ -65,16 +65,32 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     @param mpcCont Instance of PyMPC.MPC class.
     """
 
-    # I/O management
-    if 'SaveDict' in kwords:
-        SaveDict=kwords['SaveDict']
-        Settings.OutputDir     =SaveDict['OutputDir']
-        Settings.OutputFileRoot=SaveDict['OutputFileRoot']
-        
-   
     # Check correct solution code.
     assert XBOPTS.Solution.value == 312, ('NonlinearDynamic requested' +
-                                          ' with wrong solution code')
+                                         ' with wrong solution code')
+
+    # I/O options
+    XBOUT=DerivedTypes.Xboutput()  
+    SaveDict=Settings.SaveDict
+    if 'SaveDict' in kwords: SaveDict=kwords['SaveDict']
+    if SaveDict['Format']=='h5':
+        Settings.WriteOut=False
+        Settings.PlotTec=False
+        OutList=[AELAOPTS, VMINPUT, VMOPTS, XBOPTS, XBINPUT, XBOUT]
+        #if VMINPUT.ctrlSurf!=None:
+        #    for cc in range(len(VMINPUT.ctrlSurf)):
+        #        OutList.append(VMINPUT.ctrlSurf[cc])
+        if SaveDict['SaveWake'] is True:
+            dirwake=SaveDict['OutputDir']+'wake'+SaveDict['OutputFileRoot']+'/'
+            os.system('mkdir -p %s' %dirwake)
+            XBOUT.dirwake=dirwake  
+            
+    XBOUT.cputime.append(time.clock()) # time.processor_time more appropriate 
+    XBOUT.ForceDofList=[]
+    XBOUT.ForceRigidList=[] 
+   
+    #--------------------------------------------- Initial Displacement: ImpStart vs Static Solution
+
     # Initialise static beam data.
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT,XBOPTS)
@@ -85,32 +101,68 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         VMOPTS.Steady = ct.c_bool(True)
         Rollup = VMOPTS.Rollup.value
         VMOPTS.Rollup.value = False
+
+        if VMINPUT.ctrlSurf != None:
+            # open-loop control
+            for cc in range(len(VMINPUT.ctrlSurf)):
+                VMINPUT.ctrlSurf[cc].update(0.0,iStep=0)
+
         # Solve Static Aeroelastic.
-        PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
-                    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        # Note: output force includes gravity loads
+        #PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
+        #            Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        XBSTA=Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        PosDefor=XBSTA.PosDeforStatic,
+        PsiDefor=XBSTA.PsiDeforStatic,
+        Zeta=XBSTA.ZetaStatic,
+        ZetaStar=XBSTA.ZetaStarStatic,
+        Gamma=XBSTA.GammaStatic,
+        GammaStar=XBSTA.GammaStarStatic,
+        Force=XBSTA.ForceTotStatic
+        del XBSTA
+
         XBOPTS.Solution.value = 312 # Reset options.
         VMOPTS.Steady = ct.c_bool(False)
         VMOPTS.Rollup.value = Rollup
+
+        # isolate aerodynamic force for saving
+        NonAeroForce = XBINPUT.ForceStatic.copy('F')
+        AddGravityLoads(NonAeroForce, XBINPUT, XBELEM, AELAOPTS,
+                        PsiDefor, VMINPUT.c)
+        ForceAero = (Force-NonAeroForce).copy('C')
+
     elif AELAOPTS.ImpStart == True:
         PosDefor = PosIni.copy(order='F')
         PsiDefor = PsiIni.copy(order='F')
         Force = np.zeros((XBINPUT.NumNodesTot,6),ct.c_double,'F')
+        #Force = XBINPUT.ForceStatic.copy('F')
+        ForceAero = 0.0*Force.copy('C')
         
-    # Write deformed configuration to file. TODO: tidy this away inside function.
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL312_def.dat'
-    if XBOPTS.PrintInfo==True:
-        sys.stdout.write('Writing file %s ... ' %(ofile))
-    fp = open(ofile,'w')
-    fp.write('TITLE="Non-linear static solution: deformed geometry"\n')
-    fp.write('VARIABLES="iElem" "iNode" "Px" "Py" "Pz" "Rx" "Ry" "Rz"\n')
-    fp.close()
-    if XBOPTS.PrintInfo==True:
-        sys.stdout.write('done\n')
-    WriteMode = 'a'
-    # Write
-    BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM,
-                       PosDefor, PsiDefor, ofile, WriteMode)
+    if SaveDict['Format']=='dat': 
+        # Write deformed configuration to file. TODO: tidy this away inside function.
+        ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL312_def.dat'
+        if XBOPTS.PrintInfo==True:
+            sys.stdout.write('Writing file %s ... ' %(ofile))
+        fp = open(ofile,'w')
+        fp.write('TITLE="Non-linear static solution: deformed geometry"\n')
+        fp.write('VARIABLES="iElem" "iNode" "Px" "Py" "Pz" "Rx" "Ry" "Rz"\n')
+        fp.close()
+        if XBOPTS.PrintInfo==True:
+            sys.stdout.write('done\n')
+        WriteMode = 'a'
+        # Write
+        BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM,
+                           PosDefor, PsiDefor, ofile, WriteMode)
+    else: # HDF5
+        XBOUT.drop( PosIni=PosIni, PsiIni=PsiIni, ForceTotStatic = Force.copy(),
+                    PosDeforStatic=PosDefor.copy(), PsiDeforStatic=PsiDefor.copy() )
+        XBOUT.ForceAeroList.append( ForceAero )
+        PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5',
+                              *OutList)
     
+    #--------------------------------------------------------------- Initialise Structural Variables
+    
+ 
     # Initialise structural variables for dynamic analysis.
     Time, NumSteps, ForceTime, ForcedVel, ForcedVelDot,\
     PosDotDef, PsiDotDef,\
@@ -580,11 +632,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                            ctrlSurf,
                            kwords['mpcCont'])
         # END if write.
-        
-        # sm - I/O
         XBOUT.QuatList.append(Quat)
-        
-        
+
         ZetaStar[:,:] = ZetaStar[:,:] + VMINPUT.U_infty*dt
         if VMINPUT.gust != None:
             ZetaStar[:,:,:] = ZetaStar[:,:,:] + VMINPUT.gust.Vels(ZetaStar)*dt
@@ -822,23 +871,27 @@ if __name__ == '__main__':
                               Tight = False,
                               ImpStart = True)
     
-    mpcCont = MPC.MPC('modifiedGolandControlOutput','/home/rjs10/git/SHARPy/src/PyMPC/systems/', LQR = True)
-#     mpcCont = None
-    
-    # Live output options.
-    writeDict = OrderedDict()
-    writeDict['R_z_tip'] = 0
-    writeDict['kappa_x_root'] = 0
-    writeDict['kappa_y_root'] = 0
-    writeDict['kappa_z_root'] = 0
-    writeDict['u_opt_1'] = 0
-    writeDict['du_opt_1'] = 0
-    writeDict['contTime'] = 0
-    
-    Settings.OutputDir = Settings.SharPyProjectDir + "output/MPC/ModifiedGoland/testMPC/"
-    Settings.OutputFileRoot = "Q28_M8N20_CS80_L20_W1707_Nmod8_LQR"
-    
-    # Solve nonlinear dynamic simulation.
-    Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS,
-             writeDict =  writeDict, mpcCont = mpcCont)
+
+    for H in (1,):#(5,10,20,30,50,75,100,150,200,300):
+#         mpcCont = MPC.MPC('golandControlOutput_'+str(H),'/home/rjs10/git/SHARPy/src/PyMPC/systems/', LQR = False)
+        mpcCont = MPC.MPC('golandControlOutput','/home/rjs10/git/SHARPy/src/PyMPC/systems/', LQR = True)
+    #     mpcCont = None
+        
+        # Live output options.
+        writeDict = OrderedDict()
+        writeDict['R_z_tip'] = 0
+        writeDict['kappa_x_root'] = 0
+        writeDict['kappa_y_root'] = 0
+        writeDict['kappa_z_root'] = 0
+        writeDict['u_opt_1'] = 0
+        writeDict['du_opt_1'] = 0
+        writeDict['contTime'] = 0
+        
+        Settings.OutputDir = Settings.SharPyProjectDir + "output/MPC/Goland/testMPC_2/"
+#         Settings.OutputFileRoot = 'Q140_M8N20_CS80_L20_W1707_L20_Nmod8_wUnitBend_H'+str(H)+'_R01_noDist'
+        Settings.OutputFileRoot = 'Q140_M8N20_CS80_L20_W1707_L20_Nmod8_wUnitBend_LQR_R01_noDist'
+        
+        # Solve nonlinear dynamic simulation.
+        Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS,
+                 writeDict =  writeDict, mpcCont = mpcCont)
 

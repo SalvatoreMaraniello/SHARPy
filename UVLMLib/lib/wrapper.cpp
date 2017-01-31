@@ -289,9 +289,16 @@ void cpp_wrap_dAgamma0_dZeta(const double* zetaSrc_,
 								const double* zetaTgt_,
 								const unsigned int& mTgt,
 								const unsigned int& nTgt,
+//<<<<<<< HEAD
+//								double* dAgam0_) {
+//	// call function
+//	dAgamma0_dZeta(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dAgam0_);
+//=======
+								const bool& imageMeth,
 								double* dAgam0_) {
 	// call function
-	dAgamma0_dZeta(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dAgam0_);
+	dAgamma0_dZeta(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,imageMeth,dAgam0_);
+//>>>>>>> rob/master
 }
 
 void cpp_wrap_dWzetaPri0_dZeta(const double* zeta_,
@@ -402,8 +409,14 @@ void cpp_wrap_AIC3s(const double* zetaSrc_,
 		  const double* zetaTgt_,
 		  const unsigned int& mTgt,
 		  const unsigned int& nTgt,
+//<<<<<<< HEAD
+//		  double* dX_){
+//	AIC3s(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,dX_);
+//=======
+		  const bool& imageMeth,
 		  double* dX_){
-	AIC3s(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,dX_);
+	AIC3s(zetaSrc_,mSrc,nSrc,zetaTgt_,mTgt,nTgt,imageMeth,dX_);
+//>>>>>>> rob/master
 }
 
 void cpp_wrap_AIC3s_noTE(const double* zetaSrc_,
@@ -430,10 +443,14 @@ void cpp_wrap_dAs3gam0_dZeta_numerical(const double* zetaSrc_,
 									  const double* zetaTgt_,
 									  const unsigned int& mTgt,
 									  const unsigned int& nTgt,
+//<<<<<<< HEAD
+//									  double* dX_) {
+//	dAs3gam0_dZeta_numerical(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dX_);
+//=======
+									  const bool& imageMeth,
 									  double* dX_) {
-	dAs3gam0_dZeta_numerical(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,dX_);
+	dAs3gam0_dZeta_numerical(zetaSrc_,mSrc,nSrc,gamma0_,zetaTgt_,mTgt,nTgt,imageMeth,dX_);
+//>>>>>>> rob/master
 }
 
 } // END extern C
-
-

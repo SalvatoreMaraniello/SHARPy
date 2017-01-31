@@ -1,6 +1,6 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !-> Module.- XBEAM_SOLV  Henrik Hesse. 07/01/2011 - Last Update 07/01/2011
-!                        Salvatore Maraniello. 20/10/2014 - Last Update 23/10/2014
+!                        S. Maraniello. 20/10/2014 - Last Update 23/10/2014
 !
 !-> Language: FORTRAN90, Free format.
 !
@@ -15,13 +15,13 @@
 !   -xbeam_solv_rigidlindyn:        Linear rigid-body dynamic solution
 !   -xbeam_solv_rigidnlindyn:       Nonlinear rigid-body dynamic solution
 !
-!-> Remark:
-! - SM: xbeam_solv_couplednlindyn modified to account for spherical BCs.
-! - SM: convergence check improved for sol932        ?
-!   sm: uneffective for sol932. To be investigated   ?
+!-> Remarks/Warnings:
+! - sm: xbeam_solv_couplednlindyn modified to account for spherical BCs.
+! - sm: convergence check improved for sol932 ?
+! - sm: uneffective for sol932. To be investigated ?
+! - sm: exception handle for python wrapper (line 567, 699) may be obsolite
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
 module xbeam_solv
  use xbeam_shared
  use lib_solv
@@ -506,7 +506,7 @@ module xbeam_solv
     ListIN(k)=Node(k)%Vdof
   end do
 
-  ! Initialize (sperical joint) sm
+  ! Initialize (sperical joint)
   SphFlag=.false.
   do k=1,NumN
       if (Node(k)%Sflag == 1) then
@@ -564,7 +564,7 @@ module xbeam_solv
   allocate (Veloc(NumN,6)); Veloc=0.d0
   allocate (Displ(NumN,6)); Displ=0.d0
 
-  ! sm exceptions handling for python wrapper
+  ! exceptions handling for python wrapper - possible BUG: obsolite?
   if (present(SUCCESS)) then
       SUCCESS=.true.
   end if
@@ -578,7 +578,7 @@ module xbeam_solv
   dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
   dQdt(NumDof+7:NumDof+10)= Quat
 
-  ! (spherical joint - sm)
+  ! spherical joint
   if (SphFlag) then
     dQdt(NumDof+1:NumDof+3) = 0.d0
   end if
@@ -604,23 +604,27 @@ module xbeam_solv
   end do
 
 ! Compute initial acceleration (we are neglecting qdotdot in Kmass).
-! sm: why we are neglecting it? Let's set it to be on-zero
-  call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,   &
-&                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),            &
-&                            0.d0*dQddt(NumDof+1:NumDof+6),                     &
-&                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,Options,Cao)
+! sm: why we are neglecting it? Let's set it to be non-zero
+  call cbeam3_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,&
+&                            PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,            &
+&                            F0+Fdyn(:,:,1),dQdt(NumDof+1:NumDof+6),             &
+&                            0.d0*dQddt(NumDof+1:NumDof+6),                      &
+&                            ms,MSS,MSR,cs,CSS,CSR,ks,KSS,fs,Felast,Qelast,      &
+&                            Options,Cao)                                        
 
   Qelast= Qelast - sparse_matvmul(fs,Felast,NumDof,fem_m2v(F0+Fdyn(:,:,1),NumDof,Filter=ListIN))
 
-  call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,    &
+  call xbeam_asbly_dynamic (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,PosDotDefor,&
+&                           PsiDotDefor,0.d0*PosDefor,0.d0*PsiDefor,            &
 &                           dQdt(NumDof+1:NumDof+6),                            &
 &                           0.d0*dQddt(NumDof+1:NumDof+6),                      &
 &                           dQdt(NumDof+7:NumDof+10),                           &
-&                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
+&                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,     &
+&                           Qrigid,Options,Cao)                                 
 
-  ! Sperical Joint - sm:
-  !  Qrigid: Total generalized forces on the element: gyroscopic, lumped masses.
-  !          This is non-linear and acts like residual
+  ! Sperical Joint:
+  !  Qrigid: total generalized forces on the element: gyroscopic, lumped masses.
+  !          This is non-linear and acts like residual.
   !  Frigid: influence coeff. matrix for applied forces.
   ! All terms related to the translational dof and that will influence the RHS
   ! of Newmark-beta time stepping are set to zero.
@@ -644,10 +648,10 @@ module xbeam_solv
   call sparse_addmat    (NumDof,NumDof,MRR,mtot,Mtotal)
   call sparse_addmat    (NumDof+6,NumDof+6,Unit4,mtot,Mtotal)
 
-! Spherical Joint - sm:
+! Spherical Joint:
 ! unit diag term in Mtotal to the translational dof of the a FoR. The aim is to
 ! implement M*dBetadt = 0
-! Note: also the columns deleted (though unecessary if the beam root is not
+! Note: also the columns are deleted (though unecessary if the beam root is not
 ! moving) to avoid numerical error. If a moving hinge/spherical joint is implemented,
 ! the columns related to the translational dof can't be set to zero!
   if (SphFlag) then
@@ -672,7 +676,7 @@ module xbeam_solv
     dQdt = dQdt + (1.d0-gamma)*dt*dQddt
     dQddt= 0.d0
 
-    ! Spherical Joint - sm
+    ! Spherical Joint
     ! Predictor step is forced to be zero for translational dofs.
     if (SphFlag) then
       Q(NumDof+1:NumDof+3)=0.d0
@@ -684,14 +688,14 @@ module xbeam_solv
   converged=.false.
 ! Iteration until convergence.
     do Iter=1,Options%MaxIterations+1
-      !Spherical Joint - sm
+      !Spherical Joint
       ! reminder of possible issues
       if (Iter.gt.Options%MaxIterations) then
         print *, '\N success=', SUCCESS
         print *, 'Reminders:'
         print *, '1. Old convergence criteria still used. Consider upgrading as per static solver.'
         print *, '2. Spherical Joint, not hinge!'
-        !!! sm: stop commented to allow python wrapper to handle exceptions
+        ! stop commented to allow python wrapper to handle exceptions
         if (present(SUCCESS)) then
             SUCCESS=.false.
             ! always print last iteration delta if crash occurrs
@@ -745,7 +749,7 @@ module xbeam_solv
 &                               dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                &
 &                               mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
-      ! Spherical Joint - sm:
+      ! Spherical Joint:
       ! for spherical joint doesn't matter the orientation of a, we want all the
       ! global external force to be zero.
       ! Note: for hinge BCs no rotations should be required to understand which
@@ -773,7 +777,7 @@ module xbeam_solv
       call sparse_addmat    (NumDof,NumDof,MRR,mtot,Mtotal)
       call sparse_addmat    (NumDof+6,NumDof+6,Unit4,mtot,Mtotal)
 
-      ! Spherical Joint - sm:
+      ! Spherical Joint:
       ! set Mass matrix to unit. If the hinge/spherical joint translates, the
       ! coulmn part cannot be set to zero (see also above).
       if (SphFlag) then
@@ -792,7 +796,7 @@ module xbeam_solv
       end if
 
       if (maxval(abs(Qtotal)).lt.MinDelta) then
-          converged=.true. ! sm
+          converged=.true.
       end if
 
       ! exit do loop: kept outside in case of other criteria will be introduced
@@ -816,7 +820,7 @@ module xbeam_solv
       call sparse_addmat    (NumDof+6,NumDof  ,CQR,ctot,Ctotal)
       call sparse_addmat    (NumDof+6,NumDof+6,CQQ,ctot,Ctotal)
 
-      ! Spherical Joint - sm:
+      ! Spherical Joint :
       ! set damping and stiffness terms columns and rows to zero. this can also
       ! be set to unit (won't change the nature of the equations at the joint).
       if (SphFlag .eqv. .true.) then
@@ -842,7 +846,7 @@ module xbeam_solv
       dQdt  = dQdt  + gamma/(beta*dt)*DQ
       dQddt = dQddt + 1.d0/(beta*dt*dt)*DQ
 
-      ! Spherical Joint - sm
+      ! Spherical Joint
       ! unsure what's the beast approach. The code works with this part being
       ! commented out.
       !if (SphFlag) then
@@ -1054,7 +1058,7 @@ module xbeam_solv
     Msc = max( maxval(abs( F0(:,4:6)+Fdyn(:,4:6,iStep+1) )), Msc);
   end do
 
-  ! Initialize (sperical joint) sm
+  ! Initialize (sperical joint)
   NumN=size(Node)
   SphFlag=.false.
   do k=1,NumN
@@ -1135,7 +1139,7 @@ module xbeam_solv
   dQdt(NumDof+1:NumDof+6) = Vrel(1,:)
   dQdt(NumDof+7:NumDof+10)= Quat
 
-  ! (spherical joint - sm)
+  ! spherical joint
   if (SphFlag) then
     dQdt(NumDof+1:NumDof+3) = 0.d0
   end if
@@ -1174,7 +1178,7 @@ module xbeam_solv
 &                           dQdt(NumDof+7:NumDof+10),                                                                       &
 &                           mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
-  ! Sperical Joint - sm:
+  ! Sperical Joint:
   !  Qrigid: Total generalized forces on the element: gyroscopic, lumped masses.
   !          This is non-linear and acts like residual
   !  Frigid: influence coeff. matrix for applied forces.
@@ -1200,7 +1204,7 @@ module xbeam_solv
   call sparse_addmat    (NumDof,NumDof,MRR,mtot,Mtotal)
   call sparse_addmat    (NumDof+6,NumDof+6,Unit4,mtot,Mtotal)
 
-! Spherical Joint - sm:
+! Spherical Joint:
 ! unit diag term in Mtotal to the translational dof of the a FoR. The aim is to
 ! implement M*dBetadt = 0
 ! Note: also the columns deleted (though unecessary if the beam root is not
@@ -1230,7 +1234,7 @@ module xbeam_solv
     dQdt = dQdt + (1.d0-gamma)*dt*dQddt
     dQddt= 0.d0
 
-    ! Spherical Joint - sm
+    ! Spherical Joint
     ! Predictor step is forced to be zero for translational dofs.
     if (SphFlag) then
       Q(NumDof+1:NumDof+3)=0.d0
@@ -1242,14 +1246,14 @@ module xbeam_solv
   converged=.false.
 ! Iteration until convergence.
     do Iter=1,Options%MaxIterations+1
-      !Spherical Joint - sm
+      !Spherical Joint
       ! reminder of possible issues
       if (Iter.gt.Options%MaxIterations) then
         print *, '\N success=', SUCCESS
         print *, 'Reminders:'
         print *, '1. Old convergence criteria still used. Consider upgrading as per static solver.'
         print *, '2. Spherical Joint, not hinge!'
-        !!! sm: stop commented to allow python wrapper to handle exceptions
+        ! stop commented to allow python wrapper to handle exceptions
         if (present(SUCCESS)) then
             SUCCESS=.false.
             ! always print last iteration delta if crash occurrs
@@ -1303,7 +1307,7 @@ module xbeam_solv
 &                               dQdt(NumDof+1:NumDof+6),0.d0*dQddt(NumDof+1:NumDof+6),dQdt(NumDof+7:NumDof+10),                &
 &                               mr,MRS,MRR,cr,CRS,CRR,CQR,CQQ,kr,KRS,fr,Frigid,Qrigid,Options,Cao)
 
-      ! Spherical Joint - sm:
+      ! Spherical Joint:
       ! for spherical joint doesn't matter the orientation of a, we want all the
       ! global external force to be zero.
       ! Note: for hinge BCs no rotations should be required to understand which
@@ -1331,7 +1335,7 @@ module xbeam_solv
       call sparse_addmat    (NumDof,NumDof,MRR,mtot,Mtotal)
       call sparse_addmat    (NumDof+6,NumDof+6,Unit4,mtot,Mtotal)
 
-      ! Spherical Joint - sm:
+      ! Spherical Joint:
       ! set Mass matrix to unit. If the hinge/spherical joint translates, the
       ! coulmn part cannot be set to zero (see also above).
       if (SphFlag) then
@@ -1350,7 +1354,7 @@ module xbeam_solv
       end if
 
       if (maxval(abs(Qtotal)).lt.MinDelta) then
-          converged=.true. ! sm
+          converged=.true.
       end if
 
       ! exit do loop: kept outside in case of other criteria will be introduced
@@ -1374,7 +1378,7 @@ module xbeam_solv
       call sparse_addmat    (NumDof+6,NumDof+6,CQQ,ctot,Ctotal)
 
 
-      ! Spherical Joint - sm:
+      ! Spherical Joint:
       ! set damping and stiffness terms columns and rows to zero. this can also
       ! be set to unit (won't change the nature of the equations at the joint).
       if (SphFlag .eqv. .true.) then
@@ -1401,9 +1405,7 @@ module xbeam_solv
       dQdt  = dQdt  + gamma/(beta*dt)*DQ
       dQddt = dQddt + 1.d0/(beta*dt*dt)*DQ
 
-      ! Spherical Joint - sm
-      ! unsure what's the beast approach. The code works with this part being
-      ! commented out.
+      ! Spherical Joint:
       ! Without hardcoding the terms to zero, we make sure the system, durint the
       ! iteration, will converge to the 0.0 solution. Also, non zero values will
       ! not affect other dofs (columns zero in all matrices).

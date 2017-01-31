@@ -80,6 +80,7 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
                         + np.dot(CaB, np.dot(
                         Skew(Omega_B_B), Section[jSection,:])))
             
+#<<<<<<< HEAD
             # Control Surface Update
             if ctrlSurf != None: 
                 for cc in range(NumCtrlSurf):
@@ -136,10 +137,64 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
                                          + np.dot(CBBnew,
                                                   np.dot(Skew(hingeRotDot),
                                                          leverArm))))
+# #=======
+#             if (ctrlSurf != None and 
+#                 jSection > ctrlSurf.iMin and jSection <= ctrlSurf.iMax and
+#                 iNode >= ctrlSurf.jMin and iNode <= ctrlSurf.jMax):
+#                 # Apply changes to Zeta and ZetaDot in a-frame due to control
+#                 # surface movement.
+                
+                # # Check if control surface indices are within range of grid
+                # assert (ctrlSurf.iMin >= 0), 'CtrlSurf iMin less then zero'
+                # assert (ctrlSurf.iMax < Section.shape[0]), ('CtrlSurf iMax '
+                #         + 'greater than section iMax')
+                # assert (ctrlSurf.jMin >= 0), 'CtrlSurf jMin less then zero'
+                # assert (ctrlSurf.jMax < PosDefor.shape[0]), ('CtrlSurf jMax '
+                #         + 'greater than section jMax')
+                
+                # # Determine hinge point
+                # hingePoint = Section[ctrlSurf.iMin,:]
+                
+                # # Use a CRV to define rotation in sectional frame
+                # hingeRot = np.array([ctrlSurf.beta, 0.0, 0.0])
+                # hingeRotDot = np.array([ctrlSurf.betaDot, 0.0, 0.0])
+                
+                # # Find lever arm from hinge point
+                # leverArm = Section[jSection,:] - hingePoint
+                
+                # # Deformed position of node in B-frame
+                # CBBnew = Psi2TransMat(hingeRot)
+                # newSectionPoint = hingePoint + np.dot(CBBnew,leverArm)
+                
+                # # Overwrite corresponding element in Aerogrid
+                # AeroGrid[jSection,iNode,:] = (PosDefor[iNode,:]
+                #                               + np.dot(CaB,newSectionPoint))
+                
+                # # Overwrite corresponding element in AeroVels
+                # # There is an extra velocity contribution due to the rotation 
+                # # of the hinge, with reference frame Bnew. Hence, 
+                # # CBBnew * ( Omega_Bnew_Bnew X Point__Bnew), which is the
+                # # velocity at a point on the flap due to the rotation
+                # # of the hinge projected in the B-frame. is added.
+                # # Note: Skew(hingeRotDot) is an acceptable definition of the
+                # # angular rate as it corresponds to planar motion within the
+                # # section. In general Skew(T(\psi)\dot{\psi}) is required.
+                # # Warning: should omega_Bnew_Bnew  (Skew(hingeRotDot))
+                # # be an inertial velocity?
+                # AeroVels[jSection,iNode,:] = (VelA_A
+                #         + np.dot(Skew(OmegaA_A),PosDefor[iNode,:])
+                #         + PosDotDef[iNode,:]
+                #         + np.dot(CaB, 
+                #                  np.dot(Skew(Omega_B_B), newSectionPoint)
+                #                  + np.dot(CBBnew,
+                #                           np.dot(Skew(hingeRotDot),
+                #                                  leverArm))))
+# >>>>>>> rob/master
                 
         #END for jSection
     #END for iNode
     
+
     if ( (OriginA_a != None) and (PsiA_G != None) ):
         # Get transformation from a-frame to earth frame.
         #CaG = Psi2TransMat(PsiA_G)
@@ -162,6 +217,7 @@ def CoincidentGrid(PosDefor, PsiDefor, Section,
 
 def CoincidentGridForce(XBINPUT, PsiDefor, Section, AeroForces,
                         BeamForces, PsiA_G=np.zeros(3)):
+
     """@brief Calculates aero forces and moments on the beam nodes from those on
     the aerodynamic grid.
     @param XBINPUT Beam input options.

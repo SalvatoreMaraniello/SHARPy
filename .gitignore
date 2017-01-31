@@ -34,13 +34,9 @@ var
 sdist
 develop-eggs
 .installed.cfg
-<<<<<<< HEAD
-#lib # sm july 2014
-=======
+
+# sm july 2014
 #lib
->>>>>>> 6b938af9e48891042977aa916567a6853bfabd53
-lib64
-res  # 
 
 # Installer logs
 pip-log.txt
@@ -148,9 +144,11 @@ cmpc/
 /UVLMLib/.cproject
 
 
-
-
 /BeamLib/openmdao_log.txt
 /BeamLib/src/optimiser/wrapper/test/openmdao_log.txt
 /BeamLib/src/fortran/install/src/xbeam_solv_bkp.f90
 /BeamLib/src/fortran/install/src/xbeam_solv_sph_aborted.f90
+
+
+# Sublime editor
+*.sublime-*

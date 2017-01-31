@@ -142,8 +142,7 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
             scripts. E.g "/home/rjs10/git/SHARPy/output/DancingFrame/PyBeamInput
             "
             """
-    
-    
+
     # Load customised inputs
     if moduleName != None:
         Input = __import__(moduleName)
@@ -156,8 +155,7 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
             raise
     else:
         Input = __import__('Input')
-    
-    
+
     #Create time vector.
     Time = np.arange(XBINPUT.t0,XBINPUT.tfin  + XBINPUT.dt, XBINPUT.dt,
                      ct.c_double)
@@ -165,12 +163,11 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
     #Calculate number of timesteps.
     NumSteps = ct.c_int(len(Time) - 1)
     
-    
     # sm: set dynamic loads
     XBINPUT = DynLoads(XBINPUT)
     
-    
-    # ------------------------------------------------------------- sm: move into DynLoads
+    # -------------------------------------------------- sm: move into DynLoads
+
     #Create force-amp-in-time array.
     ForceTime = np.zeros(NumSteps.value+1,ct.c_double,'F')
     if XBINPUT.ForcingType == 'Const':
@@ -237,7 +234,9 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
             
     else:
         raise ValueError('ForcingType not recognised')
-    # ------------------------------------------------------------- sm: move into DynLoads    
+
+    # -------------------------------------------------- sm: move into DynLoads
+
     
     # Create default forced velocities and accelerations if not specified.
     if hasattr(XBINPUT, 'ForcedVel'):

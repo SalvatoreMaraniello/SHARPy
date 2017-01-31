@@ -268,8 +268,7 @@ class Xbinput:
                  ):
         """
         @brief NumNodesElem and NumElems must be specified for initialisation
-                  of force arrays.
-        
+               of force arrays.
         @param NumNodes Local variable storing number of nodes in model for
                array init.
         """
@@ -315,8 +314,6 @@ class Xbinput:
         self.ForceStatic = np.zeros((NumNodesTot,6),ct.c_double,'F')
         self.ForceStatic_foll = np.zeros((NumNodesTot,6),ct.c_double,'F')
         self.ForceStatic_dead = np.zeros((NumNodesTot,6),ct.c_double,'F')
-        
-        
         
         ### sm: changed standard for dynamic force input
         self.ForceDynType = None # 'dss', 'spline', 'modal'
@@ -507,7 +504,7 @@ class Xboutput:
             setattr(self, ww, kwargs[ww])
         
         return self
-    
+
      
     
 def dump(obj):

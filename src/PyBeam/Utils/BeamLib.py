@@ -485,7 +485,7 @@ def Cbeam3_Asbly_Fglobal(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
     
     @details Numpy arrays are mutable so the changes made here are 
     reflected in the data of the calling script after execution."""
-    
+
     f_cbeam3_asbly_fglobal( \
                 ct.byref(ct.c_int(XBINPUT.NumElems)),\
                 ct.byref(NumNodes_tot),\
@@ -613,6 +613,124 @@ def Xbeam_Asbly_Frigid(XBINPUT, NumNodes_tot, XBELEM, XBNODE, \
                 PsiIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 PosDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 PsiDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
+# <<<<<<< HEAD
+                ct.byref(ct.c_int(Settings.DimMat)),\
+                ct.byref(NumDof),\
+                ct.byref(frf), \
+                FrigidFull_foll.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                ct.byref(frd),\
+                FrigidFull_dead.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                Cao.ctypes.data_as(ct.POINTER(ct.c_double)) ) 
+# =======
+#                 ForceStatic.ctypes.data_as(ct.POINTER(ct.c_double)),\
+#                 ct.byref(ct.c_int(Settings.DimMat)), \
+#                 ct.byref(NumDof), \
+#                 ct.byref(ksf), \
+#                 KglobalFull_foll.ctypes.data_as(ct.POINTER(ct.c_double)), \
+#                 ct.byref(fsf), \
+#                 FglobalFull_foll.ctypes.data_as(ct.POINTER(ct.c_double)),\
+#                 ct.byref(fsd),\
+#                 FglobalFull_dead.ctypes.data_as(ct.POINTER(ct.c_double)),\
+#                 Cao.ctypes.data_as(ct.POINTER(ct.c_double)) ) 
+# >>>>>>> rob/master
+
+def Xbeam_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
+                        PosIni, PsiIni, PosDefor, PsiDefor,\
+                        PosDotDef, PsiDotDef, PosDotDotDef, PsiDotDotDef,\
+                        Vrel, VrelDot, Quat,\
+                        NumDof, DimMat,\
+                        mr, MrsFull, Mrr,\
+                        cr, CrsFull, Crr, Cqr, Cqq,\
+                        kr, KrsFull, fr, FrigidFull,\
+                        Qrigid, XBOPTS, Cao):
+    """@brief Wrapper for f_xbeam_asbly_dynamic."""
+
+    f_xbeam_asbly_dynamic( \
+            ct.byref(ct.c_int(XBINPUT.NumElems)), \
+            ct.byref(NumNodes_tot), \
+            XBELEM.NumNodes.ctypes.data_as(ct.POINTER(ct.c_int)),\
+            XBELEM.MemNo.ctypes.data_as(ct.POINTER(ct.c_int)),\
+            XBELEM.Conn.ctypes.data_as(ct.POINTER(ct.c_int)),\
+            XBELEM.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
+            XBELEM.Length.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.PreCurv.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.Psi.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.Vector.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.Mass.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.Stiff.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.InvStiff.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            XBELEM.RBMass.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
+            XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+            XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)), \
+            PosIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            PsiIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            PosDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            PsiDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            PosDotDef.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            PsiDotDef.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            PosDotDotDef.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            PsiDotDotDef.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Vrel.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            VrelDot.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Quat.ctypes.data_as(ct.POINTER(ct.c_double)),\
+            ct.byref(NumDof), \
+            ct.byref(ct.c_int(DimMat)), \
+            ct.byref(mr), \
+            MrsFull.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Mrr.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            ct.byref(cr), \
+            CrsFull.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Crr.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Cqr.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Cqq.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            ct.byref(kr), \
+            KrsFull.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            ct.byref(fr), \
+            FrigidFull.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Qrigid.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            Cao.ctypes.data_as(ct.POINTER(ct.c_double)), \
+            ct.byref(XBOPTS.FollowerForce),\
+            ct.byref(XBOPTS.FollowerForceRig),\
+            ct.byref(XBOPTS.PrintInfo),\
+            ct.byref(XBOPTS.OutInBframe),\
+            ct.byref(XBOPTS.OutInaframe),\
+            ct.byref(XBOPTS.ElemProj),\
+            ct.byref(XBOPTS.MaxIterations),\
+            ct.byref(XBOPTS.NumLoadSteps),\
+            ct.byref(XBOPTS.NumGauss),\
+            ct.byref(XBOPTS.Solution),\
+            ct.byref(XBOPTS.DeltaCurved),\
+            ct.byref(XBOPTS.MinDelta),\
+            ct.byref(XBOPTS.NewmarkDamp) )
+    
+
+def Xbeam_Asbly_Frigid(XBINPUT, NumNodes_tot, XBELEM, XBNODE, \
+                        PosIni, PsiIni, PosDefor, PsiDefor, NumDof, \
+                        frf, FrigidFull_foll, frd, FrigidFull_dead, Cao):
+    """@brief Python wrapper for f_xbeam_asbly_frigid.
+    
+    @details Numpy arrays are mutable so the changes made here are 
+    reflected in the data of the calling script after execution."""
+    
+    f_xbeam_asbly_frigid( \
+                ct.byref(ct.c_int(XBINPUT.NumElems)),\
+                ct.byref(NumNodes_tot),\
+                XBELEM.NumNodes.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.MemNo.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.Conn.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.Length.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.PreCurv.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.Psi.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.Vector.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                PosIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PsiIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PosDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PsiDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 ct.byref(ct.c_int(Settings.DimMat)),\
                 ct.byref(NumDof),\
                 ct.byref(frf), \
@@ -621,6 +739,65 @@ def Xbeam_Asbly_Frigid(XBINPUT, NumNodes_tot, XBELEM, XBNODE, \
                 FrigidFull_dead.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 Cao.ctypes.data_as(ct.POINTER(ct.c_double)) ) 
 
+
+def Xbeam_Solv_FreeNonlinDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni,\
+            PsiIni, XBNODE, NumDof, PosDefor, PsiDefor, Quat, NumSteps, Time,\
+            ForceTime, ForcedVel, ForcedVelDot, PosDotDef, PsiDotDef,\
+            DynOut, OutGrids):
+    """@brief Python wrapper for f_xbeam_solv_couplednlndyn
+    
+    @details Numpy arrays are mutable so the changes (solution) made here are
+     reflected in the data of the calling script after execution."""
+    
+    f_xbeam_solv_couplednlndyn(ct.byref(ct.c_int(XBINPUT.iOut)),\
+                ct.byref(NumDof),\
+                ct.byref(NumSteps),\
+                Time.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                ct.byref(ct.c_int(XBINPUT.NumElems)),\
+                XBELEM.NumNodes.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.MemNo.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.Conn.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBELEM.Length.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.PreCurv.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.Psi.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.Vector.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.Mass.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.Stiff.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.InvStiff.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBELEM.RBMass.ctypes.data_as(ct.POINTER(ct.c_double)), \
+                ct.byref(NumNodes_tot),\
+                XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBINPUT.ForceStatic.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBINPUT.ForceDyn.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                ForceTime.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                ForcedVel.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                ForcedVelDot.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                Quat.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PosIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PsiIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PosDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PsiDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PosDotDef.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                PsiDotDef.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                DynOut.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                OutGrids.ctypes.data_as(ct.POINTER(ct.c_bool)),\
+                ct.byref(XBOPTS.FollowerForce),\
+                ct.byref(XBOPTS.FollowerForceRig),\
+                ct.byref(XBOPTS.PrintInfo),\
+                ct.byref(XBOPTS.OutInBframe),\
+                ct.byref(XBOPTS.OutInaframe),\
+                ct.byref(XBOPTS.ElemProj),\
+                ct.byref(XBOPTS.MaxIterations),\
+                ct.byref(XBOPTS.NumLoadSteps),\
+                ct.byref(XBOPTS.NumGauss),\
+                ct.byref(XBOPTS.Solution),\
+                ct.byref(XBOPTS.DeltaCurved),\
+                ct.byref(XBOPTS.MinDelta),\
+                ct.byref(XBOPTS.NewmarkDamp) )
+        
 
 def Xbeam_Solv_FreeNonlinDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni,\
             PsiIni, XBNODE, NumDof, PosDefor, PsiDefor, Quat, NumSteps, Time,\

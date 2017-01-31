@@ -955,7 +955,6 @@ void KatzForces(const double* Zeta_Vec, const double* Gamma_Vec,\
 								0.0,0.5,true);
 		}
 	}
-
 }
 
 
@@ -1374,9 +1373,4 @@ void cpp_solver_vlm(const double* Zeta_Vec, const double* ZetaDot_Vec, \
 
 	}
 }
-
-
-
-
-
 

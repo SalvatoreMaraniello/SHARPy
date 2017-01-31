@@ -13,7 +13,7 @@
 !    -cbeam3_asbly_static : Assembly matrices for nonlinear static problem.
 !    -cbeam3_asbly_modal  : Assembly matrices for modal analysis.
 !    -cbeam3_asbly_dynamic: Assembly matrices for nonlinear dynamic problems.
-!
+!:129
 !-> Remarks.-
 !  1) HH (20.09.2011) Changes made according to new version of nlabs r3.0,
 !     which include derivatives of follower forces and new slave2master trans
@@ -135,7 +135,7 @@ module cbeam3_asbly
 !    call cbeam3_projs2m (NumNE,Elem(iElem)%Master(:,:),Psi0(iElem,:,:),Psi0,SB2B1)
     call cbeam3_slave2master (NumNE,Elem(iElem)%Master(:,:),rElem0(:,4:6),Psi0,rElem(:,4:6),PsiDefor,SB2B1)
     Kelem=matmul(transpose(SB2B1),matmul(Kelem,SB2B1))
-    Felem=matmul(transpose(SB2B1),Felem) !sm: ???
+    Felem=matmul(transpose(SB2B1),Felem)
     Qelem=matmul(transpose(SB2B1),Qelem)
 
  ! Add to global matrix. Remove columns and rows at clamped points.

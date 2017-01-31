@@ -57,8 +57,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     @todo: Add list of variables with description
     
     """
-       
-    
+
     # Check correct solution code.
     assert XBOPTS.Solution.value == 912, ('NonlinearFlightDynamic requested' +
                                           ' with wrong solution code')
@@ -84,9 +83,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     XBOUT.ForceRigidList=[]
 
 
-
     #--------------------------------------------- Initial Displacement: ImpStart vs Static Solution
-    
     
     # Initialise static beam data.
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
@@ -99,24 +96,37 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
         VMOPTS.Steady = ct.c_bool(True)
         Rollup = VMOPTS.Rollup.value
         VMOPTS.Rollup.value = False
-        # Solve Static Aeroelastic.
-        # Note: output force includes gravity loads
-        
+
         if VMINPUT.ctrlSurf != None:
             # open-loop control
             for cc in range(len(VMINPUT.ctrlSurf)):
                 VMINPUT.ctrlSurf[cc].update(0.0,iStep=0)
-        
-        
-        PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
-                    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)          
+
+        # Solve Static Aeroelastic.
+        # Note: output force includes gravity loads
+        #PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
+        #    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        XBSTA=Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
+        PosDefor=XBSTA.PosDeforStatic
+        PsiDefor=XBSTA.PsiDeforStatic
+        Zeta=XBSTA.ZetaStatic
+        ZetaStar=XBSTA.ZetaStarStatic
+        Gamma=XBSTA.GammaStatic
+        GammaStar=XBSTA.GammaStarStatic
+        Force=XBSTA.ForceTotStatic
+        del XBSTA
+
         XBOPTS.Solution.value = 912 # Reset options.
         VMOPTS.Steady = ct.c_bool(False)
         VMOPTS.Rollup.value = Rollup
         # isolate aerodynamic force for saving
         NonAeroForce = XBINPUT.ForceStatic.copy('F')
+
+        #import pdb; pdb.set_trace()
+        #from IPython import embed; embed()
+
         AddGravityLoads(NonAeroForce, XBINPUT, XBELEM, AELAOPTS,
-                               PsiDefor, VMINPUT.c)
+                        PsiDefor, VMINPUT.c)
         ForceAero = (Force-NonAeroForce).copy('C')
         del NonAeroForce
     elif AELAOPTS.ImpStart == True:
