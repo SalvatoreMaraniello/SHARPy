@@ -69,7 +69,6 @@ Debug/
 cmpc/
 
 
-
 /BeamLib/src/optimiser/res/*
 /BeamLib/src/optimiser/tex/*.aux
 /BeamLib/src/optimiser/tex/*.pdf
@@ -152,3 +151,7 @@ cmpc/
 
 # Sublime editor
 *.sublime-*
+
+
+# External Libraries folder
+ExtLib
