@@ -72,12 +72,12 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
 
         # ------------------------------------------------ Beam solution options
         self.xbopts = DerivedTypes.Xbopts(FollowerForce = ct.c_bool(False),
-                                     MaxIterations = ct.c_int(25),
+                                     MaxIterations = ct.c_int(100),
                                      PrintInfo = ct.c_bool(True),
                                      OutInaframe = ct.c_bool(True),
                                      NumLoadSteps = ct.c_int(15),
                                      Solution = ct.c_int(912),
-                                     MinDelta = ct.c_double(1e-5),
+                                     MinDelta = ct.c_double(1e-6),
                                      NewmarkDamp = ct.c_double( 5e-2))
 
 
@@ -245,14 +245,14 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
         xbout=Solve_Py(self.xbinput, self.xbopts, self.vmopts, self.vminput,
                        self.aelaopts, SaveDict=self.savedict)
 
-
+        print(xbout.DynOut[0,:])
         # ------------------------------------------------------------- Testing
 
         # Tip initial/final position (FoR A)
-        Tip0 = np.array([-14.074999557383318, -0.10975597617063762, 
-                                                             7.063461979098654])
-        TipEnd=np.array([-14.178217935221744, -0.09523382983611592,	
-                                                             6.891872959990548])
+        Tip0 = np.array([-14.075000340332117, -0.10975596305021743,
+                                                             7.063460636167727])
+        TipEnd=np.array([-14.178218001238577, -0.09523383752103955,
+                                                             6.891872846008573])
         self.assertTrue(np.linalg.norm(xbout.DynOut[0,:]-Tip0) < TOL,
                         msg='Node 0 initial position: relative difference '  
                                                    'above tolerance %.2e' %TOL )
@@ -260,10 +260,9 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
                         -TipEnd) < TOL, msg='Node 0 final position: relative '
                                         'difference above tolerance %.2e' %TOL )
 
-
         # Cartesian rotation vectors
-        PsiTip0x = 0.059785862902468422
-        PsiTipEndx = 0.076647741437134667
+        PsiTip0x = 0.0597858606169632
+        PsiTipEndx = 0.07664774257355415
         self.assertTrue( np.abs(PsiTip0x-xbout.PsiDeforStatic[0,0,0]) < TOL,
                          msg='Node 0 initial x rotation: relative difference '
                                                     'above tolerance %.2e'%TOL )
@@ -272,11 +271,11 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
                                                    'above tolerance %.2e'%TOL  )
 
         # Quaternions final
-        QuatEnd=np.array([ 0.9911874,  0.04327618, -0.12507956, -0.00546109])
+        QuatEnd=np.array([ 0.9911873963518871, 0.043276176323756375, 
+                                   -0.12507955212199778, -0.005461091184220796])
         self.assertTrue( np.linalg.norm(xbout.QuatList[-1]-QuatEnd) < TOL,
                          msg='Final quaternion: relative difference above '
                                                           'tolerance %.2e'%TOL )
-
 
         return xbout
 
@@ -299,10 +298,10 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
         # ---------------------------------------------------------------Testing
 
         # Tip initial/final position (FoR A)
-        Tip0 = np.array([-15.999638684431325, 0.0014610025322748543, 
-                                                           0.10079232151504619])
-        TipEnd=np.array([-15.999717588696065, 0.003799444708618084, 
-                                                           0.09428770140427575])
+        Tip0 = np.array([-15.999638684284168, 0.00146100289313548,
+                                                           0.10079233807585077])
+        TipEnd=np.array([-15.999717588696027, 0.0037994447293490086, 
+                                                           0.09428770140878796])
         self.assertTrue(np.linalg.norm(xbout.DynOut[0,:]-Tip0) < TOL,
                         msg='Node 0 initial position: relative difference '  
                                                    'above tolerance %.2e' %TOL )
@@ -311,8 +310,8 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
                                         'difference above tolerance %.2e' %TOL )
 
         # Cartesian rotation vectors
-        PsiTip0x = 0.0012716072782286982
-        PsiTipEndx = 0.0020322238658857287
+        PsiTip0x = 0.0012716073996545453
+        PsiTipEndx = 0.002032223865776397
         self.assertTrue( np.abs(PsiTip0x-xbout.PsiDeforStatic[0,0,0]) < TOL,
                          msg='Node 0 initial x rotation: relative difference '
                                                     'above tolerance %.2e'%TOL )
@@ -321,8 +320,8 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
                                                    'above tolerance %.2e'%TOL  )
 
         # Quaternions final
-        QuatEnd=np.array([ 0.9872585711139502, 0.04310464010934549, 
-                                     -0.1530289606836371, -0.00668138871575723])
+        QuatEnd=np.array([ 0.9872585711139321, 0.04310464010934447, 
+                                   -0.15302896068375335, -0.006681388715762283])
         self.assertTrue( np.linalg.norm(xbout.QuatList[-1]-QuatEnd) < TOL,
                          msg='Final quaternion: relative difference above '
                                                           'tolerance %.2e'%TOL )
@@ -339,7 +338,3 @@ if __name__=='__main__':
     #T.setUp()
     #xbout=T.testVeryFlexibleWing()
     #xbout=T.testVeryStiffWing()
-    
- 
-
-    
