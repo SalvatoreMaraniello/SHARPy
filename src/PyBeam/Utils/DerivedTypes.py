@@ -210,10 +210,12 @@ class Xbinput:
     @param BeamMass 6-by-6 sectional mass matrix.
     @param BConds 2-char string with boundary condition, 'CF' = Clamped-Free.
         C = clamp
-        S = spherical
+        S = spherical or costum (rigid+flex body dynamics solutions, 912, 932)
         F = free
-        when 'S' is set, the dof to block can be specified via the Enforce{Ang/Tra}Vel
-        parameters.
+        When 'S' is set, in a flight-dynamics solution (912, 932), the dof to 
+        block can be specified via the Enforce{Ang/Tra}Vel parameters. In a 
+        rigid+flex body dynamics, C will determine the beam point attached to
+        the moving body frame A. 'FF' will always return error.
     @param Sigma Stiffness parameter. Not Implemented.
     @param iOut Output file.
     @param t0 Initial time.

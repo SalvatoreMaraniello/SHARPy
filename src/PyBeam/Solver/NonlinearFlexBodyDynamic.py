@@ -23,7 +23,7 @@ from PyBeam.Solver.NonlinearStatic import Solve_Py as Solve_Py_Static
 import PyBeam.Utils.XbeamLib as xbl
 import h5py, time  
 import PyLibs.io.save, PyLibs.io.dat
-
+from IPython import embed
 
 
 def Solve_F90(XBINPUT,XBOPTS,**kwords):
@@ -59,7 +59,6 @@ def Solve_F90(XBINPUT,XBOPTS,**kwords):
 
     #Change solution code back to NonlinearDynamic
     XBOPTS.Solution.value = 912
-    
     
     #Write deformed configuration to file
     ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_def.dat'
@@ -169,18 +168,17 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     #Initialise beam
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT,XBOPTS)
-    
-    # special BCs
-    SphFlag=False
-    if XBNODE.Sflag.any(): SphFlag=True
      
     #Solve static ?
     PosDefor = PosIni.copy(order='F')
     PsiDefor = PsiIni.copy(order='F')
 
     if XBOPTS.ImpStart==False:
-        XBOPTS.Solution.value = 112 
+        if XBNODE.Sflag.any():
+            raise NameError('Solution with Spherical joint not possible/implemented!')
+        XBOPTS.Solution.value = 112
         PosDefor, PsiDefor = Solve_Py_Static(XBINPUT,XBOPTS)
+    #embed()
     XBOPTS.Solution.value = 912 
 
     if SaveDict['Format']=='dat': 
@@ -373,32 +371,27 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     # -------------------------------------------------------------------   
     # special BCs
     iiblock=[]
-    
-    if SphFlag:
-
+    if XBNODE.Sflag.any():
         # block translations (redundant:)
         for ii in range(3):
-            if XBINPUT.EnforceTraVel_FoRA[ii] == True:
-                iiblock.append(NumDof.value+ii)
+            if XBINPUT.EnforceTraVel_FoRA[ii] == True: iiblock.append(NumDof.value+ii)
         # block rotations
         iirotfree=[] # free rotational dof 
         for ii in range(3):
-            if XBINPUT.EnforceAngVel_FoRA[ii] is True:
-                iiblock.append(NumDof.value+3+ii)
-            else:
-                iirotfree.append(NumDof.value+3+ii)
+            if XBINPUT.EnforceAngVel_FoRA[ii] is True: iiblock.append(NumDof.value+3+ii)
+            else: iirotfree.append(NumDof.value+3+ii)
 
-    # modify matrices
     if len(iiblock)>0:
-        # block dof
         Msys[iiblock,:] = 0.0
+        Msys[:,iiblock] = 0.0 
         Msys[iiblock,iiblock] = 1.0
-        Qsys[iiblock] = 0.0
-
-        # add damp at the spherical joints
+        Csys[iiblock,:] = 0.0
+        Ksys[iiblock,:] = 0.0
+        Qsys[iiblock]   = 0.0
         if XBINPUT.sph_joint_damping is not None:
-            Qsys[iirotfree]+= XBINPUT.sph_joint_damping*dQdt[iirotfree]
-         
+            Csys[iirotfree,iirotfree] += XBINPUT.sph_joint_damping
+            Qsys[iirotfree] += XBINPUT.sph_joint_damping*dQdt[iirotfree]
+    #from IPython import embed; embed()     
     # add structural damping term
     if XBINPUT.str_damping_model is not None:
         Cdamp = XBINPUT.str_damping_param['alpha'] * MssFull + \
@@ -601,11 +594,13 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
             # final of initial iter
             if iStep==0:
                 XBOUT.Qstruc0=Qstruc.copy()
-                XBOUT.Qrigid0=Qrigid.copy()    
-
-            #Compute residual
-            Qstruc += -np.dot(FstrucFull, Force_Dof)
-            Qrigid += -np.dot(FrigidFull, Force_All)
+                XBOUT.Qrigid0=Qrigid.copy()
+  
+            Qsys[:NumDof.value] = Qstruc
+            Qsys[NumDof.value:NumDof.value+6] = Qrigid
+            Qsys[NumDof.value+6:] = np.dot(Cqq,dQdt[NumDof.value+6:])
+            
+            Qsys += np.dot(Msys,dQddt)
 
             # include damping
             if XBINPUT.str_damping_model == 'prop':
