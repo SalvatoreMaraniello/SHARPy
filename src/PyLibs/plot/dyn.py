@@ -150,18 +150,20 @@ def beam_snapshots(THPosDef,asp_ratio='equal'):
     else:
         raise NameError('THPosDef is not 2D or 3D!!!')
     
-    ax.set_aspect(asp_ratio)
+    if asp_ratio is not None:
+        ax.set_aspect(asp_ratio)
     
     return fig, ax
     
 
-def polytrend(xv,tv,Fmat,fig=plt.figure('Poly trend',(10,8)),**kwargs):
+
+def polytrend(xv,tv,Fmat,fig,**kwargs):
     '''
     The function visualises the quantity Fmat, continuously defined over the 
     domain xv, at the discrete times tv.
     Fmat has size (len(xv),len(tv))
     '''
-    
+
     #------------------------------------------------ Extract optional arguments
     #if 'figure' is kwargs:
     #    fig = kwargs['figure']

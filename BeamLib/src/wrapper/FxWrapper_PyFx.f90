@@ -116,7 +116,7 @@ module test
         integer     ,intent(in), optional :: Sflag(NumNodes)
         
         integer:: i,i2
-        
+
         do i=1,NumNodes
             i2 = (i-1)*2
             Node(i)%Master(1) = Master(1+i2)
@@ -999,7 +999,9 @@ module test
     &           PrintInfo, OutInBframe, OutInaframe,    &!for pack_xbopts
     &           ElemProj, MaxIterations, NumLoadSteps,  &!for pack_xbopts
     &           NumGauss, Solution, DeltaCurved,        &!for pack_xbopts
-    &           MinDelta, NewmarkDamp)                   !for pack_xbopts)
+    &           MinDelta, NewmarkDamp,                  &!for pack_xbopts)
+    &           Cao,                                    &
+    &           Nod_Sdof                                )                             
         
         integer,intent(in)   :: NumElems
         integer,intent(in)   :: NumNodes_tot
@@ -1043,6 +1045,10 @@ module test
         real(8),intent(in) :: DeltaCurved
         real(8),intent(in) :: MinDelta
         real(8),intent(in) :: NewmarkDamp
+        !real(8),intent(in), optional :: Cao(3,3)
+        real(8),intent(in) :: Cao(3,3)
+        integer,intent(inout),optional :: Nod_Sdof(NumNodes_tot)
+
         
         type(xbelem),allocatable:: Elem(:)
         type(xbnode),allocatable:: Node(:)
@@ -1076,7 +1082,11 @@ module test
         &       InvStiff_Array,RBMass_Array)
         
         ! Convert PY data to F90 data
-        call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
+        if (present(Nod_Sdof)) then
+            call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof,Nod_Sdof)    
+        else
+            call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
+        end if
 
         ! Convert PY data to F90 data
         call pack_xbopts(Options,FollowerForce,FollowerForceRig,            &
@@ -1092,7 +1102,7 @@ module test
         
         ! Assembly matrices for a nonlinear static problem
         call cbeam3_asbly_static(Elem,Node,Coords,Psi0,PosDefor,PsiDefor,&
-        &       AppForces,ks,Kglobal,fs,Fglobal,Qglobal,Options)
+        &       AppForces,ks,Kglobal,fs,Fglobal,Qglobal,Options, Cao)
         
         ! Convert F90 data to PY data
         call sparse2full_rank(ks,Kglobal,NumDof,NumDof,Kglobal_Full)
@@ -1341,7 +1351,7 @@ module test
     subroutine wrap_cbeam3_asbly_dynamic(NumElems,NumNodes_tot,NumNodes,&
     &           MemNo,Conn,Master_Array,Length,PreCurv,Psi,Vector,Mass_Array,&
     &           Stiff_Array,InvStiff_Array,RBMass_Array,&
-    &           Nod_Master,Nod_Vdof,Nod_Fdof,&
+    &           Nod_Master,Nod_Vdof,Nod_Fdof,Nod_Sdof,&
     &           Coords_Array,Psi0_Array,PosDefor_Array,PsiDefor_Array,&
     &           PosDeforDot_Array,PsiDeforDot_Array,&
     &           PosDeforDDot_Array,PsiDeforDDot_Array,&
@@ -1374,6 +1384,7 @@ module test
         integer,intent(in) :: Nod_Master(2*NumNodes_tot)
         integer,intent(in) :: Nod_Vdof(NumNodes_tot)
         integer,intent(in) :: Nod_Fdof(NumNodes_tot)
+        integer,intent(in) :: Nod_Sdof(NumNodes_tot)
         real(8),intent(in) :: Coords_Array(NumNodes_tot*3)
         real(8),intent(in) :: Psi0_Array(NumElems*MaxElNod*3)
         real(8),intent(in) :: PosDefor_Array(NumNodes_tot*3)
@@ -1467,7 +1478,7 @@ module test
         &       InvStiff_Array,RBMass_Array)
 
 		! Convert PY data to F90 data        
-        call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof)
+        call pack_xbnode(NumNodes_tot,Node,Nod_Master,Nod_Vdof,Nod_Fdof,Nod_Sdof)
 
 		! Convert PY data to F90 data
 		call pack_xbopts(Options,FollowerForce,FollowerForceRig,			&
@@ -2030,7 +2041,7 @@ module test
 &					Psi, Vector, Mass_Array,				&!for do_xbelem_var
 &					Stiff_Array,							&!for do_xbelem_var
 &					InvStiff_Array, RBMass_Array,			&!for do_xbelem_var
-&					NumNodes_tot, Master, Vdof, Fdof,		&!for pack_xbnode
+&					NumNodes_tot, Master, Vdof, Fdof,Sdof,  &!for pack_xbnode
 &					AppForces_Vec,&
 &					Coords_Vec,Psi0_Vec,&
 &					PosDefor_Vec,PsiDefor_Vec,&
@@ -2038,7 +2049,9 @@ module test
 &					PrintInfo, OutInBframe, OutInaframe,	&!for pack_xbopts
 &					ElemProj, MaxIterations, NumLoadSteps,	&!for pack_xbopts
 &					NumGauss, Solution, DeltaCurved, 		&!for pack_xbopts
-&					MinDelta, NewmarkDamp)					 !for pack_xbopts
+&					MinDelta, NewmarkDamp)                   !for pack_xbopts
+
+
 
 		integer,   	intent(in) 	:: NumDof       		! No. of independent DoF
 		integer,	intent(in) 	:: NumElems				!for do_xbelem_var
@@ -2058,11 +2071,12 @@ module test
         integer,	intent(in) 	:: Master(2*NumNodes_tot)	!for pack_xbnode
         integer,	intent(in) 	:: Vdof(NumNodes_tot)		!for pack_xbnode
         integer,	intent(in) 	:: Fdof(NumNodes_tot)		!for pack_xbnode
+        integer,    intent(in)  :: Sdof(NumNodes_tot)       !for pack_xbnode
 		real(8),   	intent(in) 	:: AppForces_Vec(NumNodes_tot*6)!Applied static nodal forces
 		real(8),   	intent(in) 	:: Coords_Vec(NumNodes_tot*3)	!Undefrmd coords of grid points
   		real(8),   	intent(in)  :: Psi0_Vec(NumElems*MaxElNod*3)	!Undefrmd CRV of nodes in elems
-  		real(8),   	intent(inout)	:: PosDefor_Vec(NumNodes_tot*3)   !Initial/final grid pts
-  		real(8),   	intent(inout)	:: PsiDefor_Vec(NumElems*MaxElNod*3) !Init/Fnl CRVs
+  		real(8),   	intent(inout) :: PosDefor_Vec(NumNodes_tot*3)   !Initial/final grid pts
+  		real(8),   	intent(inout) :: PsiDefor_Vec(NumElems*MaxElNod*3) !Init/Fnl CRVs
 		logical,	intent(in) :: FollowerForce
         logical,	intent(in) :: FollowerForceRig
         logical,	intent(in) :: PrintInfo
@@ -2076,6 +2090,7 @@ module test
         real(8),	intent(in) :: DeltaCurved
         real(8),	intent(in) :: MinDelta
         real(8),	intent(in) :: NewmarkDamp
+        !integer,intent(inout),optional :: Sdof(NumNodes_tot)
 
 		! Declare local variables 
         type(xbelem),allocatable:: Elem(:) ! Initialise vec of xbelem derived type
@@ -2105,8 +2120,8 @@ module test
 &				Master_Array,Length,PreCurv,Psi,Vector,Mass_Array, 		&
 &				Stiff_Array,InvStiff_Array,RBMass_Array)
 
-		! Convert PY data to F90 data
-		call pack_xbnode(NumNodes_tot,Node,Master,Vdof,Fdof)
+        ! Convert PY data to F90 data
+            call pack_xbnode(NumNodes_tot,Node,Master,Vdof,Fdof,Sdof)    
 
 		! Convert PY data to F90 data
 		call pack_xbopts(Options,FollowerForce,FollowerForceRig,			&

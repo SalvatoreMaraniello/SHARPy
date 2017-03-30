@@ -40,7 +40,7 @@ module cbeam3_asbly
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,Force, &
-&                                ks,Kglobal,fs,Fglobal,Qglobal,Options)
+&                                ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
   use lib_rotvect
   use lib_fem
   use lib_sparse
@@ -61,16 +61,17 @@ module cbeam3_asbly
   integer,      intent(out):: fs                ! Size of the sparse stiffness matrix.
   type(sparse), intent(out):: Fglobal   (:)     ! Influence coefficients matrix for applied forces.
   type(xbopts), intent(in) :: Options           ! Solver parameters.
+  real(8),optional,intent(in) :: Cao(3,3)       ! Rotation operator of FoR A w.r.t. G (used for gravity loads)
 
 ! Local variables.
   logical:: Flags(MaxElNod)                ! Auxiliary flags.
   integer:: i,j,i1,j1                      ! Counters.
   integer:: nn, mm                         ! Counter for node number in global ordering
-  integer:: rr, cc                         ! Counters for rows (rr) and column (cc) - for Kglobal only - in Kglobal, Qglobal and Fglobal
+  integer:: rr, cc                         ! Counters for rows (rr) and cols (cc) in Kglobal, Qglobal and Fglobal
   integer:: iElem                          ! Counter on the finite elements.
   integer:: NumE                           ! Number of elements in the model.
   integer:: NumNE                          ! Number of nodes in an element.
-  integer:: NsphBC                         ! number of hinges
+  !integer:: NwkBC                          ! number of weakly enforced BCs
   real(8):: Felem (6*MaxElNod,6*MaxElNod)  ! Element force influence coefficients.  
   real(8):: Kelem (6*MaxElNod,6*MaxElNod)  ! Element tangent stiffness matrix.  
   real(8):: Qelem (6*MaxElNod)             ! Total generalized forces on the element.
@@ -78,9 +79,9 @@ module cbeam3_asbly
   real(8):: rElem (MaxElNod,6)             ! Current Coordinates/CRV of nodes in the element.
   real(8):: ForceElem (MaxElNod,6)         ! Current forces/moments of nodes in the element.
   real(8):: SB2B1 (6*MaxElNod,6*MaxElNod)  ! Transformation from master to global node orientations.
-
-  integer, allocatable:: row_sphBC(:)      ! row in global matrices/vector associated with weakly enforced hinge BCs
-
+  integer, allocatable:: row_wkBC(:)      ! row in global matrices/vector associated with weakly enforced BCs
+  integer:: Ctot ! total number of dof constrained in weak form
+  
 ! Loop in all elements in the model.
   NumE=size(Elem)
 
@@ -128,7 +129,11 @@ module cbeam3_asbly
 ! - rotate if follower forces and filter out slave nodes.
 ! - The contribution due to follower forces is added to the stiffness matrix
 ! in cbeam3_dqext
-    call cbeam3_fext  (NumNE,rElem,Flags(1:NumNE),Felem,Options%FollowerForce,Options%FollowerForceRig,Unit)
+    if (present(Cao)) then
+      call cbeam3_fext  (NumNE,rElem,Flags(1:NumNE),Felem,Options%FollowerForce,Options%FollowerForceRig,Cao)
+    else
+      call cbeam3_fext  (NumNE,rElem,Flags(1:NumNE),Felem,Options%FollowerForce,Options%FollowerForceRig,Unit)
+    end if
     call cbeam3_dqext (NumNE,rElem,ForceElem,Flags(1:NumNE),Kelem,Options%FollowerForce)
 
 ! Project equations to the orientation of the "master" degrees of freedom.
@@ -160,32 +165,43 @@ module cbeam3_asbly
     end do
   end do
 
+!  Special (weakly enforced) BCs 
+  ! a. determine rows to be modified (row_wkBC)
+  ! b. add constant value (max. in Kglobal to improve scaling) to Kglobal and 
+  !    zero the elements in Fglobal
 
-  ! ------------------------------------------------------ Hinged BCs correction
-  ! a. determine number of rows to delete
-  ! b. determine which rows to eleminate
-  ! c. delete themn from sparse matrix and resize it
-  ! d. add unitary value to Kglobal and resize)
-  NsphBC = sum(Node%Sflag)
-  if (NsphBC>0) then
-      allocate(row_sphBC (3*NsphBC) )
+  ! use more memory but save time
+  allocate( row_wkBC(18*NumE) ) 
+  row_wkBC=0
 
-      cc=0 ! here cc is a counter for the number of spherical joints
-      do nn=1,size(Node)
-        if (Node(nn)%Sflag == 1) then
-          i1=Node(nn)%Vdof
-          rr = 6*(i1-1)
-          row_sphBC( 3*cc+1:3*(cc+1) ) = (/ rr+1, rr+2, rr+3 /)
-          cc=cc+1
-        end if
-      end do
-
-      call sparse_set_rows_zero(row_sphBC,ks,Kglobal)
-      call sparse_set_rows_zero(row_sphBC,fs,Fglobal)
-      call sparse_set_rows_unit(row_sphBC,ks,Kglobal)
-
-      deallocate(row_sphBC)
-   end if
+  Ctot=0    ! dof counter
+  !NwkBC=0 ! constraints counter
+  do nn=1,size(Node)
+    ! spherical joints
+    if (Node(nn)%Sflag == 1) then 
+      i1=Node(nn)%Vdof
+      rr = 6*(i1-1)
+      row_wkBC( Ctot+1:Ctot+3 ) = (/ rr+1, rr+2, rr+3 /)
+      !NwkBC=NwkBC+1
+      Ctot=Ctot+3
+    ! double hinge (no axial twist)
+    else if (Node(nn)%Sflag == 3) then 
+      i1=Node(nn)%Vdof
+      rr = 6*(i1-1)
+      row_wkBC( Ctot+1:Ctot+4 ) = (/ rr+1, rr+2, rr+3, rr+4 /)
+      !NwkBC=NwkBC+1
+      Ctot=Ctot+4
+    end if
+  end do
+   !print *, 'Ctot: ', Ctot
+   !print *, row_wkBC
+  if (Ctot>0) then
+      call sparse_set_colrows_zero(row_wkBC(1:Ctot),ks,Kglobal) ! stiffness matrix
+      call sparse_set_rows_val(row_wkBC(1:Ctot),ks,Kglobal,1.d-1*maxval(Kglobal(:)%a)) 
+      call sparse_set_rows_zero(row_wkBC(1:Ctot),fs,Fglobal) ! Force influence coeff.s
+      Qglobal(row_wkBC(1:Ctot)) = 0.d0                       ! RHS
+  end if 
+  deallocate(row_wkBC) 
 
   return
  end subroutine cbeam3_asbly_static
@@ -362,7 +378,7 @@ module cbeam3_asbly
 
 ! Local variables.
   logical:: Flags(MaxElNod)                ! Auxiliary flags.
-  integer:: i,j,i1,j1                      ! Counters.
+  integer:: i,j,i1,j1,cc,nn,rr             ! Counters.
   integer:: iElem                          ! Counter on the finite elements.
   integer:: NumE                           ! Number of elements in the model.
   integer:: NumNE                          ! Number of nodes in an element.
@@ -380,7 +396,9 @@ module cbeam3_asbly
   real(8):: rElemDDot (MaxElNod,6)         ! Current Coordinates/CRV of nodes in the element.
   real(8):: ForceElem (MaxElNod,6)         ! Current forces/moments of nodes in the element.
   real(8):: SB2B1 (6*MaxElNod,6*MaxElNod)  ! Transformation from master to global node orientations.
-
+  integer, allocatable:: row_wkBC(:)      ! row in global matrices/vector associated with weakly enforced BCs
+  integer:: Ctot ! total number of dof constrained in weak form
+ 
 ! Loop in all elements in the model.
   NumE=size(Elem)
 
@@ -486,6 +504,53 @@ module cbeam3_asbly
       end if
     end do
   end do
+
+
+!  Special (weakly enforced) BCs 
+  ! a. determine rows to be modified (row_wkBC)
+  ! b. add constant value (max. in Kglobal to improve scaling) to Kglobal and 
+  !    zero the elements in Fglobal
+
+  ! use more memory but save time
+  allocate( row_wkBC(18*NumE) ) 
+  row_wkBC=0
+
+  Ctot=0    ! dof counter
+  !NwkBC=0 ! constraints counter
+  do nn=1,size(Node)
+    ! spherical joints
+    if (Node(nn)%Sflag == 1) then 
+      i1=Node(nn)%Vdof
+      rr = 6*(i1-1)
+      row_wkBC( Ctot+1:Ctot+3 ) = (/ rr+1, rr+2, rr+3 /)
+      !NwkBC=NwkBC+1
+      Ctot=Ctot+3
+    ! double hinge (no axial twist)
+    else if (Node(nn)%Sflag == 3) then 
+      i1=Node(nn)%Vdof
+      rr = 6*(i1-1)
+      row_wkBC( Ctot+1:Ctot+4 ) = (/ rr+1, rr+2, rr+3, rr+4 /)
+      !NwkBC=NwkBC+1
+      Ctot=Ctot+4
+    end if
+  end do
+  ! print *, 'Ctot: ', Ctot
+  ! print *, row_wkBC
+   
+  if (Ctot>0) then
+      ! zero columns/rows or relevant matrices
+      call sparse_set_colrows_zero(row_wkBC(1:Ctot),ks,Kglobal) ! stiffness
+      call sparse_set_colrows_zero(row_wkBC(1:Ctot),cs,Cglobal) ! damping
+      call sparse_set_colrows_zero(row_wkBC(1:Ctot),ms,Mglobal) ! mass
+      
+      call sparse_set_rows_val(row_wkBC(1:Ctot),ms,Mglobal,1.d-1*maxval(Mglobal(:)%a)) 
+
+      call sparse_set_rows_zero(row_wkBC(1:Ctot),fs,Fglobal) ! Force influence coeff.s
+      Qglobal(row_wkBC(1:Ctot)) = 0.d0                       ! RHS
+      Mvel(row_wkBC(1:Ctot),:) = 0.0
+      Cvel(row_wkBC(1:Ctot),:) = 0.0
+  end if
+  deallocate(row_wkBC)
 
   return
  end subroutine cbeam3_asbly_dynamic

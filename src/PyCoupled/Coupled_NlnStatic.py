@@ -189,9 +189,10 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                             Force, PsiA_G=XBINPUT.PsiA_G)
             
         # Add gravity loads.
-        AddGravityLoads(Force,XBINPUT,XBELEM,AELAOPTS,
-                        PsiDefor,VMINPUT.c)
-            
+        # FoR A orientation is given by XBINPUT.PsiA_G
+        AddGravityLoads(Force,XBINPUT,XBELEM,AELAOPTS, PsiDefor,VMINPUT.c, 
+                                   PsiA_G=XBINPUT.PsiA_G, FollowerForceRig=True)
+
         # Apply factor corresponding to force step.
         if iLoadStep < XBOPTS.NumLoadSteps.value:
             iForceStep = (Force + XBINPUT.ForceStatic)*float( (iLoadStep+1) )/\
@@ -358,8 +359,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 PosDeforStatic=PosDefor, PsiDeforStatic=PsiDefor, 
                 ZetaStatic=Zeta, ZetaStarStatic=ZetaStar, 
                 GammaStatic=Gamma, GammaStarStatic=GammaStar,
-                ForceTotStatic=Force, ForceAeroStatic=ForceAero,
-                iForceStepDebug=iForceStep,
+                ForceStaticTotal=iForceStep, ForceAeroStatic=ForceAero,
+                #iForceStepDebug=iForceStep,
                 Uext=Uext )
 
     PyLibs.io.save.h5file( SaveDict['OutputDir'],

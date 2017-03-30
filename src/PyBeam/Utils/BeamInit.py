@@ -16,6 +16,7 @@ import ctypes as ct
 import BeamIO
 import BeamLib
 import PyLibs.CVP.fourier, PyLibs.CVP.spline
+from IPython import embed
 
 
 def Static(XBINPUT,XBOPTS, moduleName = None):
@@ -130,7 +131,7 @@ def Static(XBINPUT,XBOPTS, moduleName = None):
             ll =  cc%3 + 1  # local position in element
             if ll in Master[Master[:,0]==ee,1]:
                 XBELEM.RBMass[cc,:,:] = RBM['Mass']
-    
+
     return XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni,\
             XBNODE, NumDof
             
@@ -178,7 +179,6 @@ def Dynamic(XBINPUT,XBOPTS, moduleName = None):
                                        'frequency')
         for i in np.arange(len(Time)):
             ForceTime[i] = np.sin(XBINPUT.Omega * Time[i])
-            
     elif XBINPUT.ForcingType == 'Ramp':
         assert XBINPUT.RampTime <= XBINPUT.tfin,'Ramp time greater than final time'
         assert XBINPUT.RampTime >= XBINPUT.t0,'Ramp time less than start time'
@@ -286,32 +286,50 @@ def DynLoads(XBINPUT):
     Time = np.arange(XBINPUT.t0,XBINPUT.tfin  + XBINPUT.dt, XBINPUT.dt,
                      ct.c_double)
     shape = (len(Time),XBINPUT.NumNodesTot,6)
-    XBINPUT.ForceDyn = np.zeros(shape,ct.c_double,'F')
     XBINPUT.ForceDyn_foll = np.zeros(shape,ct.c_double,'F')
     XBINPUT.ForceDyn_dead = np.zeros(shape,ct.c_double,'F')
-    
-    
-    # ... and fill
-    if XBINPUT.ForceDynType=='dss': 
-        print('NumNodesTot is %f'%XBINPUT.NumNodesTot)
-        params = XBINPUT.ForceDynDict['dss']
-        #assert params['Node']<XBINPUT.NumNodesTot-1 ("params[Node] can't be higher then NumNodes-1!")
 
-        for comp in range(6):
-            XBINPUT.ForceDyn[:,params['Node'],comp] = \
-                    PyLibs.CVP.fourier.sin_series_vec( Time                  ,  
-                                                       params['Acf'][:,comp] ,
-                                                       params['Fcf'][:,comp] )
-       
-         
-    if XBINPUT.ForceDynType=='spline': 
-        params = XBINPUT.ForceDynDict['spline']
-        XBINPUT.ForceDyn =  PyLibs.CVP.spline.nodal_force(
-                                    XBINPUT.NumNodesTot, Time, 
-                                    params['Node'],
-                                    params['TCint'], 
-                                    params['Scf'], 
-                                    params['order'])   
+
+    if XBINPUT.ForceDynType=='hard-coded':
+        assert XBINPUT.ForceDyn.shape==shape, 'If using XBINPUT.ForceDynType=%s'\
+            ' XBINPUT.ForceDyn needs to have shape ('+ 3*'%d, '%shape + ') !'
+
+    else:
+        # allocate
+        XBINPUT.ForceDyn = np.zeros(shape,ct.c_double,'F')
+
+        # ... and fill
+        if XBINPUT.ForceDynType=='dss': 
+            print('NumNodesTot is %f'%XBINPUT.NumNodesTot)
+            params = XBINPUT.ForceDynDict['dss']
+            #assert params['Node']<XBINPUT.NumNodesTot-1 \
+            #("params[Node] can't be higher then NumNodes-1!")
+            for comp in range(6):
+                XBINPUT.ForceDyn[:,params['Node'],comp] = \
+                    PyLibs.CVP.fourier.sin_series_vec( Time,
+                                    params['Acf'][:,comp],params['Fcf'][:,comp])
+
+        elif XBINPUT.ForceDynType=='spline': 
+            params = XBINPUT.ForceDynDict['spline']
+            XBINPUT.ForceDyn = PyLibs.CVP.spline.nodal_force(
+                XBINPUT.NumNodesTot, Time,params['Node'],params['TCint'], 
+                                                  params['Scf'],params['order'])   
+
+        elif XBINPUT.ForceDynType=='modal': 
+            params = XBINPUT.ForceDynDict['modal']
+            NT=shape[0]
+            assert NT==len(params['ForceTime']), 'ForceTime parameter needs to '\
+                                  'have the same length as the number of time-steps'
+            for tt in range(shape[0]):
+                XBINPUT.ForceDyn[tt,:,:]=params['ForceTime'][tt]*params['ForceNodes']
+
+        elif XBINPUT.ForceDynType is None:
+            pass
+        else:
+            raise NameError('XBINPUT.ForceDynType method not recognised!')
+
+
+
 
     return XBINPUT
 

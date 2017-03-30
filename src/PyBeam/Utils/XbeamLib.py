@@ -20,6 +20,19 @@ import BeamLib
 import lib_rotvect
 
 
+
+
+def QuatMult(quat0, quat1):
+    w0, x0, y0, z0 = quat0
+    w1, x1, y1, z1 = quat1
+    qtot = np.array([-x1 * x0 - y1 * y0 - z1 * z0 + w1 * w0,
+                      x1 * w0 + y1 * z0 - z1 * y0 + w1 * x0,
+                     -x1 * z0 + y1 * w0 + z1 * x0 + w1 * y0,
+                      x1 * y0 - y1 * x0 + z1 * w0 + w1 * z0])
+    return qtot
+
+
+
 def RotCRV(Psi):
     '''
     Calculates the rotation matrix from CRV. 
@@ -27,6 +40,12 @@ def RotCRV(Psi):
       frame B.
     - C will be the rotation matrix from A to B or, alternatively, the projection 
       matrix from B to A
+
+
+      @warning: for the same rotation, this function returns the transpose of
+      Rot. i.e.
+      RotCRV(Psi).T = Rot(psi2quat(Psi))
+      @warning: equivalent to Psi2TransMat !!
     '''
     
     C = np.zeros((3,3))
@@ -79,11 +98,12 @@ def Rot(q1):
     """@brief Calculate rotation matrix based on quaternions.
     See Aircraft Control and Simulation, pag. 31, by Stevens, Lewis.
     
-    Remark: if A is a FoR obtained rotating a FoR G of angle fi about an axis n (remind n will be 
-    invariant during the rotation), and q is the related quaternion q(fi,n), the function will
-    return the matrix Cag such that:
+    Remark: if A is a FoR obtained rotating a FoR G of angle fi about an axis n 
+    (remind n will be invariant during the rotation), and q is the related 
+    quaternion q(fi,n), the function will return the matrix Cag such that:
         - Cag rotates A to G
-        - Cag transforms the coordinates of a vector defined in G component to A components.
+        - Cag transforms the coordinates of a vector defined in G component to A 
+        components.
     """
     
     q = q1.copy(order='F')
@@ -149,12 +169,13 @@ def Quat2Euler(qv):
     
     return ev
 
-    
 
 def Psi2TransMat(Psi):
-    """@brief Calculates the transformation matrix associated with CRV Psi.
+    """
+    @brief Calculates the transformation matrix associated with CRV Psi.
     @details This gives the transformation from B to a, or the rotation from
-              a to B."""
+              a to B.
+    @warning: equivalent to RotCRV."""
     TransMat = np.zeros((3,3))
     Norm = TriadNorm(Psi)
     SkewPsi=Skew(Psi)
@@ -215,14 +236,18 @@ def Tangential(Psi):
 
 
 def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
-                      chord = 1.0, PsiA_G=None):
-    """@brief Apply nodal gravity loads.
+                      chord = 1.0, PsiA_G=None, FollowerForceRig=True):
+    """@brief Apply nodal gravity loads. If the solver calling this function is
+           using a FollowerForceRig=True option, loads are rotated so as the 
+           guarantee that gravity are always considered as dead loads aligned
+           along the z axis of the FoR G.
     @param BeamForces Nodal forces to update.
     @param XBINPUT Xbeam inputs.
     @param XBELEM Xbeam element information.
-    @param AELAOPTS Aeroelastic options.
+    @param AELAOPTS Aeroelastic options. If none, input will be neglected
     @param PsiA_G Cartesian rotation vector describing orientation of a-frame
-           with respect to earth.
+           with respect to earth - rotation is performed only if 
+           FollForceRig=True.
     @param chord Aerofoil chord, assumed to be 1.0 if ommited. 
     @details Offset of mass centroid from elastic axis is currently calculated
              using the AELAOPTS.ElasticAxis and .InertialAxis parameters which 
@@ -244,8 +269,17 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
     ForcePerNode = -NodeSpacing * MassPerLength * XBINPUT.g 
     
     # Obtain transformation from Earth to a-frame.
-    if PsiA_G == None: CGa = Psi2TransMat(XBINPUT.PsiA_G)
-    else: CGa = Psi2TransMat(PsiA_G)
+    #if PsiA_G == None: CGa = Psi2TransMat(XBINPUT.PsiA_G)
+    #else: CGa = Psi2TransMat(PsiA_G)
+    if FollowerForceRig is True:
+        # rotate gravity loads
+        if PsiA_G == None: 
+            PsiA_G = XBINPUT.PsiA_G
+    else:
+        # do not rotate gravity loads
+        PsiA_G = np.zeros((3,))
+
+    CGa = Psi2TransMat(PsiA_G)
     CaG = CGa.T
     
     # Force in a-frame.
@@ -298,8 +332,15 @@ def AddGravityLoads(BeamForces,XBINPUT,XBELEM,AELAOPTS,PsiDefor,
         
         # Define moment arm in B-frame
         # Moment arm to elastic axis defined using EA and IA of Theodorsen.
-        armY = -(AELAOPTS.InertialAxis - AELAOPTS.ElasticAxis)*chord/2.0
-        armY_a = np.dot(CaB,np.array([0.0, armY, 0.0]))
+        ###
+        # The if/else allows using this method in structural only solvers.
+        # TO IMPROVE: the inertial and elastic axis properties should be in 
+        # Xbinput.
+        if AELAOPTS != None:
+            armY = -(AELAOPTS.InertialAxis - AELAOPTS.ElasticAxis)*chord/2.0
+            armY_a = np.dot(CaB,np.array([0.0, armY, 0.0]))
+        else:
+            armY_a=np.zeros((3,))
         
         ### Calculate moment
         BeamForces[iNode,3:] += np.cross( armY_a, BeamForces[iNode,:3] )     

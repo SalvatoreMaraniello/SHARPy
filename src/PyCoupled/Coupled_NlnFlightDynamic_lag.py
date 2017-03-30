@@ -30,7 +30,7 @@ from PyAero.UVLM.Solver.VLM import InitSteadyExternalVels
 from PyAero.UVLM.Solver.VLM import InitSteadyWake
 
 import PyCoupled.Coupled_NlnStatic as Static
-from PyCoupled.Coupled_NlnStatic import AddGravityLoads
+from PyBeam.Utils.XbeamLib import AddGravityLoads
 
 import PyLibs.io.save
 from PyLibs.io.dat import write_SOL912_def, write_SOL912_final, \
@@ -61,7 +61,12 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # Check correct solution code.
     assert XBOPTS.Solution.value == 912, ('NonlinearFlightDynamic requested' +
                                           ' with wrong solution code')
-    
+    # Check loads options
+    assert XBOPTS.FollowerForceRig.value == True, ('For NonlinearFlightDynamic '
+        'solution XBOPTS.FollowerForceRig = ct.c_bool(True) is required. \n'
+        'Note that gravity is treated as a dead load by default.')
+
+
     # I/O options
     XBOUT=DerivedTypes.Xboutput()  
     SaveDict=Settings.SaveDict
@@ -83,7 +88,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     XBOUT.ForceRigidList=[]
 
 
-    #--------------------------------------------- Initial Displacement: ImpStart vs Static Solution
+    #------------------ Initial Displacement/Forces: ImpStart vs Static Solution
     
     # Initialise static beam data.
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
@@ -91,7 +96,22 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     
     
     # Calculate initial displacements.
-    if AELAOPTS.ImpStart == False:
+    if AELAOPTS.ImpStart == True:
+
+        PosDefor = PosIni.copy(order='F')
+        PsiDefor = PsiIni.copy(order='F')
+        # Extract forces
+        XBOUT.ForceStaticTotal = XBINPUT.ForceStatic.copy('F')
+        AddGravityLoads(XBOUT.ForceStaticTotal,XBINPUT,XBELEM,
+                        AELAOPTS=None, # allows defining inertial/elastic axis
+                        PsiDefor=PsiDefor,
+                        chord = 0.0, # used to define inertial/elastic axis
+                        PsiA_G=XBINPUT.PsiA_G,
+                        FollowerForceRig=True)
+
+        ForceAero = 0.0*XBOUT.ForceStaticTotal.copy('C')
+
+    else:
         XBOPTS.Solution.value = 112 # Modify options.
         VMOPTS.Steady = ct.c_bool(True)
         Rollup = VMOPTS.Rollup.value
@@ -101,55 +121,43 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             # open-loop control
             for cc in range(len(VMINPUT.ctrlSurf)):
                 VMINPUT.ctrlSurf[cc].update(0.0,iStep=0)
-
         # Solve Static Aeroelastic.
         # Note: output force includes gravity loads
         #PosDefor, PsiDefor, Zeta, ZetaStar, Gamma, GammaStar, Force = \
         #    Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
         XBSTA=Static.Solve_Py(XBINPUT, XBOPTS, VMOPTS, VMINPUT, AELAOPTS)
-        PosDefor=XBSTA.PosDeforStatic
-        PsiDefor=XBSTA.PsiDeforStatic
+        # Extract forces
+        XBOUT.ForceStaticTotal=XBSTA.ForceStaticTotal.copy(order='F') # gravity/aero/applied
+        ForceAero = XBSTA.ForceAeroStatic.copy(order='C')
+        # Define Pos/Psi as fortran array (crash otherwise)
+        PosDefor=XBSTA.PosDeforStatic.copy(order='F')
+        PsiDefor=XBSTA.PsiDeforStatic.copy(order='F')
+        XBOUT.PosDeforStatic = XBSTA.PosDeforStatic
+        XBOUT.PsiDeforStatic = XBSTA.PsiDeforStatic
+        # Wake variables
         Zeta=XBSTA.ZetaStatic
         ZetaStar=XBSTA.ZetaStarStatic
         Gamma=XBSTA.GammaStatic
         GammaStar=XBSTA.GammaStarStatic
-        Force=XBSTA.ForceTotStatic
         del XBSTA
 
         XBOPTS.Solution.value = 912 # Reset options.
         VMOPTS.Steady = ct.c_bool(False)
         VMOPTS.Rollup.value = Rollup
-        # isolate aerodynamic force for saving
-        NonAeroForce = XBINPUT.ForceStatic.copy('F')
 
-        #import pdb; pdb.set_trace()
-        #from IPython import embed; embed()
 
-        AddGravityLoads(NonAeroForce, XBINPUT, XBELEM, AELAOPTS,
-                        PsiDefor, VMINPUT.c)
-        ForceAero = (Force-NonAeroForce).copy('C')
-        del NonAeroForce
-    elif AELAOPTS.ImpStart == True:
-        PosDefor = PosIni.copy(order='F')
-        PsiDefor = PsiIni.copy(order='F')
-        Force = XBINPUT.ForceStatic.copy('F')
-        ForceAero = 0.0*Force.copy('C')
-     
-     
     # Save output   
     if SaveDict['Format']=='dat': 
         write_SOL912_def(XBOPTS,XBINPUT,XBELEM,NumNodes_tot,PosDefor,PsiDefor,SaveDict)
     else: # HDF5
-        XBOUT.drop( PosIni=PosIni, PsiIni=PsiIni, ForceTotStatic = Force.copy(),
-                    PosDeforStatic=PosDefor.copy(), PsiDeforStatic=PsiDefor.copy() )
+        XBOUT.drop( PosIni=PosIni, PsiIni=PsiIni,PosDeforStatic=PosDefor.copy(), 
+                    PsiDeforStatic=PsiDefor.copy() )
         XBOUT.ForceAeroList.append( ForceAero )
-        PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5',
-                              *OutList)
+        PyLibs.io.save.h5file(SaveDict['OutputDir'], 
+                                     SaveDict['OutputFileRoot']+'.h5', *OutList)
     
-    
-    
-    #--------------------------------------------------------------- Initialise Structural Variables
-    
+
+    #------------------------------------------- Initialise Structural Variables
     
     # Build arrays for dynamic analysis
     #   1. initial accelerations  {Pos/Psi}DotDotDef approximated to zero
@@ -188,8 +196,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     Quat=xbl.psi2quat(PsiA_G)
     currVrel=Vrel[0,:].copy('F')   # also shared by aero initialisation
     
-    Force += XBINPUT.ForceDyn[0,:,:].copy('F')  
-    
+    # ForceStatic will include aero only in the non-impulsive case
+    Force = XBOUT.ForceStaticTotal.copy('F') + XBINPUT.ForceDyn[0,:,:].copy('F')  
+
     Q[:NumDof.value]=X.copy('F')
     dQdt[:NumDof.value]=dXdt.copy('F')
     dQdt[NumDof.value:NumDof.value+6] = currVrel.copy('F')
@@ -226,8 +235,8 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
                 MsysList=[], CsysList=[], KsysList=[])
     XBOUT.QuatList.append(Quat.copy())
     XBOUT.CRVList.append( PsiA_G.copy())
-    XBOUT.drop( Msys0 = Msys.copy(), Csys0 = Csys.copy(), Ksys0 = Ksys.copy(), Qsys0 = Qsys.copy())
-    
+    XBOUT.drop( Msys0 = Msys.copy(), Csys0 = Csys.copy(), 
+                                       Ksys0 = Ksys.copy(), Qsys0 = Qsys.copy())
     
 
     #--------------------------------------------------------------------- Initialise UVLM variables
@@ -285,7 +294,7 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
     # structure has an initially undeformed/statically-deformed configuration, with zero velocities
     # but accelerations are non-zero).
     #   2. lagged solution compensates for Msys mal-conditioned
-    if XBOPTS.RigidDynamics==False:
+    if XBOPTS.RigidDynamics is False and AELAOPTS.ImpStart is False:
         lagsol=True
         if lagsol==True: dQddt[:] = lagsolver(Msys,-Qsys,MaxIter=1)
         else: dQddt[:] = np.linalg.solve(Msys,-Qsys)
@@ -370,8 +379,9 @@ def Solve_Py(XBINPUT,XBOPTS,VMOPTS,VMINPUT,AELAOPTS,**kwords):
             else: Force[:,:] = ForceAero 
              
             # Add gravity loads.
-            AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS, PsiDefor, VMINPUT.c, PsiA_G)
-                
+            AddGravityLoads(Force, XBINPUT, XBELEM, AELAOPTS, PsiDefor, 
+                                       VMINPUT.c, PsiA_G, FollowerForceRig=True)
+
             # Add prescribed loads
             Force += (XBINPUT.ForceStatic + XBINPUT.ForceDyn[iStep,:,:]).copy('F')
             # Dead forces are defined in FoR G, follower in FoR A.

@@ -24,6 +24,7 @@ import PyBeam.Utils.XbeamLib as xbl
 import h5py, time  
 import PyLibs.io.save, PyLibs.io.dat
 from IPython import embed
+from XbeamLib import AddGravityLoads
 
 
 def Solve_F90(XBINPUT,XBOPTS,**kwords):
@@ -35,6 +36,9 @@ def Solve_F90(XBINPUT,XBOPTS,**kwords):
                                               ' with wrong solution code')  
 
     # I/O management
+    XBOUT=DerivedTypes.Xboutput()
+    XBOUT.cputime.append(time.clock())  
+    OutList=[XBOPTS, XBINPUT, XBOUT]  
     if 'SaveDict' in kwords:
         SaveDict=kwords['SaveDict']
         Settings.OutputDir     =SaveDict['OutputDir']
@@ -51,29 +55,48 @@ def Solve_F90(XBINPUT,XBOPTS,**kwords):
     PosDefor = PosIni.copy(order='F')
     PsiDefor = PsiIni.copy(order='F')
     
+    # Add Gravity - record applied ForceStatic for I/O
+    if XBOPTS.FollowerForceRig is True and np.linalg.abs(XBINPUT.g)>1e-14:
+        raise NameError('For automatically include gravity loads, '
+                  'XBOPTS.FollowerForceRig=False is required.\n'
+                  'Use PyCoupled.NonlinearFlexBodyDynamic.Solve_Py instead!')
+    ForceStaticCopy = XBINPUT.ForceStatic.copy('F')
+    AddGravityLoads(XBINPUT.ForceStatic,XBINPUT,XBELEM,
+                    AELAOPTS=None, # allows defining inertial/elastic axis
+                    PsiDefor=PsiDefor,
+                    chord = 0.0, # used to define inertial/elastic axis
+                    PsiA_G=None) # no G/A frame in this solution
+
     #Solve static:
     if XBOPTS.ImpStart == False:
         BeamLib.Cbeam3_Solv_NonlinearStatic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM,\
                             PosIni, PsiIni, XBNODE, NumDof,\
                             PosDefor, PsiDefor)
+        #Change solution code back to NonlinearDynamic
+        XBOPTS.Solution.value = 912
 
-    #Change solution code back to NonlinearDynamic
-    XBOPTS.Solution.value = 912
-    
+    XBOUT.drop( PosIni=PosIni, PsiIni=PsiIni, PosDeforStatic=PosDefor.copy(), 
+                PsiDeforStatic=PsiDefor.copy() )
+
     #Write deformed configuration to file
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_def.dat'
-    if XBOPTS.PrintInfo==True:
-        sys.stdout.write('Writing file %s ... ' %(ofile))
-    fp = open(ofile,'w')
-    fp.write('TITLE="Non-linear static solution: deformed geometry"\n')
-    fp.write('VARIABLES="iElem" "iNode" "Px" "Py" "Pz" "Rx" "Ry" "Rz"\n')
-    fp.close()
-    if XBOPTS.PrintInfo==True:
-        sys.stdout.write('done\n')
-    WriteMode = 'a'
-    
-    BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM, \
-                       PosDefor, PsiDefor, ofile, WriteMode)
+    if SaveDict['Format']=='dat':
+        ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_def.dat'
+        if XBOPTS.PrintInfo==True:
+            sys.stdout.write('Writing file %s ... ' %(ofile))
+        fp = open(ofile,'w')
+        fp.write('TITLE="Non-linear static solution: deformed geometry"\n')
+        fp.write('VARIABLES="iElem" "iNode" "Px" "Py" "Pz" "Rx" "Ry" "Rz"\n')
+        fp.close()
+        if XBOPTS.PrintInfo==True:
+            sys.stdout.write('done\n')
+        WriteMode = 'a'
+        
+        BeamIO.OutputElems(XBINPUT.NumElems, NumNodes_tot.value, XBELEM, \
+                           PosDefor, PsiDefor, ofile, WriteMode)
+    else:
+        PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5',
+                              *OutList)
+
         
     #Initialise variables for dynamic analysis
     Time, NumSteps, ForceTime, ForcedVel, ForcedVelDot,\
@@ -84,23 +107,24 @@ def Solve_F90(XBINPUT,XBOPTS,**kwords):
     # Delete unused variables.
     del PosPsiTime, VelocTime
     
-    #Initialise quaternions for rigid-body dynamics
-    Quat = np.zeros(4, ct.c_double, 'F')
-    Quat[0] = 1.0
+    ###Initialise quaternions for rigid-body dynamics
+    #Quat = np.zeros(4, ct.c_double, 'F')
+    #Quat[0] = 1.0
+    if XBINPUT.PsiA_G_dyn != None: PsiA_G = XBINPUT.PsiA_G_dyn.copy()
+    else: PsiA_G = XBINPUT.PsiA_G.copy()
+    Quat=XbeamLib.psi2quat(PsiA_G)
     
     
     #Write _force file
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_force.dat'
-    fp = open(ofile,'w')
-    BeamIO.Write_force_File(fp, Time, ForceTime, ForcedVel, ForcedVelDot)
-    fp.close() 
+    if SaveDict['Format']=='dat':
+        ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_force.dat'
+        fp = open(ofile,'w')
+        BeamIO.Write_force_File(fp, Time, ForceTime, ForcedVel, ForcedVelDot)
+        fp.close() 
 
     # sm write class
-    XBOUT=DerivedTypes.Xboutput()
     XBOUT.QuatList.append(Quat)
     XBOUT.Time=Time
-    XBOUT.PosIni=PosIni
-    XBOUT.PsiIni=PsiIni  
     #XBOUT.ForcedVel=ForcedVel        # ...SOL912_force.dat
     #XBOUT.ForcedVelDot=ForcedVelDot
     XBOUT.ForceTime=ForceTime
@@ -112,38 +136,36 @@ def Solve_F90(XBINPUT,XBOPTS,**kwords):
             NumSteps, Time, ForceTime, ForcedVel, ForcedVelDot,\
             PosDotDef, PsiDotDef, DynOut, OutGrids)
     
-    #Write _shape file
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_shape.dat'
-    fp = open(ofile,'w')
-    BeamIO.Write_shape_File(fp, len(Time), NumNodes_tot.value, Time, DynOut)
-    fp.close()
-    
-    #Write rigid-body velocities
-    ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_rigid.dat'
-    fp = open(ofile,'w')
-    BeamIO.Write_rigid_File(fp, Time, ForcedVel, ForcedVelDot)
-    fp.close()
-    
+    # Divide gravity and applied load for I/O
+    XBOUT.ForceTotal = XBINPUT.ForceStatic.copy('F')
+    XBINPUT.ForceStatic = ForceStaticCopy
+
     # collect output for saving
     XBOUT.DynOut=DynOut
     XBOUT.ForcedVel=ForcedVel
     XBOUT.ForcedVelDot=ForcedVelDot
+
+    if SaveDict['Format']=='dat':
+        #Write _shape file
+        ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_shape.dat'
+        fp = open(ofile,'w')
+        BeamIO.Write_shape_File(fp, len(Time), NumNodes_tot.value, Time, DynOut)
+        fp.close()
     
-    try:
-        h5filename=Settings.OutputDir + Settings.OutputFileRoot + '.h5'
-        hdfile=h5py.File(h5filename,'w')
-        print ('created %s'%h5filename)
-        PyLibs.io.save.add_class_as_grp(XBOPTS,hdfile)
-        PyLibs.io.save.add_class_as_grp(XBINPUT,hdfile)
-        PyLibs.io.save.add_class_as_grp(XBOUT,hdfile)
-        hdfile.close()
-    except:
-        pass  
-    
+        #Write rigid-body velocities
+        ofile = Settings.OutputDir + Settings.OutputFileRoot + '_SOL912_rigid.dat'
+        fp = open(ofile,'w')
+        BeamIO.Write_rigid_File(fp, Time, ForcedVel, ForcedVelDot)
+        fp.close()
+    else:
+        PyLibs.io.save.h5file(SaveDict['OutputDir'], 
+                                     SaveDict['OutputFileRoot']+'.h5', *OutList)
+
+
     return XBOUT     
 
 
-def Solve_Py(XBINPUT,XBOPTS,**kwords):
+def Solve_Py(XBINPUT,XBOPTS,SaveDict=Settings.SaveDict):
 
     """Nonlinear dynamic structural solver in Python. Assembly of matrices 
     is carried out with Fortran subroutines."""
@@ -153,41 +175,52 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
                                               ' with wrong solution code')
     
     # I/O management
+    Settings.SaveDict=SaveDict # overwrite for compatibility with 'dat' format output
     XBOUT=DerivedTypes.Xboutput()  
-    SaveDict=Settings.SaveDict
-    if 'SaveDict' in kwords: SaveDict=kwords['SaveDict']
+    XBOUT.cputime.append(time.clock())
     if SaveDict['Format']=='h5':
         Settings.WriteOut=False
         Settings.PlotTec=False
         OutList=[XBOPTS, XBINPUT, XBOUT]
             
-    XBOUT.cputime.append(time.clock()) # or time.processor_time
-    XBOUT.ForceDofList=[]
-    XBOUT.ForceRigidList=[]
-            
     #Initialise beam
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT,XBOPTS)
      
-    #Solve static ?
-    PosDefor = PosIni.copy(order='F')
-    PsiDefor = PsiIni.copy(order='F')
-
-    if XBOPTS.ImpStart==False:
+    # Solve static
+    # Note: gravity loads added according to XBINPUT.PsiA_G into Solve_Py_Static
+    if XBOPTS.ImpStart==True:
+        PosDefor = PosIni.copy(order='F')
+        PsiDefor = PsiIni.copy(order='F')
+        XBOUT.ForceStaticTotal = XBINPUT.ForceStatic.copy('F')
+        AddGravityLoads(XBOUT.ForceStaticTotal,XBINPUT,XBELEM,
+                        AELAOPTS=None, # allows defining inertial/elastic axis
+                        PsiDefor=PsiDefor,
+                        chord=0.0, # used to define inertial/elastic axis
+                        PsiA_G=XBINPUT.PsiA_G,
+                        FollowerForceRig=XBOPTS.FollowerForceRig.value)
+    else:
         if XBNODE.Sflag.any():
-            raise NameError('Solution with Spherical joint not possible/implemented!')
+            raise NameError('Static solution with spherical joint not '
+                                                 'implemented and/or possible!')
         XBOPTS.Solution.value = 112
-        PosDefor, PsiDefor = Solve_Py_Static(XBINPUT,XBOPTS)
-    #embed()
-    XBOPTS.Solution.value = 912 
+        XBSTA = Solve_Py_Static(XBINPUT, XBOPTS, SaveDict=SaveDict)
+        XBOPTS.Solution.value = 912
+        PosDefor=XBSTA.PosDeforStatic.copy(order='F')
+        PsiDefor=XBSTA.PsiDeforStatic.copy(order='F')
+        XBOUT.PosDeforStatic  =XBSTA.PosDeforStatic
+        XBOUT.PsiDeforStatic  =XBSTA.PsiDeforStatic
+        XBOUT.ForceStaticTotal=XBSTA.ForceStaticTotal # includes gravity
+        del XBSTA
+
 
     if SaveDict['Format']=='dat': 
         PyLibs.io.dat.write_SOL912_def(XBOPTS,XBINPUT,XBELEM,
                                 NumNodes_tot,PosDefor,PsiDefor,SaveDict)
     
-    # sm I/O
-    XBOUT.PosDefor=PosDefor
-    XBOUT.PsiDefor=PsiDefor
+    ## sm I/O
+    #XBOUT.PosDefor=PosDefor
+    #XBOUT.PsiDefor=PsiDefor
 
     #Initialise variables for dynamic analysis
     Time, NumSteps, ForceTime, Vrel, VrelDot,\
@@ -270,7 +303,6 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     
     #Initialise rotation operators 
     Quat =  xbl.psi2quat(XBINPUT.PsiA_G)
-
     Cao  = XbeamLib.Rot(Quat)
     ACoa = np.zeros((6,6), ct.c_double, 'F')
     Cqr = np.zeros((4,6), ct.c_double, 'F')
@@ -296,9 +328,13 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     dQdt[NumDof.value+6:]= Quat.copy('F')
     
     # Force at the first time-step
+    # Gravity needs including for correctly computing the accelerations at the 
+    # 1st time-step
     # Note: rank of Force increased after removing ForceTime
     #Force = (XBINPUT.ForceStatic + XBINPUT.ForceDyn*ForceTime[0]).copy('F')
-    Force = (XBINPUT.ForceStatic + XBINPUT.ForceDyn[0,:,:]).copy('F')
+    #Force = (XBINPUT.ForceStatic + XBINPUT.ForceDyn[0,:,:]).copy('F')
+    Force = (XBOUT.ForceStaticTotal + XBINPUT.ForceDyn[0,:,:]).copy('F')
+
 
     #Assemble matrices and loads for structural dynamic analysis
     tmpVrel=Vrel[0,:].copy('F')
@@ -405,10 +441,17 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     XBOUT.Msys0 = Msys.copy()
     XBOUT.Csys0 = Csys.copy()
     XBOUT.Ksys0 = Ksys.copy()
+    XBOUT.Qsys0 = Qsys.copy()
 
     #Initial Accel
     #dQddt[:] = np.dot(np.linalg.inv(Msys), -Qsys)
-    dQddt[:] = np.linalg.solve(Msys,-Qsys)
+    #dQddt[:] = np.linalg.solve(Msys,-Qsys) # most correct but inaccurate / Msys ill-conditioned
+    # solve only rigid body dynamics
+    dQddt[:NumDof.value]=0.0
+    dQddt[NumDof.value:]=np.linalg.solve( Msys[NumDof.value:,NumDof.value:],
+                                                          -Qsys[NumDof.value:] ) 
+
+
     XBOUT.dQddt0=dQddt.copy()
     
     #Record position of all grid points in global FoR at initial time step
@@ -453,17 +496,10 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
         Q += beta*dQddt*dt**2
         dQdt += gamma*dQddt*dt
 
-        
-        ### sm: removed ForceTime and increased rank of ForceDyn 
-        #Force at current time-step
-        #Force = (XBINPUT.ForceStatic+XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
-        Force = (XBINPUT.ForceStatic+XBINPUT.ForceDyn[iStep+1,:,:]).copy('F')
-        
         #Reset convergence parameters
         Iter = 0
         ResLog10 = 1.0
-        
-        
+
         #Newton-Raphson loop      
         while ( (ResLog10 > XBOPTS.MinDelta.value) \
                 & (Iter < XBOPTS.MaxIterations.value) ):
@@ -504,8 +540,22 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
             Quat = dQdt[NumDof.value+6:].copy('F')
             Quat = Quat/np.linalg.norm(Quat)
             Cao  = XbeamLib.Rot(Quat)
-            
-                       
+
+
+            ### sm: removed ForceTime and increased rank of ForceDyn 
+            # Note: do not add gravity load here!
+            #Force at current time-step
+            #Force = (XBINPUT.ForceStatic+XBINPUT.ForceDyn*ForceTime[iStep+1]).copy('F')
+            Force = (XBINPUT.ForceStatic+XBINPUT.ForceDyn[iStep+1,:,:]).copy('F')
+
+            # Add gravity loads (accounting for new orientation)
+            AddGravityLoads(Force, XBINPUT, XBELEM,
+                        AELAOPTS=None, # allows defining inertial/elastic axis
+                        PsiDefor=PsiDefor,
+                        chord = 0.0, # used to define inertial/elastic axis
+                        PsiA_G=xbl.quat2psi(Quat),
+                        FollowerForceRig=XBOPTS.FollowerForceRig.value)
+
             #Assemble matrices and loads for structural dynamic analysis
             tmpVrel=Vrel[iStep+1,:].copy('F')
             tmpQuat=Quat.copy('F')
@@ -725,7 +775,7 @@ def Solve_Py(XBINPUT,XBOPTS,**kwords):
     XBOUT.PosPsiTime=PosPsiTime    
     
     # save h5 
-    XBINPUT.ForceDyn = XBINPUT.ForceDyn + XBINPUT.ForceDyn_foll +  XBINPUT.ForceDyn_dead
+    XBINPUT.ForceDyn = XBINPUT.ForceDyn + XBINPUT.ForceDyn_foll + XBINPUT.ForceDyn_dead
     del(XBINPUT.ForceDyn_dead)
     del(XBINPUT.ForceDyn_foll)
     PyLibs.io.save.h5file(SaveDict['OutputDir'], SaveDict['OutputFileRoot']+'.h5', *OutList)

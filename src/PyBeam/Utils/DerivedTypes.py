@@ -321,7 +321,7 @@ class Xbinput:
         self.ForceStatic_dead = np.zeros((NumNodesTot,6),ct.c_double,'F')
         
         ### sm: changed standard for dynamic force input
-        self.ForceDynType = None # 'dss', 'spline', 'modal'
+        self.ForceDynType = None # 'dss', 'spline', 'modal', 'hard-coded'
         self.ForceDynDict = {
                 'dss'      : # DSS
                            {'Acf' : np.zeros((0,6)), # waves amplitude (no. waves,6)
@@ -335,7 +335,8 @@ class Xbinput:
                             'Node' : 0                # node applied force
                                                      },
                 'modal'   : # modal based parametrisation
-                            { 'future' : 'move_here_required_fields' }
+                            { 'ForceTime' : np.zeros((1,)),# 1d array for scaling - same length as time vector
+                              'ForceNodes': np.zeros((NumNodesTot,6))}  # amp[litude of force at each node]
                              }
         
         # loads can be set using BeamInit.DynLoads
@@ -357,8 +358,12 @@ class Xbinput:
         self.str_damping_param=str_damping_param
         self.sph_joint_damping = sph_joint_damping
         
-        # list of non-structural added masses
+        # list of non-structural added masses. See addRBMass
         self.RBMass=[]
+
+        # Forced Displacements. See addForcedDisp 
+        self.ForcedDisp=[]
+
         
         
     def addRBMass(self,node,Mmat):
@@ -379,6 +384,37 @@ class Xbinput:
         self.RBMass.append( D )
         
         return self
+
+
+    def addForcedDisp(self, node, pos, FoR='A'):
+        '''
+        Utility to add a Forced Displacement at some nodes of the beam (e.g for
+        solving catenary problems.
+       
+        @param node: node at which the froced displacement is applied. This can
+        only be equal to zero or NumNodesTot-1
+        @param pos: (3,) array with the displaced position of the node.
+        @param FoR='A' or 'G': specifies in which frame of reference the nodal
+        position is expressed
+        
+        @note: numbering as in python, ie starting from 0 !
+        '''
+
+        assert (FoR=='A' or FoR=='G'), "FoR must be equal to 'A' or 'G'!"
+
+        if node==-1: node=self.NumNodesTot-1
+
+        if node==0 or node==self.NumNodesTot-1:
+            # create dictionary
+            D = {'node': node,
+                 'pos' : pos,
+                 'FoR' : FoR}
+            self.ForcedDisp.append(D)
+        else:
+            raise NameError('This condition has been developed only for initial '
+                '(node=0) or final (node=NumNodesTot) node!')
+
+        return self 
 
 
     def set_ctypes(self):

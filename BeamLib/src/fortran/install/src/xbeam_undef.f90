@@ -180,11 +180,6 @@ module xbeam_undef
 
   deallocate (ListIn,ListFr,ListSflag)
 
-  !print *, 'NumDof: ', NumDof
-  !print *, 'Node%Vdof: ', Node%Vdof
-  !print *, 'Node%Fdof: ', Node%Fdof
-  !print *, 'Node%Sflag:', Node%Sflag
-
   return
  end subroutine xbeam_undef_dofs
 
@@ -276,7 +271,9 @@ module xbeam_undef
   integer,intent(out):: ListIN (:)         ! List of independent nodes.
   integer,intent(out):: ListFr (:)         ! List of nodes with independent force vector (not free nodes).
 
-  integer,intent(out):: ListSflag (:)      ! 1 if node is hinged, 0 if not
+  integer,intent(out):: ListSflag (:)      ! 1 if node has spherical BCs, 
+                                           ! 0 if none
+                                           ! 3 double hinge (no twist)
   integer,intent(inout), optional :: Solution ! Solution number. Used for Sperical Joint BCs only
   integer :: SolutionCode ! copy of solution number
 
@@ -286,13 +283,13 @@ module xbeam_undef
 
 ! Solution not present: if not present (wrapper) rigid-flex body dynamic solution
 ! is assumed
-  if (present(Solution)) then
-      SolutionCode=Solution
-  else
-      ! for wrapper
-      print *, 'xbeam_undef: setting Solution=912!!!'
-      SolutionCode=912
-  end if
+  !if (present(Solution)) then
+  !    SolutionCode=Solution
+  !else
+  !    ! for wrapper
+  !    print *, 'xbeam_undef: setting Solution=912!!!'
+  !    SolutionCode=912
+  !end if
 
 ! Loop on the nodes and remove then from the final list if they are constrained.
   NumIN=0
@@ -315,22 +312,15 @@ module xbeam_undef
         NumFr=NumFr+1
         ListFr(iNode)=NumFr
       case (2)
-        select case (SolutionCode)
-          case default
-            print *, 'Spherical Joint not implemented for Solution: ', Solution
-            stop 'Program terminated - xbeam_undef_nodeindep'
-          case (102) ! spherical joint implemented
-            NumIN=NumIN+1
-            NumFr=NumFr+1
-            ListIN(iNode)=NumIN
-            ListFr(iNode)=NumFr
-            ListSflag(iNode)=1
-          case (912,932) ! treat the spherical joint as clamped
-            !print *, 'Treating spherical joint as a clamp'
-            NumFr=NumFr+1
-            ListFr(iNode)=NumFr
-            ListSflag(iNode)=1
-        end select
+        !select case (SolutionCode)
+        !  case (102,112,312) ! spherical joint implemented
+        NumIN=NumIN+1
+        ListIN(iNode)=NumIN
+        ListSflag(iNode)=1
+      case(3)
+        NumIN=NumIN+1
+        ListIN(iNode)=NumIN
+        ListSflag(iNode)=3
     end select
   end do
 

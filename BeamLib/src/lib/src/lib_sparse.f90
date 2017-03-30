@@ -465,6 +465,35 @@ module lib_sparse
 
 
 
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-> Subroutine sparse_set_rows_val
+!
+!-> Description:
+!
+!    Given a sparse matrix, the routine delete allocates a value val along
+!    the diagonal corresponding to the rows specified in rows_list
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ subroutine sparse_set_rows_val (rows_list,DimArray,SprMat,val)
+
+  integer,     intent(in)   :: rows_list(:)! rows for which all entries of sparse matrix will be set to zero
+  integer,     intent(inout):: DimArray      ! Storage dimension of sparse matrix
+  type(sparse),intent(inout):: SprMat(:)     ! Sparse matrix.
+  real(8),     intent(in)   :: val
+
+  integer:: nn, rr
+
+  do nn=1,size(rows_list)
+    rr = rows_list(nn)
+    call sparse_addval(rr,rr,1.d0,DimArray,SprMat,val)
+  end do
+
+  return
+ end subroutine sparse_set_rows_val
+
+
+
+
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

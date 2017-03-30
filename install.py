@@ -86,7 +86,7 @@ EIGENDIR=None
 BOOSTDIR=None
 
 # If you wish to clone SHARPy, set this to True 
-CloneRepo = True
+CloneRepo = False
 
 # Set the name of the f2py executable installed with Anaconda. 
 f2py_executable='f2py3'

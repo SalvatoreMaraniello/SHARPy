@@ -109,7 +109,9 @@ module cbeam3_solv
   real(8)   :: DPos_now, DPos_old   ! Norm of translational dofs of DeltaX at current and old iteration
   real(8)   :: DPsi_now, DPsi_old   ! Norm of rotational dofs of DeltaX at current and old iteration
   real(8)   :: TaX, TaPos, TaPsi    ! Absolute tolerance for DeltaX, DeltaPos and DeltaPsi
-
+!print *, 'Node in cbeam3_solv'
+!print *, Node%Sflag
+!if (1>0) stop
  ! Determine scaling factors for convergence test (absolute tolerances)
   Psisc = 1.0_8
   Possc = maxval(abs(Coords))
@@ -206,6 +208,8 @@ TaPsi =           Psisc *Options%MinDelta
 ! Add forces on the unconstrained nodes.
       Qglobal= Qglobal - dble(iLoadStep)/dble(Options%NumLoadSteps) * &
 &              sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))
+!!print *,Qglobal
+!print *, 'kglobal:', Kglobal
 
 ! Solve equation and update the global vectors.
       call lu_sparse(ks,Kglobal,-Qglobal,DeltaX)

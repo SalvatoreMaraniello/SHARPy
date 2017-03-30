@@ -163,7 +163,7 @@ def aero2dcomp(tv, span, Faero01, Faero02, filename='./foo', savepng=True,
 
 
 def beam2d(tv, THPosDef, filename='./foo', savepng=True, 
-           fps=30, ND=1.0, Nloops=1, Tdelay=1.0):
+           fps=30, ND=1.0, Nloops=1, Tdelay=1.0, fig=None, ax=None):
     '''
     @summary: Creates objects required for a 2D animation of the beam deformation
     
@@ -178,7 +178,6 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
     @param Nloops: number of repetitions
     @param time between consecutive loops
     '''
-
 
     #-------------------------------------------------------------------- Set-up animation variables
 
@@ -210,14 +209,10 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
     
    
     # ------------------------------------------------------------------------------- Prepare figure
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    #ax.set_xlim(-1.0,1.1)
-    #ax.set_ylim(-1.1,0.25)
-    #ax.set_xlabel(r'$x \ [m]$',fontsize=fontlabel)
-    #ax.set_ylabel(r'$z \ [m]$',fontsize=fontlabel)
-    
+    if fig==None and ax==None:
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+
     # add final configuration
     xend=THPosDef[-1,:,0]
     yend=THPosDef[-1,:,1]
@@ -225,7 +220,6 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
     line,       = ax.plot([], [], lw=4, color='0.6')
     time_text   = ax.text(0.02, 0.95, '', transform=ax.transAxes)
     vel_text = ax.text(0.02, 0.90, '', transform=ax.transAxes)
-    
     
     #----------------------------------------------------------------------- Create required methods
    
@@ -291,6 +285,130 @@ def beam2d(tv, THPosDef, filename='./foo', savepng=True,
 
     return ax, fig, animfun, frames, initfun, interv
     
+
+
+
+
+
+def beam2dsub(tv, THPosDefList, filename='./foo', savepng=True, 
+           fps=30, ND=1.0, Nloops=1, Tdelay=1.0, axList=None, fig=None ):
+    '''
+    @summary: As per beam2d, but created several subplots or view of the beam
+
+    @param tv: time vector used for dynamic simulation of length NT
+    @param THPosDefList: list of 3D array containing beam deformed time history 
+        in the format:
+            THPosDef[case,time_step,node_number,(x,y)coordinates]
+            and shape (Ncases,NT,NumNodesTotal,2)
+    @param filename: file name without extension
+    @param savepng: if True, a folder containing the png of the snapshots is 
+        created
+    @param fps: frames per second
+    @param ND: slow time factor
+    @param Nloops: number of repetitions
+    @param time between consecutive loops
+    @param fig: figure where to plot
+    @param axList: List of axes objects belonging to fig
+    '''
+
+    # Define number of plots
+    Ncases=len(THPosDefList)
+    if axList is not None:
+        assert Ncases==len(axList),'The number of axis does not match the '\
+                                                        'length of THPosDefList'
+    # set standard format
+    if fig==None:
+        fig = plt.figure('Animation Figure',(Ncases*5,5))
+    if axList==None:
+        axList=[]
+        code=int('%.1d%.1d%.1d' %(1,Ncases,1))
+        for ii in range(Ncases):
+            axList.append(fig.add_subplot(code))
+            code+=1
+
+    #----------------------------------------------- Set-up animation variables
+
+    #total frames required for final video
+    NF = fps*ND*tv[-1]+1
+    # compute step for mask
+    NT=len(tv)
+    step_ex = float(NT)/float(NF)
+    print('theoretical step: %f' %step_ex)
+    step = int(np.round(step_ex))
+    print('rounded step %f' %step)
+    ttvec = range(0,NT,step)
+    # ensure we get the last time-step
+    ttvec = np.concatenate((ttvec,np.array([NT-1]))) 
+    # reduce arrays size
+    THPosDefMaskcheap_List=[]
+    for nn in range(Ncases):
+        THPosDefMaskcheap_List.append(THPosDefList[nn][ttvec,:,:])
+    TimeMaskcheap=tv[ttvec]
+    NTMaskcheap=len(THPosDefMaskcheap_List[0])   
+    #interval on video mask
+    interv = 1e3*(TimeMaskcheap[1] - TimeMaskcheap[0])*float(ND) #ms
+    #real slow down
+    NDreal = float(ND)*step_ex/float(step)
+    print('Input slow down: %f' %ND)
+    print('Real slow down: %f' %NDreal)
+    
+    ##### Prepare figure
+    LineList=[]
+    for nn in range(Ncases):
+        # add final configuration
+        axList[nn].plot(THPosDefList[nn][-1,:,0],THPosDefList[nn][-1,:,1],
+                                                        color='0.8',linewidth=2)
+        line, = axList[nn].plot([], [], lw=3, color='k')
+        LineList.append(line) 
+    time_text=axList[0].text(0.02, 0.95, '', transform=axList[0].transAxes)
+    vel_text=axList[0].text(0.02, 0.85, '', transform=axList[0].transAxes)
+    
+    #### Create required methods
+    # initialisation function (plot the background of each frame)
+    def initfun():
+        for nn in range(Ncases):
+            LineList[nn].set_data([], [])
+        time_text.set_text('')
+        return LineList
+    
+    # animate video
+    def animfun(tt):
+        for nn in range(Ncases):
+            x=THPosDefMaskcheap_List[nn][tt,:,0]
+            y=THPosDefMaskcheap_List[nn][tt,:,1]
+            LineList[nn].set_data(x, y)
+        time_text.set_text(r'$t = %.2f  \ s$' % TimeMaskcheap[tt])
+        # save all the png
+        if savepng:
+            os.system('mkdir -p %s_pngdir' %filename )
+            fig.savefig('%s_pngdir/snap%.4d.png'%(filename,tt),format='png')
+            #fig.savefig('%s_pngdir/snap%.4d.pdf'%(filename,tt),format='pdf')
+        return LineList
+    
+    # create a generator to save a file with Nloops
+    def GenFun(NT,NL,fps,Tdel=1.0):
+        snaps=[]
+        ll=0
+        Ndelay=np.round(Tdel*float(fps))
+        while ll<NL:
+            nn=0
+            while nn<NT:
+                snaps.append(nn)
+                nn+=1
+            ll+=1
+            if NL>1 and ll<NL: # add delay snaps
+                dd=0
+                while dd<Ndelay:
+                    snaps.append(NT-1)
+                    dd+=1
+        return snaps 
+    
+    frames = GenFun(NTMaskcheap,Nloops,fps,Tdelay)
+  
+    return axList, fig, animfun, frames, initfun, interv
+
+
+
  
  
 def beam2dcomp(tv, THPosDef01, THPosDef02, filename='./foo', savepng=True, 

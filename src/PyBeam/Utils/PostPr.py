@@ -19,6 +19,7 @@ import PyBeam.Utils.XbeamLib
 import PyLibs.numerics.diff, PyLibs.numerics.integr
 import BeamIO, BeamInit
 import PyBeam.Utils.DerivedTypes
+from IPython import embed
 
 
 
@@ -218,7 +219,7 @@ def THPosDefGlobal(DynOut,Time,RefVel,set_origin='a',**kwargs): #xi0=np.array([1
         Cga = PyBeam.Utils.XbeamLib.Rot(Xi[tt,:]).transpose() 
         for nn in range(NumNodes):     
             THPosDefGlobal[tt,nn,:]=np.dot(Cga,THPosDefLocal[tt,nn,:]) +aOrigin[tt,:]
-    
+
     return THPosDefGlobal
         
   
@@ -624,10 +625,32 @@ def ReOrderPsi(PosIni,PsiTH):
     
     
     
+def reshape_PsiMat(PsiSol):
+    '''
+    The function reshapes the CRV at each node of the beam from the SHARPy solver
+    format 
+        PsiSol[element,node_number_local,CRV] 
+    to
+        PsiNew[nodel_number_global,CRV]
+    The algorithm  assumes the global numbering of nodes is
+        n_global = 2*n_element+n_local
+    and 3-noded elements.
+    '''
     
+    Nelems = PsiSol.shape[0]
+    Nnodes= 2*Nelems+1
+
+    PsiNew = np.zeros((Nnodes,3))
+    Mask=[0,2,1]
+
+    PsiNew[0,:]=PsiSol[Mask[0],0,:]
+    for ee in range(0,Nelems):
+        #print('for ee=%d allocating %d to %d' %(ee,2*ee,2*ee+3))
+        PsiNew[2*ee:2*ee+3,:]=PsiSol[ee,Mask,:]
+
+    return PsiNew    
     
-    
-    
+
     
     
     

@@ -19,6 +19,9 @@ import unittest
 
 sys.path.append( os.environ["SHARPYDIR"]+'/src' )
 sys.path.append( os.environ["SHARPYDIR"]+'/src/Main' )
+#sys.path.append( '/home/sm6110/git/SHARPYold_versions/SHARPy_25Jan2017/src' )
+#sys.path.append( '/home/sm6110/git/SHARPYold_versions/SHARPy_25Jan2017/src/Main' )
+
 
 import SharPySettings as Settings
 import DerivedTypes, DerivedTypesAero
@@ -27,6 +30,9 @@ from PyCoupled.Coupled_NlnFlightDynamic_lag import Solve_Py
 
 from DerivedTypesAero import ControlSurf
 import PyLibs.CVP.spline
+
+import PyLibs.numerics.integr
+import PyBeam.Utils.PostPr
 
 TOL=1e-8
 
@@ -48,9 +54,9 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
         c = 1. # chord
         Umag = 0. # speed of FoR A
         Umag_flow = 30. # flow speed
-        fi = 5.0*np.pi/180.0 # attitude of FoR A
+        fi = 5.0*np.pi/180.0 # attitude of FoR A                             
         alpha = 0.0*np.pi/180.0 # flow angle
-        NumElems = 2 * 8  # finite elements (multiple of 8 to match ailerons)
+        NumElems = 2 * 8  # finite elements (multiple of 8 to match ailerons)  
         M = 1 * 4  # chord-wise panels (multiple of 4 to match ailerons)
         NumNodesElem = 3 
         NumElemsHere = int(0.5*NumElems)
@@ -71,7 +77,9 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
 
 
         # ------------------------------------------------ Beam solution options
-        self.xbopts = DerivedTypes.Xbopts(FollowerForce = ct.c_bool(False),
+        self.xbopts = DerivedTypes.Xbopts(
+                                     FollowerForce = ct.c_bool(False),
+                                     FollowerForceRig = ct.c_bool(True),
                                      MaxIterations = ct.c_int(100),
                                      PrintInfo = ct.c_bool(True),
                                      OutInaframe = ct.c_bool(True),
@@ -85,7 +93,7 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
         self.xbinput = DerivedTypes.Xbinput(NumNodesElem,NumElemsHere,
                                                             BConds='MS',g=9.754)
         self.xbinput.BeamLength = 2.0*16.0
-        self.xbinput.addRBMass(node=NumElemsHere,  Mmat=np.diag(3*[0.0] + 3*[0.0]))
+        self.xbinput.addRBMass(node=NumElemsHere, Mmat=np.diag(3*[0.0]+3*[0.0]))
    
         # get mass for sig1=1 and stiffness for sig1=sig1
         mvec=np.array([.75,.75,.75,.1,.001,.001])
@@ -245,7 +253,7 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
         xbout=Solve_Py(self.xbinput, self.xbopts, self.vmopts, self.vminput,
                        self.aelaopts, SaveDict=self.savedict)
 
-        print(xbout.DynOut[0,:])
+
         # ------------------------------------------------------------- Testing
 
         # Tip initial/final position (FoR A)
@@ -330,6 +338,73 @@ class TestConstrainedFlightDynamics(unittest.TestCase):
 
 
 
+
+    def testFreeFallingStiff(self):
+        '''
+        Stiff wing at an angle free falling in zero density flow. The function 
+        asses the gravity (dead) loads implementation within the time-marching
+        routine and the I/O
+        '''
+        
+        self.xbopts.NewmarkDamp = ct.c_double( 1e-2)
+
+        # wing specification
+        sig1=50.0
+        kvec=np.array([1e7,1e7,1e7,sig1*1e4,sig1*2e4,5.e6])
+        for ii in range(6): self.xbinput.BeamStiffness[ii,ii]=kvec[ii]
+        # FoR A orientation and constraints
+        fi=30.
+        self.xbinput.PsiA_G=fi*np.pi/180.*np.array([1,0,0])
+        self.xbinput.EnforceAngVel_FoRA=3*[False]
+        self.xbinput.EnforceTraVel_FoRA=3*[False]
+        # Simulation in vacuum
+        self.vminput.WakeLength = 3.0
+        self.aelaopts.AirDensity = 0.0
+        self.aelaopts.ImpStart = True
+
+        self.savedict['OutputFileRoot'] = 'HALE_FreeFall_%.1f'%fi + \
+                      self.savedict['OutputFileRoot'][22:] + '_sig%0.1f'%(sig1,)
+
+        xbout=Solve_Py(self.xbinput,self.xbopts,self.vmopts,self.vminput,self.aelaopts,
+                       SaveDict=self.savedict)
+
+        # compute positions in FoR G of FoR A and beam nodes
+        Xi=np.array( xbout.QuatList )
+        tv = xbout.Time
+
+        # Convert Translational Velocities from A to G frame
+        if self.xbopts.OutInaframe.value == True:
+            for ii in range(len(Xi)):
+                Cga = PyBeam.Utils.XbeamLib.Rot(Xi[ii,:]).transpose()
+                xbout.Vrel[ii,:3] = np.dot(Cga,xbout.Vrel[ii,:3])    
+                xbout.Vrel[ii,3:] = np.dot(Cga,xbout.Vrel[ii,3:]) 
+
+        # Integrate positions
+        aOrigin = PyLibs.numerics.integr.function(xbout.Vrel[:,:3],tv)
+        THPosDefGlobal = PyBeam.Utils.PostPr.THPosDefGlobal(xbout.DynOut,tv,
+                                                xbout.Vrel,set_origin='G',Xi=Xi)
+
+        # Build reference data: 
+        posGref = -0.5*self.xbinput.g*self.xbinput.tfin**2
+        posGsh = THPosDefGlobal[-1,:,2]
+        error_nodes = (posGsh-posGref)/posGref
+        error_origin = (aOrigin[-1,-1]-posGref)/posGref
+
+        TOLREL=1e-2*self.xbinput.dt/self.xbinput.tfin
+
+        self.assertTrue( np.max(np.abs(error_nodes))<TOLREL,msg='Node 0 final '
+                   'position: relative difference above tolerance %.2e' %TOLREL)
+        self.assertTrue( np.max(np.abs(error_origin))<TOLREL,msg='Node 0 final '
+                   'position: relative difference above tolerance %.2e' %TOLREL)
+
+        return xbout
+
+
+
+
+
+
+
 if __name__=='__main__':
 
     unittest.main()
@@ -338,3 +413,4 @@ if __name__=='__main__':
     #T.setUp()
     #xbout=T.testVeryFlexibleWing()
     #xbout=T.testVeryStiffWing()
+    #xbout=T.testFreeFallingStiff()

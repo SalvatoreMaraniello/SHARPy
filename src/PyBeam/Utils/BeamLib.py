@@ -10,9 +10,10 @@
 import numpy as np
 import ctypes as ct #http://docs.python.org/3.2/library/ctypes.html
 import SharPySettings as Settings
-import lib_fem
+#import lib_fem #unused
 import lib_cbeam3
-import lib_rotvect
+#import lib_rotvect #unused
+from IPython import embed
 
 BeamPath = Settings.BeamLibDir + Settings.BeamLibName
 BeamLib = ct.cdll.LoadLibrary(BeamPath)
@@ -89,6 +90,7 @@ def Cbeam3_Solv_NonlinearStatic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, \
                 XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
+                XBNODE.Sflag.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBINPUT.ForceStatic.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 PosIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 PsiIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
@@ -118,6 +120,10 @@ def Cbeam3_Solv_NonlinearDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni,\
     @details Numpy arrays are mutable so the changes (solution) made here are
      reflected in the data of the calling script after execution."""
     
+    # Generate amplitude of modal forces at each node vector, Fa_vec
+    Fa_vec=XBINPUT.ForceDynDict['modal']['ForceNodes'].reshape(
+                                              (6*NumNodes_tot.value,),order='F')
+    # invoche F90 routine
     f_cbeam3_solv_nlndyn(ct.byref(ct.c_int(XBINPUT.iOut)),\
                 ct.byref(NumDof),\
                 ct.byref(NumSteps),\
@@ -140,8 +146,11 @@ def Cbeam3_Solv_NonlinearDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni,\
                 XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
                 XBINPUT.ForceStatic.ctypes.data_as(ct.POINTER(ct.c_double)),\
-                XBINPUT.ForceDyn.ctypes.data_as(ct.POINTER(ct.c_double)),\
-                ForceTime.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                #XBINPUT.ForceDyn.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                #ForceTime.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                Fa_vec.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBINPUT.ForceDynDict['modal']['ForceTime'].ctypes.data_as(
+                                                      ct.POINTER(ct.c_double)),\
                 ForcedVel.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 ForcedVelDot.ctypes.data_as(ct.POINTER(ct.c_double)),\
                 PosIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
@@ -173,7 +182,7 @@ def Cbeam3_Asbly_Static(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
                         PosIni, PsiIni, PosDefor, PsiDefor,\
                         ForceStatic, NumDof,\
                         ks, KglobalFull, fs, FglobalFull, Qglobal,
-                        XBOPTS):
+                        XBOPTS, Cao=np.diag([1.,1.,1.])  ):
     """@brief Python wrapper for f_cbeam3_asbly_static.
     
     @details Numpy arrays are mutable so the changes made here are 
@@ -221,7 +230,9 @@ def Cbeam3_Asbly_Static(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
                 ct.byref(XBOPTS.Solution),\
                 ct.byref(XBOPTS.DeltaCurved),\
                 ct.byref(XBOPTS.MinDelta),\
-                ct.byref(XBOPTS.NewmarkDamp) )
+                ct.byref(XBOPTS.NewmarkDamp),\
+                Cao.ctypes.data_as(ct.POINTER(ct.c_double)),\
+                XBNODE.Sflag.ctypes.data_as(ct.POINTER(ct.c_int)) )
     
     
 def Cbeam_Solv_Disp2State(NumNodes_tot, NumDof, XBINPUT, XBNODE,\
@@ -373,6 +384,7 @@ def Cbeam3_Asbly_Dynamic(XBINPUT, NumNodes_tot, XBELEM, XBNODE,\
             XBNODE.Master.ctypes.data_as(ct.POINTER(ct.c_int)),\
             XBNODE.Vdof.ctypes.data_as(ct.POINTER(ct.c_int)),\
             XBNODE.Fdof.ctypes.data_as(ct.POINTER(ct.c_int)), \
+            XBNODE.Sflag.ctypes.data_as(ct.POINTER(ct.c_int)), \
             PosIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
             PsiIni.ctypes.data_as(ct.POINTER(ct.c_double)),\
             PosDefor.ctypes.data_as(ct.POINTER(ct.c_double)),\

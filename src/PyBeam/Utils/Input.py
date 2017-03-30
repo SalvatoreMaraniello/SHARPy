@@ -105,19 +105,40 @@ def Node(XBINPUT, XBOPTS, NumNodes_tot, XBELEM):
         MidNode = (NumNodes_tot.value - 1)/2
         if XBINPUT.BConds[1] is 'C': BoundConds[ MidNode ] = 1
         if XBINPUT.BConds[1] is 'S': BoundConds[ MidNode ] = 2
-        x_shift=-XBINPUT.BeamLength*(float(MidNode)/float(NumNodes_tot.value - 1))
+        x_shift=-XBINPUT.BeamLength*(float(MidNode)/float(NumNodes_tot.value - 1)) 
     else:    
         if XBINPUT.BConds[0] is 'C': BoundConds[                     0] =  1
         if XBINPUT.BConds[1] is 'C': BoundConds[NumNodes_tot.value - 1] =  1
         if XBINPUT.BConds[0] is 'F': BoundConds[                     0] = -1
         if XBINPUT.BConds[1] is 'F': BoundConds[NumNodes_tot.value - 1] = -1
         if XBINPUT.BConds[0] is 'S': BoundConds[                     0] =  2
+        if XBINPUT.BConds[1] is 'S': BoundConds[NumNodes_tot.value - 1] =  2
+        if XBINPUT.BConds[0] is 'T': BoundConds[                     0] =  3
+        if XBINPUT.BConds[1] is 'T': BoundConds[NumNodes_tot.value - 1] =  3
+        # work out FoR A origin:
         x_shift=0.0
-        if XBINPUT.BConds[1] is 'S': 
-            BoundConds[NumNodes_tot.value - 1] =  2
+        if (XBINPUT.BConds is 'CS') or (XBINPUT.BConds is 'FS'):
             x_shift=-XBINPUT.BeamLength 
-    if np.max(BoundConds)==0 or XBINPUT.BConds=='SS':
-        raise Exception('Invalid boundary conditions string.')
+
+
+    # assert solution is implemented
+    Valid,msg=True,''
+
+    #if np.max(BoundConds)==0: 
+    #   Valid=False
+    #    msg='System not kinematically determined: use solution 912!'
+    if XBOPTS.Solution.value==912:
+        if (XBINPUT.BConds is 'SS') or (XBINPUT.BConds is 'CC') or \
+            (XBINPUT.BConds is 'CS') or (XBINPUT.BConds is 'SC'):
+            Valid=False
+            msg='Unphysical boundary conditions'
+    else:
+        if (XBINPUT.BConds is 'FS') or (XBINPUT.BConds is 'SF'): # or XBINPUT.BConds is 'SS'
+            msg='System not kinematically determined: use solution 912!'
+            Valid=False
+
+    if not Valid:
+        raise Exception(msg)
      
     # define initial nodal position 
     PosIni = BeamGeometry(XBINPUT, x_shift)                                   
