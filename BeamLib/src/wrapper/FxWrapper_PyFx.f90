@@ -2049,7 +2049,9 @@ module test
 &					PrintInfo, OutInBframe, OutInaframe,	&!for pack_xbopts
 &					ElemProj, MaxIterations, NumLoadSteps,	&!for pack_xbopts
 &					NumGauss, Solution, DeltaCurved, 		&!for pack_xbopts
-&					MinDelta, NewmarkDamp)                   !for pack_xbopts
+&					MinDelta, NewmarkDamp,                  &!for pack_xbopts
+&                   NForcedDisp,NodeForcedDisp,PosForcedDisp,&
+&                   PsiA_G                                  )
 
 
 
@@ -2090,6 +2092,12 @@ module test
         real(8),	intent(in) :: DeltaCurved
         real(8),	intent(in) :: MinDelta
         real(8),	intent(in) :: NewmarkDamp
+        integer,    intent(in) :: NForcedDisp              !forced displacements
+        integer,    intent(inout) :: NodeForcedDisp(NForcedDisp)
+        real(8),    intent(inout) :: PosForcedDisp(NForcedDisp,3)
+        real(8),    intent(inout) :: PsiA_G(3)             !orientation FoR A
+
+
         !integer,intent(inout),optional :: Sdof(NumNodes_tot)
 
 		! Declare local variables 
@@ -2100,6 +2108,7 @@ module test
 		real(8)		,allocatable:: Psi0(:,:,:)
 		real(8)		,allocatable:: PosDefor(:,:)
 		real(8)		,allocatable:: PsiDefor(:,:,:)
+
 
 		! create Options struct
 		type(xbopts):: Options
@@ -2137,7 +2146,9 @@ module test
 		call vec2mat3d_double(PsiDefor_Vec,PsiDefor,NumElems,MaxElNod,3)
 
 		call cbeam3_solv_nlnstatic (NumDof,Elem,Node,AppForces,Coords,Psi0, &
-&                                  PosDefor,PsiDefor,Options)
+&                                  PosDefor,PsiDefor,Options,               &
+&                                  NodeForcedDisp,PosForcedDisp,            &
+&                                  PsiA_G)
 
 		! Convert multi-dim fortran arrays to vectors
 		call mat2vec_double(PosDefor,PosDefor_Vec,NumNodes_tot,3)

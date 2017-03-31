@@ -49,10 +49,13 @@ module cbeam3_solv
 !
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  subroutine cbeam3_solv_nlnstatic (NumDof,Elem,Node,AppForces,Coords,Psi0, &
-&                                  PosDefor,PsiDefor,Options)
+&                                  PosDefor,PsiDefor,Options,& 
+&                                  NodeForcedDisp,PosForcedDisp,&
+&                                  PsiA_G                                  )
   use lib_fem
   use lib_sparse
   use lib_solv
+  use lib_rotvect
 !#ifdef NOLAPACK
   use lib_lu
   use cbeam3_asbly
@@ -68,7 +71,22 @@ module cbeam3_solv
   real(8),      intent(inout):: PsiDefor (:,:,:)  ! Current CRV of the nodes in the elements.
   type(xbopts),intent(in)    :: Options           ! Solver parameters.
 
+  integer,optional,intent(in) :: NodeForcedDisp(:)
+  real(8),optional,intent(in) :: PosForcedDisp(:,:)
+  real(8),optional,intent(in) :: PsiA_G(3)     !orientation FoR A
+
+
 ! Local variables.
+  integer:: NForcedDisp                    ! No. of nodes with forced displacements
+  real(8) :: Cao(3,3)                      ! Rotation operator of FoR A w.r.t. G
+
+  real(8) :: DispEnf(3)=0.d0               ! forced displacement variables
+  real(8) :: DeltaDisp
+  real(8) :: DeltaMax
+  real(8) :: IncrPercent(Options%NumLoadSteps)
+
+  integer :: Nsteps                        ! Number of steps for solution
+
   real(8):: Delta                          ! Flag for convergence in iterations.
   integer:: fs                             ! Current storage size of force matrix.
   integer:: iLoadStep                      ! Counter in the load steps.
@@ -112,6 +130,22 @@ module cbeam3_solv
 !print *, 'Node in cbeam3_solv'
 !print *, Node%Sflag
 !if (1>0) stop
+
+
+! Optional arguments
+  ! number of nodes with forced displacements
+  if (present(NodeForcedDisp)) then 
+    NForcedDisp=size(NodeForcedDisp)
+  else
+    NForcedDisp=0
+  end if 
+  ! rotation matrix associated to the FoR A orientation
+  if (present(PsiA_G)) then 
+    Cao=rotvect_psi2mat(PsiA_G)   
+  else
+    Cao=Unit  
+  end if
+
  ! Determine scaling factors for convergence test (absolute tolerances)
   Psisc = 1.0_8
   Possc = maxval(abs(Coords))
@@ -161,11 +195,48 @@ TaPsi =           Psisc *Options%MinDelta
   allocate (DeltaX (NumDof));    DeltaX = 0.d0
   allocate (Fglobal(DimMat*NumDof)); call sparse_zero (fs,Fglobal)
 
+! Prepare loads stepping
+  if (NForcedDisp==0) then
+    Nsteps = Options%NumLoadSteps
+  else 
+    Nsteps = 2*Options%NumLoadSteps
+  end if  
+
+  IncrPercent=0.d0
+  do i=1,Options%NumLoadSteps
+    IncrPercent(i)=1.1d0**dble(i-1)
+  end do
+  IncrPercent=IncrPercent/sum(IncrPercent)
+  DeltaMax = norm2(Coords(size(Node),:)-Coords(1,:))
+  !print *, IncrPercent
+  !print *, sum(IncrPercent)
+  !stop
 
 ! Apply loads in substeps.
-  do iLoadStep=1,Options%NumLoadSteps
+  do iLoadStep=1,Nsteps
     Iter  = 0
     Delta = Options%MinDelta+1.d0
+
+  ! Determine forced displacements
+  if (iLoadStep>Options%NumLoadSteps) then
+    ! account for i-th forced diplacement
+    do i=1,NForcedDisp
+      ! displacement enforced at this step
+      DispEnf = IncrPercent(iLoadStep-Options%NumLoadSteps)* &!1.d0/dble(Options%NumLoadSteps)* &                     ! factor
+              & ( PosForcedDisp(i,:) - Coords(NodeForcedDisp(i),:) )   ! full displacement
+      ! update position of node j
+      do j=1,size(Node)!NumNodesTot
+        DeltaDisp = norm2(Coords(j,:)-Coords(NodeForcedDisp(i),:))
+        PosDefor(j,:)=PosDefor(j,:)+DispEnf*(1.d0-DeltaDisp/DeltaMax)
+      end do
+    end do
+    !stop
+
+
+
+
+  end if 
+
 
 ! Iteration until convergence.
   converged=.false.
@@ -196,17 +267,17 @@ TaPsi =           Psisc *Options%MinDelta
       end if
       if (Options%PrintInfo) write(*,'(I8,I8,$)')  iLoadStep, Iter
 
-
 ! Assembly matrices and functional.
       Qglobal=0.d0
       call sparse_zero (ks,Kglobal)
       call sparse_zero (fs,Fglobal)
-
-      call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,AppForces*dble(iLoadStep)/dble(Options%NumLoadSteps), &
-&                               ks,Kglobal,fs,Fglobal,Qglobal,Options)
+ 
+      call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,  &
+&                               AppForces*min(1.d0,dble(iLoadStep)/dble(Options%NumLoadSteps)), &
+&                               ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
 
 ! Add forces on the unconstrained nodes.
-      Qglobal= Qglobal - dble(iLoadStep)/dble(Options%NumLoadSteps) * &
+      Qglobal= Qglobal - min(1.d0,dble(iLoadStep)/dble(Options%NumLoadSteps)) * &
 &              sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))
 !!print *,Qglobal
 !print *, 'kglobal:', Kglobal

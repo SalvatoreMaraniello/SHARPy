@@ -72,6 +72,19 @@ def Cbeam3_Solv_NonlinearStatic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, \
     @details Numpy arrays are mutable so the changes (solution) made here are
      reflected in the data of the calling script after execution."""
     
+
+    # unpack Force displacements dictionary
+    NForcedDisp=len(XBINPUT.ForcedDisp)
+    NodeForcedDisp=np.zeros((NForcedDisp,), ct.c_int,'F') 
+    PosForcedDisp=np.zeros( (NForcedDisp,3), ct.c_double,'F')
+    for nn in range(NForcedDisp):
+        if XBINPUT.ForcedDisp[nn]['FoR']=='G':
+            raise NameError ("In Solve_F90 only the FoR='A' option is "
+                                    "available to specify forced displacements")
+
+        NodeForcedDisp[nn]=XBINPUT.ForcedDisp[nn]['node']+1
+        PosForcedDisp[nn,:]=XBINPUT.ForcedDisp[nn]['pos']
+
     f_cbeam3_solv_nlnstatic(ct.byref(NumDof),\
                 ct.byref(ct.c_int(XBINPUT.NumElems)),\
                 XBELEM.NumNodes.ctypes.data_as(ct.POINTER(ct.c_int)),\
@@ -108,7 +121,12 @@ def Cbeam3_Solv_NonlinearStatic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, \
                 ct.byref(XBOPTS.Solution),\
                 ct.byref(XBOPTS.DeltaCurved),\
                 ct.byref(XBOPTS.MinDelta),\
-                ct.byref(XBOPTS.NewmarkDamp) )
+                ct.byref(XBOPTS.NewmarkDamp),
+                ct.byref(ct.c_int(NForcedDisp)),          # forced displacements  
+                NodeForcedDisp.ctypes.data_as(ct.POINTER(ct.c_double)),
+                PosForcedDisp.ctypes.data_as(ct.POINTER(ct.c_double)),
+                XBINPUT.PsiA_G.ctypes.data_as(ct.POINTER(ct.c_double))# CRV
+                )
     
 
 def Cbeam3_Solv_NonlinearDynamic(XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni,\
