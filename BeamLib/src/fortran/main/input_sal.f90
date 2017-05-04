@@ -629,9 +629,16 @@ end select
   select case (trim(TestCase))
 
   case default
+    ! Node 1
     if (BConds(1:1).eq.'C') BoundConds(1)       = 1
+    if (BConds(1:1).eq.'F') BoundConds(1)       =-1
+    if (BConds(1:1).eq.'S') BoundConds(1)       = 2
+    if (BConds(1:1).eq.'T') BoundConds(1)       = 3
+    ! Node NumNodes
     if (BConds(2:2).eq.'C') BoundConds(NumNodes)= 1
     if (BConds(2:2).eq.'F') BoundConds(NumNodes)=-1
+    if (BConds(2:2).eq.'S') BoundConds(NumNodes)= 2
+    if (BConds(2:2).eq.'T') BoundConds(NumNodes)= 3
   end select
 
   return

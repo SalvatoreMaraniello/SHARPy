@@ -356,8 +356,8 @@ def beam2dsub(tv, THPosDefList, filename='./foo', savepng=True,
     LineList=[]
     for nn in range(Ncases):
         # add final configuration
-        axList[nn].plot(THPosDefList[nn][-1,:,0],THPosDefList[nn][-1,:,1],
-                                                        color='0.8',linewidth=2)
+        #axList[nn].plot(THPosDefList[nn][-1,:,0],THPosDefList[nn][-1,:,1],
+        #                                               color='0.8',linewidth=2)
         line, = axList[nn].plot([], [], lw=3, color='k')
         LineList.append(line) 
     time_text=axList[0].text(0.02, 0.95, '', transform=axList[0].transAxes)

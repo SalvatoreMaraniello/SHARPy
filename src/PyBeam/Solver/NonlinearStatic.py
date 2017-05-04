@@ -18,7 +18,7 @@ import BeamInit
 import numpy as np
 import ctypes as ct
 import PyLibs.io.save
-from XbeamLib import AddGravityLoads, Rot, psi2quat
+from XbeamLib import AddGravityLoads, Rot, psi2quat, RotCRV
 from IPython import embed
 
 def Solve_F90(XBINPUT,XBOPTS,SaveDict=Settings.SaveDict):
@@ -36,7 +36,6 @@ def Solve_F90(XBINPUT,XBOPTS,SaveDict=Settings.SaveDict):
     "Initialise beam"
     XBINPUT, XBOPTS, NumNodes_tot, XBELEM, PosIni, PsiIni, XBNODE, NumDof \
                 = BeamInit.Static(XBINPUT,XBOPTS)
-    
     
     "Set initial conditions as undef config"
     PosDefor = PosIni.copy(order='F')
@@ -291,51 +290,22 @@ def Solve_Py(XBINPUT,XBOPTS, moduleName = None, SaveDict=Settings.SaveDict):
         #"Reset convergence parameters"
         Iter = 0
         ResLog10 = 1.0
-        
-        #"General load case"
-        #iForceStep = XBOUT.ForceStaticTotal*float( (iLoadStep+1) / \
-        #                                              XBOPTS.NumLoadSteps.value)
-        #ForceScaling = np.min([ float((iLoadStep+1)/XBOPTS.NumLoadSteps.value),
-        #                                                                   1.0])
-        #iForceStep = XBOUT.ForceStaticTotal*ForceScaling
 
-        # debug:
-        #if iLoadStep>: 1/0
-        
         if iLoadStep<XBOPTS.NumLoadSteps.value:
             # Gradually increase the static load
             IncrHere=IncrPercent[iLoadStep]
             iForceStep=iForceStep+IncrHere*XBOUT.ForceStaticTotal
 
-            # prepare initial guess
-            if iLoadStep<1:
-                PosDefor_0 = PosIni.copy('F')
-                PsiDefor_0 = PsiIni.copy('F')
-                PosDefor_1 = PosIni.copy('F')
-                PsiDefor_1 = PsiIni.copy('F')
-            else:
-                PosDefor_0 = PosDefor_1.copy('F')
-                PsiDefor_0 = PsiDefor_1.copy('F')
-                PosDefor_1 = PosDefor.copy('F')
-                PsiDefor_1 = PsiDefor.copy('F')
-            # guess for initial Newton iteration
-            # damping
-            damp=0.0#5#1#1.0
-            PosDefor = PosDefor + damp*(PosDefor_1-PosDefor_0)*\
-                                               IncrHere/IncrPercent[iLoadStep-1]
-            PsiDefor = PsiDefor + damp*(PsiDefor_1-PsiDefor_0)*\
-                                               IncrHere/IncrPercent[iLoadStep-1]
             # mid node
-            #embed()
             midNode=int((XBINPUT.NumNodesTot-1)/2)
-            print('R0\tR1\tdR\tRguess\tIncOld\tIncHere')
-            print(6*'%.4f\t'\
-                     %( PosDefor_0[midNode,2], 
-                        PosDefor_1[midNode,2], 
-                       (PosDefor_1-PosDefor_0)[midNode,2],
-                        PosDefor[midNode,2],
-                        IncrPercent[iLoadStep-1],
-                        IncrHere))
+            #print('R0\tR1\tdR\tRguess\tIncOld\tIncHere')
+            #print(6*'%.4f\t'\
+            #         %( PosDefor_0[midNode,2], 
+            #            PosDefor_1[midNode,2], 
+            #           (PosDefor_1-PosDefor_0)[midNode,2],
+            #            PosDefor[midNode,2],
+            #            IncrPercent[iLoadStep-1],
+            #            IncrHere))
 
         else: #if iLoadStep>=XBOPTS.NumLoadSteps.value:
             # Enforce displacement at the boundary
@@ -393,13 +363,9 @@ def Solve_Py(XBINPUT,XBOPTS, moduleName = None, SaveDict=Settings.SaveDict):
             KglobalFull += KglobalFull_foll
             Qglobal = Qglobal -Qforces -np.dot(FglobalFull,iForceStep_Dof)
 
-            #import matplotlib.pyplot as plt
-            #plt.spy(KglobalFull)
-            #embed()
             if iLoadStep==0 and Iter==1:
                 XBOUT.K0=KglobalFull.copy()
                 XBOUT.Q0=Qglobal.copy()
-            #XBOUT.CondK[-1].append(np.linalg.cond(KglobalFull))
 
             #"Calculate \Delta State Vector"
             DeltaS = - np.linalg.solve(KglobalFull, Qglobal)
@@ -420,11 +386,11 @@ def Solve_Py(XBINPUT,XBOPTS, moduleName = None, SaveDict=Settings.SaveDict):
             if XBOPTS.PrintInfo.value == True:
                 sys.stdout.write(2*'%-10.4e '%(max(abs(Qglobal)),
                                                               max(abs(DeltaS))))
-            #"Residual at first iteration"
+            #Residual at first iteration
             if(Iter == 1):
                 Res0_Qglobal = max(max(abs(Qglobal)),1)
                 Res0_DeltaX  = max(max(abs(DeltaS)),1)
-            #"Update residual and compute log10"
+            #Update residual and compute log10
             Res_Qglobal = max(abs(Qglobal))
             Res_DeltaX  = max(abs(DeltaS))
 
@@ -436,6 +402,16 @@ def Solve_Py(XBINPUT,XBOPTS, moduleName = None, SaveDict=Settings.SaveDict):
             BeamLib.Cbeam3_Solv_Update_Static(XBINPUT, NumNodes_tot, XBELEM,\
                                               XBNODE, NumDof, DeltaS,\
                                               PosIni, PsiIni, PosDefor,PsiDefor)
+
+            '''
+            #### Floor constrained
+            Cao=RotCRV(XBINPUT.PsiA_G)
+            for nn in range(NumNodes_tot.value):
+                posG=np.dot(Cao,PosDefor[nn,:])
+                if posG[2]<0.0:
+                    posG[2]=0.0
+                    PosDefor[nn,:]=np.dot(Cao.T,posG)
+            '''
 
             #"Stop the solution"
             if(ResLog10 > 1.e10):

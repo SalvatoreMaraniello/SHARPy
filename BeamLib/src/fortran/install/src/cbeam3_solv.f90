@@ -84,6 +84,7 @@ module cbeam3_solv
   real(8) :: DeltaDisp
   real(8) :: DeltaMax
   real(8) :: IncrPercent(Options%NumLoadSteps)
+  real(8) :: AppForcesFact                 ! Factor for scaling the applied force during load stepping
 
   integer :: Nsteps                        ! Number of steps for solution
 
@@ -155,16 +156,12 @@ module cbeam3_solv
   ! Correct Msc accounting for forces contribution. It is assumed that the
   ! beam is constrained at Node 1 and that here the coordinates are (0,0,0)
   do i =1,3
-      !print *, 'i=', 1, ' Msc=', Msc
       do j = 1,3
           if (i /= j) then
-              !print *, 'product for i,j=(', i,',',j,') equal to: ', AppForces(:,i)*Coords(:,j)
               MSc = max(Msc,maxval(abs( AppForces(:,i)*Coords(:,j) )))
-              !print *, 'i=', 1, 'j=',j, ' Msc=', Msc
           end if
       end do
   end do
-  !print *, ' Msc final=', Msc
 
   ! avoid zero scaling factors
   if (Fsc .eq. 0.0_8) then
@@ -208,34 +205,31 @@ TaPsi =           Psisc *Options%MinDelta
   end do
   IncrPercent=IncrPercent/sum(IncrPercent)
   DeltaMax = norm2(Coords(size(Node),:)-Coords(1,:))
-  !print *, IncrPercent
-  !print *, sum(IncrPercent)
-  !stop
 
 ! Apply loads in substeps.
   do iLoadStep=1,Nsteps
     Iter  = 0
     Delta = Options%MinDelta+1.d0
 
-  ! Determine forced displacements
-  if (iLoadStep>Options%NumLoadSteps) then
-    ! account for i-th forced diplacement
-    do i=1,NForcedDisp
-      ! displacement enforced at this step
-      DispEnf = IncrPercent(iLoadStep-Options%NumLoadSteps)* &!1.d0/dble(Options%NumLoadSteps)* &                     ! factor
-              & ( PosForcedDisp(i,:) - Coords(NodeForcedDisp(i),:) )   ! full displacement
-      ! update position of node j
-      do j=1,size(Node)!NumNodesTot
-        DeltaDisp = norm2(Coords(j,:)-Coords(NodeForcedDisp(i),:))
-        PosDefor(j,:)=PosDefor(j,:)+DispEnf*(1.d0-DeltaDisp/DeltaMax)
+    ! Determine forced displacements
+    if (iLoadStep>Options%NumLoadSteps) then
+      ! account for i-th forced diplacement
+      do i=1,NForcedDisp
+        ! displacement enforced at this step
+        DispEnf = IncrPercent(iLoadStep-Options%NumLoadSteps)* & !1.d0/dble(Options%NumLoadSteps)* &                     ! factor
+                & ( PosForcedDisp(i,:) - Coords(NodeForcedDisp(i),:) ) !full displacement
+        ! update position of node j
+        do j=1,size(Node)!NumNodesTot
+          DeltaDisp = norm2(Coords(j,:)-Coords(NodeForcedDisp(i),:))
+          PosDefor(j,:)=PosDefor(j,:)+DispEnf*(1.d0-DeltaDisp/DeltaMax)
+        end do
       end do
-    end do
-    !stop
 
-
-
-
-  end if 
+    ! Determine applied force
+    else
+      !AppForcesFact = min(1.d0,dble(iLoadStep)/dble(Options%NumLoadSteps))
+      AppForcesFact = min(1.d0, sum(IncrPercent(1:iLoadStep)) )
+    end if 
 
 
 ! Iteration until convergence.
@@ -265,7 +259,7 @@ TaPsi =           Psisc *Options%MinDelta
               & 'ErX','ErPos ','ErPsi'
 
       end if
-      if (Options%PrintInfo) write(*,'(I8,I8,$)')  iLoadStep, Iter
+      if (Options%PrintInfo) write(*,'(I8,I8,$)') iLoadStep, Iter
 
 ! Assembly matrices and functional.
       Qglobal=0.d0
@@ -273,11 +267,11 @@ TaPsi =           Psisc *Options%MinDelta
       call sparse_zero (fs,Fglobal)
  
       call cbeam3_asbly_static (Elem,Node,Coords,Psi0,PosDefor,PsiDefor,  &
-&                               AppForces*min(1.d0,dble(iLoadStep)/dble(Options%NumLoadSteps)), &
+&                               AppForces*AppForcesFact, &
 &                               ks,Kglobal,fs,Fglobal,Qglobal,Options,Cao)
 
 ! Add forces on the unconstrained nodes.
-      Qglobal= Qglobal - min(1.d0,dble(iLoadStep)/dble(Options%NumLoadSteps)) * &
+      Qglobal= Qglobal - AppForcesFact * &
 &              sparse_matvmul(fs,Fglobal,NumDof,fem_m2v(AppForces,NumDof,Filter=ListIN))
 !!print *,Qglobal
 !print *, 'kglobal:', Kglobal
@@ -358,7 +352,6 @@ TaPsi =           Psisc *Options%MinDelta
         converged=.true.
         if (Options%PrintInfo) write (*,'(A)') 'Displacements and Rotations error converged!'
     end if
-
 
 
  ! Print Progress
@@ -586,7 +579,7 @@ TaPsi =           Psisc *Options%MinDelta
  subroutine cbeam3_solv_nlndyn (iOut,NumDof,Time,Elem,Node,F0,Fa,Ftime,              &
 &                               Vrel,VrelDot,Coords,Psi0,PosDefor,PsiDefor,          &
 &                               PosDotDefor,PsiDotDefor,PosPsiTime,VelocTime,DynOut, &
-&                               OutGrids,Options)
+&                               OutGrids,Options,PsiA_G)
   use lib_fem
   use lib_rot
   use lib_rotvect
@@ -619,6 +612,7 @@ TaPsi =           Psisc *Options%MinDelta
   real(8),      intent(out)  :: DynOut    (:,:)   ! Time-history of displacement of all nodes.
   logical,      intent(inout):: OutGrids  (:)     ! Output grids.
   type(xbopts),intent(in)    :: Options           ! Solver parameters.
+  real(8),optional,intent(in) :: PsiA_G(3)        ! orientation FoR A
 
 ! Local variables.
   real(8):: beta,gamma                     ! Newmark coefficients.
@@ -686,7 +680,12 @@ TaPsi =           Psisc *Options%MinDelta
   allocate (Displ(NumN,6)); Displ=0.d0
 
 ! Allocate quaternions and rotation operator for initially undeformed system
-  Quat = (/1.d0,0.d0,0.d0,0.d0/); Cao = Unit; Temp = Unit4
+  Quat = (/1.d0,0.d0,0.d0,0.d0/); Temp = Unit4
+  if (present(PsiA_G)) then 
+    Cao=rotvect_psi2mat(PsiA_G)   
+  else
+    Cao=Unit  
+  end if
 
 ! Extract initial displacements and velocities.
   call cbeam3_solv_disp2state (Node,PosDefor,PsiDefor,PosDotDefor,PsiDotDefor,X,dXdt)
